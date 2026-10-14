@@ -526,6 +526,7 @@ import {
   sessionCookieName,
 } from "./request-auth.ts";
 import { cookieMaxAgeSeconds, formatPairingCode, SessionRegistry, type Scope, type SessionRecord } from "./sessions.ts";
+import { createUser, verifyUser, createSession as createUserSession, getSession as getUserSession, destroySession as destroyUserSession } from "./auth-users.ts";
 import { ThreadStarters } from "./thread-starters.ts";
 import {
   appendAdminAction,
@@ -18185,6 +18186,60 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       res.setHeader("set-cookie", serializeSessionCookie(SESSION_COOKIE, issued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(issued.session) }));
       res.setHeader("cache-control", "no-store");
       return json(res, 200, { session: issued.session });
+    }
+    // Public user accounts: signup/login with email+password. Available when
+    // PUBLIC_CHAT is on. Returns a user session token (separate from device sessions).
+    if (method === "POST" && path === "/api/auth/signup" && !gate.auth) {
+      if (!PUBLIC_CHAT) return json(res, 404, { error: "public signup is not enabled on this server" });
+      if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
+        return json(res, 415, { error: "send the signup request as JSON (content-type: application/json)" });
+      }
+      const body = await readBody(req).catch(() => ({}));
+      const { email, password, name } = (body ?? {}) as { email?: string; password?: string; name?: string };
+      const result = await createUser(DATA_DIR, email ?? "", password ?? "", name ?? "");
+      if (result.error || !result.user) {
+        return json(res, 400, { error: result.error ?? "signup failed" });
+      }
+      const session = createUserSession(DATA_DIR, result.user.id);
+      const secure = requestOrigin(req)?.startsWith("https://") === true;
+      res.setHeader("set-cookie", serializeSessionCookie("ripo_user", session.token, { secure, maxAgeSeconds: 30 * 24 * 60 * 60 }));
+      res.setHeader("cache-control", "no-store");
+      return json(res, 200, {
+        user: { id: result.user.id, email: result.user.email, name: result.user.name },
+        token: session.token,
+      });
+    }
+    if (method === "POST" && path === "/api/auth/login" && !gate.auth) {
+      if (!PUBLIC_CHAT) return json(res, 404, { error: "public login is not enabled on this server" });
+      if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
+        return json(res, 415, { error: "send the login request as JSON (content-type: application/json)" });
+      }
+      const body = await readBody(req).catch(() => ({}));
+      const { email, password } = (body ?? {}) as { email?: string; password?: string };
+      const result = await verifyUser(DATA_DIR, email ?? "", password ?? "");
+      if (result.error || !result.user) {
+        return json(res, 401, { error: result.error ?? "login failed" });
+      }
+      const session = createUserSession(DATA_DIR, result.user.id);
+      const secure = requestOrigin(req)?.startsWith("https://") === true;
+      res.setHeader("set-cookie", serializeSessionCookie("ripo_user", session.token, { secure, maxAgeSeconds: 30 * 24 * 60 * 60 }));
+      res.setHeader("cache-control", "no-store");
+      return json(res, 200, {
+        user: { id: result.user.id, email: result.user.email, name: result.user.name },
+        token: session.token,
+      });
+    }
+    if (method === "POST" && path === "/api/auth/logout" && !gate.auth) {
+      const token = parseCookies(req.headers.cookie).get("ripo_user");
+      if (token) destroyUserSession(DATA_DIR, token);
+      res.setHeader("set-cookie", serializeSessionCookie("ripo_user", "", { secure: false, maxAgeSeconds: 0 }));
+      return json(res, 200, { ok: true });
+    }
+    if (method === "GET" && path === "/api/auth/me" && !gate.auth) {
+      const token = parseCookies(req.headers.cookie).get("ripo_user");
+      const { user } = getUserSession(DATA_DIR, token ?? "");
+      if (!user) return json(res, 401, { error: "not logged in" });
+      return json(res, 200, { user: { id: user.id, email: user.email, name: user.name } });
     }
     if (!gate.auth) return json(res, gate.status, { error: gate.error });
     const auth = gate.auth;
