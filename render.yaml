@@ -9,7 +9,7 @@ services:
     runtime: node
     plan: free
     branch: main
-    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    buildCommand: corepack enable >/dev/null 2>&1; pnpm install --frozen-lockfile && pnpm build
     startCommand: pnpm start:render
     healthCheckPath: /api/health
     envVars:
