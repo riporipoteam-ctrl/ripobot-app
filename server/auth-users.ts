@@ -158,6 +158,18 @@ export async function verifyUser(
   if (!valid) {
     return { error: "Invalid email or password" };
   }
+  // Also grant admin at login time if email is in RIPO_ADMIN_EMAILS
+  // (covers users who signed up before the env var was set)
+  const adminEmails = (process.env.RIPO_ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (adminEmails.includes(normalizedEmail) && !user.isAdmin) {
+    user.isAdmin = true;
+    const users = loadUsers(dataDir);
+    const idx = users.findIndex((u) => u.id === user.id);
+    if (idx >= 0) {
+      users[idx] = user;
+      saveUsers(dataDir, users);
+    }
+  }
   return { user };
 }
 
