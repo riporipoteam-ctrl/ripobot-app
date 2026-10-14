@@ -4,9 +4,6 @@ import { Loader2, Menu } from "lucide-react";
 import { CLOUD_LINK_SETTINGS, openBot, StoreProvider, useStore } from "@/state/store";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useWelcomeViewer, WelcomeGate } from "@/components/onboarding/WelcomeGate";
-import { AuthModal } from "@/components/AuthModal";
-import { setPublicUser } from "@/lib/use-public-user";
-import { usePublicUser } from "@/lib/use-public-user";
 import { cloudSignInDue, spotlightsQuiet, type WelcomeViewer } from "@/lib/onboarding";
 import { FirstConversationTour } from "@/components/onboarding/FirstConversationTour";
 import { GuidedTour } from "@/components/onboarding/GuidedTour";
@@ -454,48 +451,6 @@ function Application() {
     initAnalytics();
   }, []);
   const viewer = useWelcomeViewer();
-  const { user, loading, refresh } = usePublicUser();
-  const [publicChatChecked, setPublicChatChecked] = useState(false);
-  const [publicChatOn, setPublicChatOn] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("signup");
-
-  useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
-      .then((res) => setPublicChatOn(res.status !== 404))
-      .catch(() => setPublicChatOn(false))
-      .finally(() => setPublicChatChecked(true));
-  }, []);
-
-  // On the public site, require login before showing anything.
-  // Full-screen auth, no chat visible behind it.
-  const requireAuth = publicChatChecked && publicChatOn && !loading && !user;
-  if (requireAuth) {
-    return (
-      <DesktopCapabilitiesProvider>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-4">
-          <div className="w-full max-w-md">
-            <div className="mb-6 text-center">
-              <h1 className="text-3xl font-bold text-ink">RipoBot</h1>
-              <p className="mt-2 text-ink-secondary">
-                Your AI assistant. Create bots, automate tasks, and more.
-              </p>
-            </div>
-            <AuthModal
-              mode={authMode}
-              onClose={() => {}}
-              onSuccess={(u) => {
-                setPublicUser(u);
-                refresh();
-              }}
-              onSwitchMode={setAuthMode}
-              mandatory={true}
-            />
-          </div>
-        </div>
-      </DesktopCapabilitiesProvider>
-    );
-  }
-
   return (
     <DesktopCapabilitiesProvider>
       <StoreProvider>
