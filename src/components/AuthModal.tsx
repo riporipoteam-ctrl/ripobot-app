@@ -6,9 +6,10 @@ interface AuthModalProps {
   onClose: () => void;
   onSuccess: (user: { id: string; email: string; name: string }) => void;
   onSwitchMode: (mode: "login" | "signup") => void;
+  mandatory?: boolean;
 }
 
-export function AuthModal({ mode, onClose, onSuccess, onSwitchMode }: AuthModalProps) {
+export function AuthModal({ mode, onClose, onSuccess, onSwitchMode, mandatory = false }: AuthModalProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -44,7 +45,7 @@ export function AuthModal({ mode, onClose, onSuccess, onSwitchMode }: AuthModalP
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
+      onClick={mandatory ? undefined : onClose}
     >
       <div
         className="w-full max-w-sm rounded-2xl border border-hairline/50 bg-card p-6 shadow-2xl"
@@ -136,12 +137,14 @@ export function AuthModal({ mode, onClose, onSuccess, onSwitchMode }: AuthModalP
           )}
         </div>
 
-        <button
-          onClick={onClose}
-          className="mt-4 w-full text-center text-sm text-ink-tertiary hover:text-ink-secondary"
-        >
-          Continue as guest
-        </button>
+        {!mandatory && (
+          <button
+            onClick={onClose}
+            className="mt-4 w-full text-center text-sm text-ink-tertiary hover:text-ink-secondary"
+          >
+            Continue as guest
+          </button>
+        )}
       </div>
     </div>
   );
