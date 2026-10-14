@@ -271,7 +271,7 @@ if (listening) {
     assert.equal(download.status, 200);
     const bytes = Buffer.from(await download.arrayBuffer());
     assert.equal(bytes.length, archive.bytes);
-    assert.equal(bytes.subarray(0, 16).toString(), "RIPO-WORKSPACE-1\n");
+    assert.equal(bytes.subarray(0, 17).toString(), "RIPO-WORKSPACE-1\n");
     backupReport = { ok: true, bytes: bytes.length };
   } catch (error) { backupReport = { error: String(error) }; }
 }
