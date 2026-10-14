@@ -845,8 +845,8 @@ export function SettingsModal() {
     // the activity log belongs to a workspace served to a browser, and to its admins
     .filter((entry) => entry.id !== "activity" || (!window.ogb && ownerOrAdmin === true))
     // public-chat guests see only their own profile/appearance: no API keys,
-    // engines, computers, or account management
-    .filter((entry) => isGuest !== true || entry.group === "you");
+    // engines, computers, pairing, or account management
+    .filter((entry) => isGuest !== true || (entry.group === "you" && entry.id !== "companion"));
   // the Skills surface browses the shared library, which exists only where
   // features.skillsLibrary switched it on
   const availableSections = baseSections.filter((entry) => entry.id !== "skills" || skillsLibraryEnabled(state.config));
