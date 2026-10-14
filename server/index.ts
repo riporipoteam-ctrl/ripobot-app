@@ -18191,12 +18191,23 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     // PUBLIC_CHAT is on. Returns a user session token (separate from device sessions).
     if (method === "POST" && path === "/api/auth/signup" && !gate.auth) {
       if (!PUBLIC_CHAT) return json(res, 404, { error: "public signup is not enabled on this server" });
-      if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
-        return json(res, 415, { error: "send the signup request as JSON (content-type: application/json)" });
+      const contentType = String(req.headers["content-type"] ?? "");
+      const isJson = /^application\/json\b/i.test(contentType);
+      const isForm = /^application\/x-www-form-urlencoded\b/i.test(contentType);
+      if (!isJson && !isForm) {
+        return json(res, 415, { error: "send the signup request as JSON or form-encoded" });
       }
-      const body = await readBody(req).catch(() => ({}));
-      const { email, password, name } = (body ?? {}) as { email?: string; password?: string; name?: string };
-      const result = await createUser(DATA_DIR, email ?? "", password ?? "", name ?? "");
+      const rawBody = await readBody(req).catch(() => ({}));
+      let email = "", password = "", name = "";
+      if (isJson) {
+        const body = (rawBody ?? {}) as { email?: string; password?: string; name?: string };
+        email = body.email ?? ""; password = body.password ?? ""; name = body.name ?? "";
+      } else {
+        // Form-encoded: parse query string format
+        const params = new URLSearchParams(String(rawBody ?? ""));
+        email = params.get("email") ?? ""; password = params.get("password") ?? ""; name = params.get("name") ?? "";
+      }
+      const result = await createUser(DATA_DIR, email, password, name);
       if (result.error || !result.user) {
         return json(res, 400, { error: result.error ?? "signup failed" });
       }
@@ -18210,6 +18221,12 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         serializeSessionCookie(SESSION_COOKIE, deviceIssued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(deviceIssued.session) }),
       ]);
       res.setHeader("cache-control", "no-store");
+      // For traditional form submissions (Safari fallback), redirect to /
+      if (typeof isForm !== "undefined" && isForm) {
+        res.writeHead(302, { Location: "/" });
+        res.end();
+        return;
+      }
       return json(res, 200, {
         user: { id: result.user.id, email: result.user.email, name: result.user.name, isAdmin: result.user.isAdmin === true },
         token: session.token,
@@ -18217,12 +18234,22 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     }
     if (method === "POST" && path === "/api/auth/login" && !gate.auth) {
       if (!PUBLIC_CHAT) return json(res, 404, { error: "public login is not enabled on this server" });
-      if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
-        return json(res, 415, { error: "send the login request as JSON (content-type: application/json)" });
+      const contentType = String(req.headers["content-type"] ?? "");
+      const isJson = /^application\/json\b/i.test(contentType);
+      const isForm = /^application\/x-www-form-urlencoded\b/i.test(contentType);
+      if (!isJson && !isForm) {
+        return json(res, 415, { error: "send the login request as JSON or form-encoded" });
       }
-      const body = await readBody(req).catch(() => ({}));
-      const { email, password } = (body ?? {}) as { email?: string; password?: string };
-      const result = await verifyUser(DATA_DIR, email ?? "", password ?? "");
+      const rawBody = await readBody(req).catch(() => ({}));
+      let email = "", password = "";
+      if (isJson) {
+        const body = (rawBody ?? {}) as { email?: string; password?: string };
+        email = body.email ?? ""; password = body.password ?? "";
+      } else {
+        const params = new URLSearchParams(String(rawBody ?? ""));
+        email = params.get("email") ?? ""; password = params.get("password") ?? "";
+      }
+      const result = await verifyUser(DATA_DIR, email, password);
       if (result.error || !result.user) {
         return json(res, 401, { error: result.error ?? "login failed" });
       }
@@ -18236,6 +18263,12 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         serializeSessionCookie(SESSION_COOKIE, deviceIssued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(deviceIssued.session) }),
       ]);
       res.setHeader("cache-control", "no-store");
+      // For traditional form submissions (Safari fallback), redirect to /
+      if (typeof isForm !== "undefined" && isForm) {
+        res.writeHead(302, { Location: "/" });
+        res.end();
+        return;
+      }
       return json(res, 200, {
         user: { id: result.user.id, email: result.user.email, name: result.user.name, isAdmin: result.user.isAdmin === true },
         token: session.token,

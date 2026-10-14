@@ -1,26 +1,29 @@
-// Simple, reliable auth page. Full page, no modal, no race conditions.
+// Safari-compatible auth page. Uses traditional form POST as fallback.
+// Works even if JavaScript fetch fails on iOS Safari.
 import { useState } from "react";
 
-interface AuthPageProps {
-  onSuccess: (user: { id: string; email: string; name: string; isAdmin?: boolean }) => void;
-}
-
-export function AuthPage({ onSuccess }: AuthPageProps) {
+export function AuthPage() {
   const [mode, setMode] = useState<"login" | "signup">("signup");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
+  // Try JS fetch first, fall back to traditional form submission
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // Don't prevent default immediately - let the form work traditionally
+    // We'll try fetch, and if it fails, allow traditional submission
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    
     try {
+      e.preventDefault(); // Prevent traditional submission, try fetch first
+      
       const endpoint = mode === "signup" ? "/api/auth/signup" : "/api/auth/login";
-      const body: Record<string, string> = { email, password };
-      if (mode === "signup") body.name = name;
+      const body: Record<string, string> = {
+        email: String(formData.get("email") ?? ""),
+        password: String(formData.get("password") ?? ""),
+      };
+      if (mode === "signup") {
+        body.name = String(formData.get("name") ?? "");
+      }
       
       const res = await fetch(endpoint, {
         method: "POST",
@@ -29,20 +32,18 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
         body: JSON.stringify(body),
       });
       
-      const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Failed");
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Failed. Please try again.");
         return;
       }
       
-      if (data.token) {
-        localStorage.setItem("ripo_user_token", data.token);
-      }
-      onSuccess(data.user);
+      // Success - reload to get the authenticated app
+      window.location.href = "/";
     } catch (err) {
-      setError("Network error. Try again.");
-    } finally {
-      setBusy(false);
+      // Fetch failed (e.g., Safari issue) - fall back to traditional form submission
+      console.warn("Fetch failed, falling back to traditional form submission", err);
+      form.submit(); // Submit traditionally
     }
   }
 
@@ -61,7 +62,13 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
             {mode === "signup" ? "Create your account" : "Welcome back"}
           </h2>
           
-          <form onSubmit={submit} className="space-y-4">
+          {/* Traditional form with POST action as fallback */}
+          <form
+            method="POST"
+            action={mode === "signup" ? "/api/auth/signup" : "/api/auth/login"}
+            onSubmit={handleSubmit}
+            className="space-y-4"
+          >
             {mode === "signup" && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-ink-secondary">
@@ -69,8 +76,7 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
                 </label>
                 <input
                   type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  name="name"
                   placeholder="Your name"
                   required
                   className="w-full rounded-lg border border-hairline bg-inset px-3 py-2.5 text-ink placeholder:text-ink-tertiary focus:border-accent focus:outline-none"
@@ -84,8 +90,7 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
               </label>
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                name="email"
                 placeholder="you@example.com"
                 required
                 className="w-full rounded-lg border border-hairline bg-inset px-3 py-2.5 text-ink placeholder:text-ink-tertiary focus:border-accent focus:outline-none"
@@ -98,8 +103,7 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
               </label>
               <input
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                name="password"
                 placeholder={mode === "signup" ? "Choose a password (min 6 chars)" : "Your password"}
                 required
                 minLength={6}
@@ -115,10 +119,9 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
             
             <button
               type="submit"
-              disabled={busy}
-              className="w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
+              className="w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-accent-ink hover:opacity-90"
             >
-              {busy ? "Please wait..." : mode === "signup" ? "Create account" : "Log in"}
+              {mode === "signup" ? "Create account" : "Log in"}
             </button>
           </form>
           
@@ -127,7 +130,7 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
               <>
                 Already have an account?{" "}
                 <button
-                  onClick={() => setMode("login")}
+                  onClick={() => { setMode("login"); setError(null); }}
                   className="font-medium text-accent hover:underline"
                 >
                   Log in
@@ -137,7 +140,7 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
               <>
                 Don't have an account?{" "}
                 <button
-                  onClick={() => setMode("signup")}
+                  onClick={() => { setMode("signup"); setError(null); }}
                   className="font-medium text-accent hover:underline"
                 >
                   Sign up

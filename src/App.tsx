@@ -4,6 +4,7 @@ import { Loader2, Menu } from "lucide-react";
 import { CLOUD_LINK_SETTINGS, openBot, StoreProvider, useStore } from "@/state/store";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useWelcomeViewer, WelcomeGate } from "@/components/onboarding/WelcomeGate";
+import { AuthPage } from "@/components/AuthPage";
 import { cloudSignInDue, spotlightsQuiet, type WelcomeViewer } from "@/lib/onboarding";
 import { FirstConversationTour } from "@/components/onboarding/FirstConversationTour";
 import { GuidedTour } from "@/components/onboarding/GuidedTour";
@@ -451,6 +452,30 @@ function Application() {
     initAnalytics();
   }, []);
   const viewer = useWelcomeViewer();
+  const [authChecked, setAuthChecked] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((res) => setLoggedIn(res.ok))
+      .catch(() => setLoggedIn(false))
+      .finally(() => setAuthChecked(true));
+  }, []);
+
+  // Show auth page if not logged in
+  if (authChecked && !loggedIn) {
+    return <AuthPage />;
+  }
+
+  // Loading while checking
+  if (!authChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-ink-secondary">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <DesktopCapabilitiesProvider>
       <StoreProvider>
