@@ -5,6 +5,7 @@ export interface PublicUser {
   id: string;
   email: string;
   name: string;
+  isAdmin?: boolean;
 }
 
 let cached: { user: PublicUser | null; checked: boolean } = { user: null, checked: false };

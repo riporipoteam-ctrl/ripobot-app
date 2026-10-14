@@ -18205,7 +18205,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       res.setHeader("set-cookie", serializeSessionCookie("ripo_user", session.token, { secure, maxAgeSeconds: 30 * 24 * 60 * 60 }));
       res.setHeader("cache-control", "no-store");
       return json(res, 200, {
-        user: { id: result.user.id, email: result.user.email, name: result.user.name },
+        user: { id: result.user.id, email: result.user.email, name: result.user.name, isAdmin: result.user.isAdmin === true },
         token: session.token,
       });
     }
@@ -18225,7 +18225,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       res.setHeader("set-cookie", serializeSessionCookie("ripo_user", session.token, { secure, maxAgeSeconds: 30 * 24 * 60 * 60 }));
       res.setHeader("cache-control", "no-store");
       return json(res, 200, {
-        user: { id: result.user.id, email: result.user.email, name: result.user.name },
+        user: { id: result.user.id, email: result.user.email, name: result.user.name, isAdmin: result.user.isAdmin === true },
         token: session.token,
       });
     }
@@ -18239,7 +18239,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       const token = parseCookies(req.headers.cookie).get("ripo_user");
       const { user } = getUserSession(DATA_DIR, token ?? "");
       if (!user) return json(res, 401, { error: "not logged in" });
-      return json(res, 200, { user: { id: user.id, email: user.email, name: user.name } });
+      return json(res, 200, { user: { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin === true } });
     }
     if (!gate.auth) return json(res, gate.status, { error: gate.error });
     const auth = gate.auth;

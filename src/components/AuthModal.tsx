@@ -4,7 +4,7 @@ import { useState } from "react";
 interface AuthModalProps {
   mode: "login" | "signup";
   onClose: () => void;
-  onSuccess: (user: { id: string; email: string; name: string }) => void;
+  onSuccess: (user: { id: string; email: string; name: string; isAdmin?: boolean }) => void;
   onSwitchMode: (mode: "login" | "signup") => void;
   mandatory?: boolean;
 }

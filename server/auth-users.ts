@@ -11,6 +11,7 @@ export interface PublicUser {
   name: string;
   passwordHash: string; // scrypt hash, format: salt:hash
   createdAt: number;
+  isAdmin?: boolean;
 }
 
 export interface PublicSession {
@@ -124,6 +125,10 @@ export async function createUser(
     return { error: "An account with this email already exists" };
   }
 
+  // Check if this email is an admin (via RIPO_ADMIN_EMAILS env var, comma-separated)
+  const adminEmails = (process.env.RIPO_ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const isAdmin = adminEmails.includes(normalizedEmail);
+
   const passwordHash = await hashPassword(password);
   const user: PublicUser = {
     id: `u_${randomBytes(12).toString("hex")}`,
@@ -131,6 +136,7 @@ export async function createUser(
     name: name.trim(),
     passwordHash,
     createdAt: Date.now(),
+    ...(isAdmin ? { isAdmin: true } : {}),
   };
   users.push(user);
   saveUsers(dataDir, users);
