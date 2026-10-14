@@ -4,6 +4,7 @@
 // The voice list comes from the harness, which holds cloud provider keys —
 // the renderer never talks to ElevenLabs or Fish Audio itself.
 import { useEffect, useState } from "react";
+import { usePublicUser } from "@/lib/use-public-user";
 import { Check, Loader2, Volume2 } from "lucide-react";
 
 import { api, useStore, type Bot, type ConfigStatus } from "@/state/store";
@@ -41,6 +42,9 @@ export function VoiceSettings({
 }) {
   const { state, dispatch } = useStore();
   const tts = state.config?.tts;
+  const { user: publicUser } = usePublicUser();
+  // On the public site, hide API key inputs — voice uses the browser's built-in voices (no key needed).
+  const hideApiKeys = publicUser !== null;
 
   const [keyDraft, setKeyDraft] = useState<VoiceKeyDraft>({ provider: null, value: "" });
   const [serverUrl, setServerUrl] = useState("");
@@ -312,7 +316,7 @@ export function VoiceSettings({
         </div>
       )}
 
-      {!workspaceConfigurationLocked && cloudProvider && (
+      {!workspaceConfigurationLocked && cloudProvider && !hideApiKeys && (
         <div className="mt-4">
         <div className="mb-1.5 flex items-center gap-2 text-[13px] text-ink-secondary">
           <span className={cn("size-1.5 rounded-full", configured ? "bg-success" : "bg-raised-hover")} />

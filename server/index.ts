@@ -18202,7 +18202,13 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       }
       const session = createUserSession(DATA_DIR, result.user.id);
       const secure = requestOrigin(req)?.startsWith("https://") === true;
-      res.setHeader("set-cookie", serializeSessionCookie("ripo_user", session.token, { secure, maxAgeSeconds: 30 * 24 * 60 * 60 }));
+      const isAdminUser = result.user.isAdmin === true;
+      const deviceScopes: Scope[] = isAdminUser ? ["client", "admin"] : ["client"];
+      const deviceIssued = sessions.issue({ label: `Public user ${result.user.email}`.slice(0, 80), scopes: deviceScopes });
+      res.setHeader("set-cookie", [
+        serializeSessionCookie("ripo_user", session.token, { secure, maxAgeSeconds: 30 * 24 * 60 * 60 }),
+        serializeSessionCookie(SESSION_COOKIE, deviceIssued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(deviceIssued.session) }),
+      ]);
       res.setHeader("cache-control", "no-store");
       return json(res, 200, {
         user: { id: result.user.id, email: result.user.email, name: result.user.name, isAdmin: result.user.isAdmin === true },
@@ -18222,7 +18228,13 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       }
       const session = createUserSession(DATA_DIR, result.user.id);
       const secure = requestOrigin(req)?.startsWith("https://") === true;
-      res.setHeader("set-cookie", serializeSessionCookie("ripo_user", session.token, { secure, maxAgeSeconds: 30 * 24 * 60 * 60 }));
+      const isAdminUser = result.user.isAdmin === true;
+      const deviceScopes: Scope[] = isAdminUser ? ["client", "admin"] : ["client"];
+      const deviceIssued = sessions.issue({ label: `Public user ${result.user.email}`.slice(0, 80), scopes: deviceScopes });
+      res.setHeader("set-cookie", [
+        serializeSessionCookie("ripo_user", session.token, { secure, maxAgeSeconds: 30 * 24 * 60 * 60 }),
+        serializeSessionCookie(SESSION_COOKIE, deviceIssued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(deviceIssued.session) }),
+      ]);
       res.setHeader("cache-control", "no-store");
       return json(res, 200, {
         user: { id: result.user.id, email: result.user.email, name: result.user.name, isAdmin: result.user.isAdmin === true },
@@ -18239,7 +18251,12 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       const token = parseCookies(req.headers.cookie).get("ripo_user");
       const { user } = getUserSession(DATA_DIR, token ?? "");
       if (!user) return json(res, 401, { error: "not logged in" });
-      return json(res, 200, { user: { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin === true } });
+      const meIsAdmin = user.isAdmin === true;
+      const meScopes: Scope[] = meIsAdmin ? ["client", "admin"] : ["client"];
+      const meDevice = sessions.issue({ label: `Public user ${user.email}`.slice(0, 80), scopes: meScopes });
+      const meSecure = requestOrigin(req)?.startsWith("https://") === true;
+      res.setHeader("set-cookie", serializeSessionCookie(SESSION_COOKIE, meDevice.token, { secure: meSecure, maxAgeSeconds: cookieMaxAgeSeconds(meDevice.session) }));
+      return json(res, 200, { user: { id: user.id, email: user.email, name: user.name, isAdmin: meIsAdmin } });
     }
     if (!gate.auth) return json(res, gate.status, { error: gate.error });
     const auth = gate.auth;
