@@ -41,7 +41,14 @@ const featureRouteModules = ["data/routes.ts", "workspace-backup-http.ts", "clou
 const serverSource = [join(ROOT, "server", "index.ts"), ...routeModules, ...featureRouteModules]
   .map((file) => readFileSync(file, "utf8")).join("\n");
 const hooksSource = readFileSync(join(ROOT, "server", "webhook-ingress.ts"), "utf8");
-const hostedSource = readFileSync(join(ROOT, "enterprise", "server", "workspace-access.ts"), "utf8");
+// The enterprise layer is a separately-licensed folder this fork does not
+// ship (see server/enterprise.ts: delete it and the server still starts in
+// the open-source edition). Its hosted-workspace sources may be absent;
+// the recipes that document its fixtures still cite them.
+const hasEnterpriseLayer = existsSync(join(ROOT, "enterprise", "server", "workspace-access.ts"));
+const hostedSource = hasEnterpriseLayer
+  ? readFileSync(join(ROOT, "enterprise", "server", "workspace-access.ts"), "utf8")
+  : "";
 // Only constants named in the public handler's accepted-path guard are routes.
 // Outbound post("/api/handoff/...") calls belong to the identity service, not us.
 const hostedConstants = new Map([...hostedSource.matchAll(/const ([A-Z_]+) = "(\/api\/[^"\n]+)";/g)].map(match => [match[1]!, match[2]!]));
@@ -67,13 +74,19 @@ describe("docs/verification recipes cite things that exist", () => {
   it("cite source files that exist", () => {
     const refs = cited(/(?<![\w/.-])((?:scripts|server|src|shared|electron|companion|enterprise)\/[\w./-]+\.(?:ts|tsx|mjs|cjs|py))(?![\w/])/g);
     expect(refs.length).toBeGreaterThan(50);
-    expect([...new Set(refs.filter((hit) => !existsSync(join(ROOT, target(hit)))))]).toEqual([]);
+    // Without the enterprise layer, its fixtures' citations point at a
+    // folder this fork deliberately does not ship.
+    const live = hasEnterpriseLayer ? refs : refs.filter((hit) => !target(hit).startsWith("enterprise/"));
+    expect([...new Set(live.filter((hit) => !existsSync(join(ROOT, target(hit)))))]).toEqual([]);
   });
 
   it("cite test files that exist", () => {
     const refs = cited(/(?<![\w/.-])([\w./-]+\.test\.(?:ts|mjs))(?![\w/])/g);
     expect(refs.length).toBeGreaterThan(20);
-    expect([...new Set(refs.filter((hit) => !existsSync(join(ROOT, target(hit)))))]).toEqual([]);
+    // Without the enterprise layer, its fixtures' citations point at a
+    // folder this fork deliberately does not ship.
+    const live = hasEnterpriseLayer ? refs : refs.filter((hit) => !target(hit).startsWith("enterprise/"));
+    expect([...new Set(live.filter((hit) => !existsSync(join(ROOT, target(hit)))))]).toEqual([]);
   });
 
   it("cite API routes the server registers", () => {
@@ -82,6 +95,10 @@ describe("docs/verification recipes cite things that exist", () => {
     const registered = (route: string) => {
       const path = route.replace(/[.,;:]+$/, "");
       if (hostedPublicRoutes.has(path)) return true;
+      // Without the enterprise layer the server still answers the hosted
+      // prefix with a 503 stub, so the sign-in recipes' routes count as
+      // registered by their prefix.
+      if (!hasEnterpriseLayer && path.startsWith("/api/auth/hosted/")) return true;
       const source = path.startsWith("/hooks/") ? hooksSource : serverSource;
       const segments = path.split("/").slice(1);
       const literal = segments.findIndex((segment) => PLACEHOLDER.test(segment));
@@ -94,7 +111,9 @@ describe("docs/verification recipes cite things that exist", () => {
     expect([...new Set(refs.filter((hit) => !registered(target(hit))))]).toEqual([]);
   });
 
-  it("distinguishes delegated public routes from external identity backchannels", () => {
+  // Only meaningful with the enterprise layer present: it asserts the exact
+  // public routes the layer's workspace-access.ts delegates.
+  it.runIf(hasEnterpriseLayer)("distinguishes delegated public routes from external identity backchannels", () => {
     expect([...hostedPublicRoutes]).toEqual(["/api/auth/hosted/start", "/api/auth/hosted/callback"]);
     expect(hostedPublicRoutes.has("/api/handoff/consume")).toBe(false);
     expect(hostedPublicRoutes.has("/api/handoff/check")).toBe(false);
