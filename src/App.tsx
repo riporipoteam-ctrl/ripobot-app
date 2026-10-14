@@ -4,7 +4,8 @@ import { Loader2, Menu } from "lucide-react";
 import { CLOUD_LINK_SETTINGS, openBot, StoreProvider, useStore } from "@/state/store";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useWelcomeViewer, WelcomeGate } from "@/components/onboarding/WelcomeGate";
-import { PublicAuthGate } from "@/components/PublicAuthGate";
+import { AuthModal } from "@/components/AuthModal";
+import { setPublicUser } from "@/lib/use-public-user";
 import { usePublicUser } from "@/lib/use-public-user";
 import { cloudSignInDue, spotlightsQuiet, type WelcomeViewer } from "@/lib/onboarding";
 import { FirstConversationTour } from "@/components/onboarding/FirstConversationTour";
@@ -453,9 +454,10 @@ function Application() {
     initAnalytics();
   }, []);
   const viewer = useWelcomeViewer();
-  const { user, loading } = usePublicUser();
+  const { user, loading, refresh } = usePublicUser();
   const [publicChatChecked, setPublicChatChecked] = useState(false);
   const [publicChatOn, setPublicChatOn] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("signup");
 
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
@@ -478,7 +480,16 @@ function Application() {
                 Your AI assistant. Create bots, automate tasks, and more.
               </p>
             </div>
-            <PublicAuthGate />
+            <AuthModal
+              mode={authMode}
+              onClose={() => {}}
+              onSuccess={(u) => {
+                setPublicUser(u);
+                refresh();
+              }}
+              onSwitchMode={setAuthMode}
+              mandatory={true}
+            />
           </div>
         </div>
       </DesktopCapabilitiesProvider>
