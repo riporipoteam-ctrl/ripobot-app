@@ -18165,6 +18165,27 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     if (method === "GET" && path === "/api/brand" && !gate.auth) {
       return json(res, 200, loadBrand());
     }
+    // Public chat guest minting: no pairing code, rate-limited per source.
+    // Public like /api/health above: an unauthenticated browser through a
+    // proxy must reach it, or the web UI could never provision its guest
+    // session. The session is client-scoped and labelled so isPublicGuest()
+    // recognises it; the cookie is set exactly like a pairing exchange.
+    if (method === "POST" && path === "/api/auth/guest" && !gate.auth) {
+      if (!PUBLIC_CHAT) return json(res, 404, { error: "public chat is not enabled on this server" });
+      if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
+        return json(res, 415, { error: "send the guest request as JSON (content-type: application/json)" });
+      }
+      const source = requestSource(req);
+      if (!guestIssueAllowed(source)) {
+        return json(res, 429, { error: "too many guest sessions from your address; try again later" });
+      }
+      const label = `Public guest ${labelFromUserAgent(req.headers["user-agent"])}`.slice(0, 80);
+      const issued = sessions.issue({ label, scopes: ["client"] });
+      const secure = requestOrigin(req)?.startsWith("https://") === true;
+      res.setHeader("set-cookie", serializeSessionCookie(SESSION_COOKIE, issued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(issued.session) }));
+      res.setHeader("cache-control", "no-store");
+      return json(res, 200, { session: issued.session });
+    }
     if (!gate.auth) return json(res, gate.status, { error: gate.error });
     const auth = gate.auth;
     if (HOSTED_WORKSPACE && auth.kind === "session") {
@@ -18206,23 +18227,9 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     // Public chat guest minting: no pairing code, rate-limited per source.
     // The session is client-scoped and labelled so isPublicGuest() recognises
     // it; the cookie is set exactly like a pairing exchange. JSON only, same
-    // reason as /api/auth/pair above.
-    if (method === "POST" && path === "/api/auth/guest") {
-      if (!PUBLIC_CHAT) return json(res, 404, { error: "public chat is not enabled on this server" });
-      if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
-        return json(res, 415, { error: "send the guest request as JSON (content-type: application/json)" });
-      }
-      const source = requestSource(req);
-      if (!guestIssueAllowed(source)) {
-        return json(res, 429, { error: "too many guest sessions from your address; try again later" });
-      }
-      const label = `Public guest ${labelFromUserAgent(req.headers["user-agent"])}`.slice(0, 80);
-      const issued = sessions.issue({ label, scopes: ["client"] });
-      const secure = requestOrigin(req)?.startsWith("https://") === true;
-      res.setHeader("set-cookie", serializeSessionCookie(SESSION_COOKIE, issued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(issued.session) }));
-      res.setHeader("cache-control", "no-store");
-      return json(res, 200, { session: issued.session });
-    }
+    // reason as /api/auth/pair above. (The public pre-gate handler above
+    // answers unauthenticated requests; this is unreachable but kept for
+    // clarity if the gate ever changes.)
     if (method === "GET" && path === "/api/auth/session") {
       return json(
         res,
