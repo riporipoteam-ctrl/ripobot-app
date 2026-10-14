@@ -60,6 +60,9 @@ export interface ThreadRouteDeps {
   messageFileRootsForThread(senderId: string, threadId: string): string[];
   viewerFor(auth: RequestAuth): Viewer;
   visibleTo(viewer: Viewer): VisibleSet;
+  /** Public-chat guests see only their own threads. */
+  isPublicGuest(auth: RequestAuth): boolean;
+  guestOwnsThread(auth: RequestAuth, threadId: string): boolean;
 }
 
 export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
@@ -92,13 +95,21 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
       // carrying no tasks, where clients expect [].
       // A member on a workspace with a restricted bot gets only what they may
       // see (bot-visibility.ts); for everyone else these filters keep all.
+      // A public-chat guest sees only the threads they opened: other guests'
+      // (and the owner's) conversations are filtered from tasks, and the
+      // main thread's messages are omitted (they start a fresh thread).
+      const guest = deps.isPublicGuest(auth);
       const shownBots = store.bots.filter((bot) => visible.bot(bot.id));
       const queued = publicBotQueuedMessages();
       return json(res, 200, {
         bots: shownBots.map((bot) => memberBot({
           ...wireBot(bot),
-          tasks: store.tasks(bot.id).map((task) => wireTask(task, bot.modelSelection)),
-          ...messagePage(bot.threadId, limit),
+          tasks: store.tasks(bot.id)
+            .filter((task) => !guest || deps.guestOwnsThread(auth, task.threadId))
+            .map((task) => wireTask(task, bot.modelSelection)),
+          // Guests don't see the main thread's history (it's the owner's or
+          // another guest's); they start their own conversation.
+          ...(guest ? { messages: [], hasMore: false, activeLeafId: null } : messagePage(bot.threadId, limit)),
         }, visible)),
         botQueuedMessages: visible.everything ? queued : Object.fromEntries(Object.entries(queued).filter(([threadId]) => visible.thread(threadId))),
         sections: visible.sections(store.sections),
@@ -120,6 +131,10 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
     if (m && method === "GET") {
       const threadId = m[1];
       if (!store.botByThread(threadId) && !store.groupByThread(threadId)) {
+        return json(res, 404, { error: "no such conversation" });
+      }
+      // Public-chat guests may only read threads they opened.
+      if (deps.isPublicGuest(auth) && !deps.guestOwnsThread(auth, threadId)) {
         return json(res, 404, { error: "no such conversation" });
       }
       const limit = pageSize(url.searchParams.get("limit"));

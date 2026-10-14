@@ -680,6 +680,20 @@ const sessions = new SessionRegistry({
   },
   portalMembership: hostedWorkspaceConfiguration()?.portalMembership === true,
 });
+/** Public-chat guest minting, per source: at most GUEST_PER_HOUR issues per
+ * rolling hour. Kept in memory; a restart resets it, which fails safe. */
+const guestIssues = new Map<string, number[]>();
+const GUEST_PER_HOUR = 10;
+const GUEST_WINDOW_MS = 60 * 60 * 1000;
+function guestIssueAllowed(source: string): boolean {
+  const now = Date.now();
+  const hits = (guestIssues.get(source) ?? []).filter((t) => now - t < GUEST_WINDOW_MS);
+  if (hits.length >= GUEST_PER_HOUR) return false;
+  hits.push(now);
+  if (guestIssues.size > 10_000) guestIssues.clear();
+  guestIssues.set(source, hits);
+  return true;
+}
 const sharedComputers = new SharedComputers(id => sessions.isLive(id));
 // One-time remote setup (RIPO_SETUP_CODE). When the operator cannot reach the
 // server over loopback (e.g. Render free has no shell), they set RIPO_SETUP_CODE
@@ -707,6 +721,13 @@ const CLOUD_HOME = cloudHomeConfiguration(CLOUD_ENV);
 // A Cloud home is personal: only the owner's own devices, each with admin
 // scope, connect (server/cloud-owner.ts; the stored rest is revoked below).
 if (CLOUD_HOME) sessions.requireAdmin(CLOUD_PERSONAL_REFUSAL);
+/** Public chat: anyone may open the web UI and chat without pairing.
+ * RIPO_PUBLIC_CHAT=1 enables POST /api/auth/guest (rate-limited per IP),
+ * which mints a client-scoped guest session. Guests write only in threads
+ * they opened (isPublicGuest below); admin routes stay admin-only via the
+ * existing CLIENT_ALLOW scope gate. */
+const PUBLIC_CHAT = process.env.RIPO_PUBLIC_CHAT === "1";
+if (PUBLIC_CHAT) console.log("public chat enabled: POST /api/auth/guest mints rate-limited guest sessions");
 /** Lending a computer to this server (the shared-computer routes, the two
  * agent tools, the advertised capability): the maintainer flag anywhere, and
  * always on an RIPO Cloud home, where it is the person's own Mac lent to their
@@ -1100,9 +1121,10 @@ function cloudThreadRefusal(auth: RequestAuth, threadId: string): string | null 
  * keep their own conversations; their lines make a conversation someone
  * else's all the same (see noteSomeoneElsesLine). */
 function cloudGuestSendRefusal(auth: RequestAuth, threadId: string): string | null {
-  if (!CLOUD_HOME || auth.kind !== "session" || cloudOwnerSession(auth)) return null;
+  if (auth.kind !== "session" || cloudOwnerSession(auth)) return null;
+  if (!CLOUD_HOME && !isPublicGuest(auth)) return null;
   return threadStarters.get(threadId) === actorKey(auth)
-    ? null : "On this Cloud you can only write in conversations you started. Start a new conversation with this bot.";
+    ? null : "You can only write in conversations you started. Start a new conversation with this bot.";
 }
 
 /** On a Cloud home: the one key every line, card answer, conversation and
@@ -1298,6 +1320,18 @@ function cloudGuestDriven(threadId: string): boolean {
  * processes on the machine (a bot's shell) do. */
 function cloudOwnerSession(auth: RequestAuth): boolean {
   return auth.kind === "session" && auth.scopes.includes("admin");
+}
+
+/** A public-chat guest: minted by POST /api/auth/guest, client scope only,
+ * never admin. Guests write only in threads they opened (cloudGuestSendRefusal
+ * and the /api/bots task filter below); they never see admin routes (the
+ * CLIENT_ALLOW scope gate) nor other guests' threads. */
+function isPublicGuest(auth: RequestAuth): boolean {
+  return PUBLIC_CHAT &&
+    auth.kind === "session" &&
+    auth.session.scopes.includes("client") &&
+    !auth.session.scopes.includes("admin") &&
+    auth.session.label.startsWith("Public guest");
 }
 
 /** On a Cloud home: whether a person key is the owner's, for who opened a
@@ -17447,6 +17481,7 @@ ROUTES.push(createThreadRoutes({
   cliOwnerToken: () => cliOwnerToken,
   pageSize, messagePage, messageWindow, publicBotQueuedMessages, publicGroupState, wireBot, wireTask,
   botComputerControlSnapshot, messageFileRootsForThread, viewerFor, visibleTo,
+  isPublicGuest, guestOwnsThread: (auth, threadId) => auth.kind === "session" && threadStarters.get(threadId) === actorKey(auth),
 }));
 // Creating a bot (POST /api/bots): the saved New bot defaults and a preset
 // are applied around the store's own creation.
@@ -18168,12 +18203,32 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     if (await dispatchRoutes(ROUTES, { req, res, url, path, method, auth, json, readBody })) return;
 
     // ── sessions: who am I, tickets, pairing and revocation ─────────────
+    // Public chat guest minting: no pairing code, rate-limited per source.
+    // The session is client-scoped and labelled so isPublicGuest() recognises
+    // it; the cookie is set exactly like a pairing exchange. JSON only, same
+    // reason as /api/auth/pair above.
+    if (method === "POST" && path === "/api/auth/guest") {
+      if (!PUBLIC_CHAT) return json(res, 404, { error: "public chat is not enabled on this server" });
+      if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
+        return json(res, 415, { error: "send the guest request as JSON (content-type: application/json)" });
+      }
+      const source = requestSource(req);
+      if (!guestIssueAllowed(source)) {
+        return json(res, 429, { error: "too many guest sessions from your address; try again later" });
+      }
+      const label = `Public guest ${labelFromUserAgent(req.headers["user-agent"])}`.slice(0, 80);
+      const issued = sessions.issue({ label, scopes: ["client"] });
+      const secure = requestOrigin(req)?.startsWith("https://") === true;
+      res.setHeader("set-cookie", serializeSessionCookie(SESSION_COOKIE, issued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(issued.session) }));
+      res.setHeader("cache-control", "no-store");
+      return json(res, 200, { session: issued.session });
+    }
     if (method === "GET" && path === "/api/auth/session") {
       return json(
         res,
         200,
         auth.kind === "loopback"
-          ? { kind: "loopback", scopes: auth.scopes, environmentId: ENVIRONMENT_ID, ...(auth.trust ? { trust: auth.trust } : {}) }
+          ? { kind: "loopback", scopes: auth.scopes, environmentId: ENVIRONMENT_ID, ...(auth.trust ? { trust: auth.trust } : {}), ...(PUBLIC_CHAT ? { publicChat: true } : {}) }
           : {
               kind: "session",
               id: auth.session.id,
@@ -18192,10 +18247,13 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
               // an RIPO Cloud home: the web UI's first run is its engine
               // sign-in (docs/cloud-pro.md). Absent everywhere else.
               ...(CLOUD_HOME ? { cloudHome: true } : {}),
-              // a device that is not one of the owner's own on a Cloud home
-              // writes only in conversations it opened: the composer offers
-              // a new conversation everywhere else.
+              // public chat is on: the web UI may offer guest sign-in
+              ...(PUBLIC_CHAT ? { publicChat: true } : {}),
+              // a device that is not one of the owner's own on a Cloud home,
+              // or a public-chat guest, writes only in conversations it
+              // opened: the composer offers a new conversation elsewhere.
               ...(CLOUD_HOME && !cloudOwnerSession(auth) ? { cloudGuest: true, openedThreads: threadStarters.threadsOf(actorKey(auth), 2_000) } : {}),
+              ...(isPublicGuest(auth) ? { cloudGuest: true, openedThreads: threadStarters.threadsOf(actorKey(auth), 2_000) } : {}),
             },
       );
     }

@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import {
-  BROWSER_SIGN_IN_FAILED, previewBrowserSignIn, readSessionState, SERVICE_TRUST_REASON, takeBrowserSignInFromLocation, takePairingCodeFromLocation, takeInvitedEmailFromLocation,
+  BROWSER_SIGN_IN_FAILED, previewBrowserSignIn, readSessionState, SERVICE_TRUST_REASON, takeBrowserSignInFromLocation, takePairingCodeFromLocation, takeInvitedEmailFromLocation, provisionGuestSession,
 } from "./lib/session";
 import { bootstrapBrand } from "./lib/brand";
 import { applySkin, readSkin } from "./lib/skins";
@@ -25,7 +25,9 @@ applyFont(readFont());
 /** A pairing link lands on /pair. A remote browser without a session lands
  * there too, because every API call would otherwise fail with "pair this
  * device"; on the owner's own machine the server trusts loopback and this
- * check is a single fast request. */
+ * check is a single fast request. When the server has public chat enabled,
+ * an unauthenticated browser is minted a guest session instead of seeing
+ * the pairing page. */
 async function chooseRoot(): Promise<React.ReactNode> {
   if (location.pathname === "/pair") {
     // The RIPO Cloud page's "Use in your browser": whose Cloud it is, then one Continue.
@@ -36,7 +38,11 @@ async function chooseRoot(): Promise<React.ReactNode> {
     }
     return <PairPage initialCode={takePairingCodeFromLocation()} initialEmail={takeInvitedEmailFromLocation()} />;
   }
-  const session = await readSessionState();
+  let session = await readSessionState();
+  // Public chat: no pairing wall. Mint a guest session and proceed as it.
+  if (session.kind === "unauthenticated" && await provisionGuestSession()) {
+    session = await readSessionState();
+  }
   if (session.kind === "unauthenticated") return <PairPage initialCode={null} reason={session.error} />;
   // A service-trust server answers this machine's requests without a session
   // but refuses to let it manage anything: sign in first, as a remote browser would.

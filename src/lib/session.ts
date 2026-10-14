@@ -55,6 +55,28 @@ export async function readSessionState(fetchImpl: typeof fetch = fetch): Promise
  * workspace), so an SSH tunnel is not the owner and must sign in. */
 export const SERVICE_TRUST_REASON = "This server does not treat this computer as its owner. Sign in or pair this browser to continue.";
 
+/** Try to mint a public-chat guest session (POST /api/auth/guest). The
+ * server sets the session cookie; returns true when a session now exists.
+ * Returns false when public chat is disabled or the rate limit bites — the
+ * caller then falls back to the pairing page. */
+export async function provisionGuestSession(fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  let res: Response;
+  try {
+    res = await fetchImpl("/api/auth/guest", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+  } catch {
+    return false;
+  }
+  if (!res.ok) return false;
+  // The cookie is set; confirm the session reads back.
+  const state = await readSessionState(fetchImpl);
+  return state.kind === "session";
+}
+
 /** A connection that can use the app: a session, or the owner on this machine. */
 export function isConnected(state: SessionState | null): boolean {
   return state?.kind === "session" || (state?.kind === "loopback" && state.trust !== "service");
