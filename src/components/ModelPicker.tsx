@@ -889,10 +889,22 @@ export function ModelPicker({
           {active && showActiveAccount && (
             <span data-model-account className="text-ink-secondary">{active.displayName} · </span>
           )}
-          {modelLabel(active, selection.model)}
-          {active && modelProvider(active, selection.model) && (
-            <span className="text-ink-secondary"> · {modelProvider(active, selection.model)}</span>
-          )}
+          {/* Public rebrand: the default engine shows as "ripoai S1" */}
+          {(() => {
+            const provider = active ? modelProvider(active, selection.model) : undefined;
+            const label = active ? modelLabel(active, selection.model) : selection.model;
+            // If the model is the default (openai-compat/Pollinations), show "ripoai S1"
+            const displayLabel = (provider === "openai" || label.toLowerCase() === "openai") ? "ripoai S1" : label;
+            const displayProvider = provider === "openai" ? undefined : provider;
+            return (
+              <>
+                {displayLabel}
+                {displayProvider && (
+                  <span className="text-ink-secondary"> · {displayProvider}</span>
+                )}
+              </>
+            );
+          })()}
         </span>
         {/* outside the truncating span: a long model name must not be what
             hides the effort the header exists to surface */}
