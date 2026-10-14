@@ -369,6 +369,31 @@ export class SessionRegistry {
     return this.pairings.map((p) => ({ id: p.id, label: p.label, scopes: [...p.scopes], createdAt: p.createdAt, expiresAt: p.expiresAt }));
   }
 
+  /**
+   * One-time remote setup (RIPO_SETUP_CODE). Opens a pairing window for a
+   * fixed, owner-chosen code with a long TTL, so the owner can pair their
+   * first device on a server they cannot reach over loopback (e.g. Render
+   * free, which has no shell). The env var must be removed after pairing.
+   * Single-use like any pairing code; full admin scopes.
+   */
+  openSetupPairing(code: string, ttlMs: number, label: string): { id: string; code: string; expiresAt: number } {
+    this.prune();
+    const now = this.now();
+    const normalized = normalizePairingCode(code);
+    const credential = generatePairingCredential();
+    const pairing: PairingCode = {
+      id: randomUUID(),
+      codeHash: sha256(normalized),
+      credentialHash: sha256(credential),
+      scopes: [...SCOPES],
+      label: label.slice(0, 80),
+      createdAt: now,
+      expiresAt: now + ttlMs,
+    };
+    this.pairings.push(pairing);
+    return { id: pairing.id, code: formatPairingCode(normalized), expiresAt: pairing.expiresAt };
+  }
+
   /** What a browser sign-in's page shows before anything is redeemed: whose
    * Cloud it signs in to. Only a browser sign-in's 256-bit credential can
    * match, so this consumes nothing and counts toward no lockout. */

@@ -681,6 +681,21 @@ const sessions = new SessionRegistry({
   portalMembership: hostedWorkspaceConfiguration()?.portalMembership === true,
 });
 const sharedComputers = new SharedComputers(id => sessions.isLive(id));
+// One-time remote setup (RIPO_SETUP_CODE). When the operator cannot reach the
+// server over loopback (e.g. Render free has no shell), they set RIPO_SETUP_CODE
+// to a fixed pairing code (XXXX-XXXX-XXXX) and restart: the server opens a
+// long-lived, single-use, full-admin pairing window for that code. The owner
+// pairs once from the /pair page, then the operator MUST remove the env var
+// and restart. The code itself is never logged.
+const RIPO_SETUP_CODE = (process.env.RIPO_SETUP_CODE ?? "").trim();
+if (RIPO_SETUP_CODE) {
+  if (/^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/i.test(RIPO_SETUP_CODE)) {
+    const setup = sessions.openSetupPairing(RIPO_SETUP_CODE, 24 * 60 * 60 * 1000, "Owner setup");
+    console.log(`[setup] RIPO_SETUP_CODE active: owner pairing window open until ${new Date(setup.expiresAt).toISOString()} (remove the env var after pairing)`);
+  } else {
+    console.warn("[setup] RIPO_SETUP_CODE ignored: expected format XXXX-XXXX-XXXX using 2-9A-Z (no 0/1/O/I)");
+  }
+}
 // RIPO Cloud Pro home machine (server/cloud-home.ts, docs/cloud-pro.md). A
 // partial or invalid boot contract stops the server here, before it serves.
 // Its secrets come over the launcher's pipe, never this process's
