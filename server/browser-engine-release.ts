@@ -48,7 +48,10 @@ const RELEASES = new Map<string, AgentBrowserReleaseAsset>([
     {
       // Upstream 0.37.0 still lacks PR #1781's Windows cold-start fix.
       // Retain the native-verified revision until its replacement is tested.
-      target: "win32-x64", version: "0.36.0-ripo.1",
+      // The binary is the reviewed 0.36.0-omb.1 vendor build, republished
+      // under this repo's release; its embedded version string is
+      // 0.36.0-omb.1, so the pin says that (the smoke gate runs --version).
+      target: "win32-x64", version: "0.36.0-omb.1",
       asset: "agent-browser-win32-x64-0.36.0-ripo.1.exe",
       url: "https://github.com/riporipoteam-ctrl/ripobot-app/releases/download/browser-engine-v0.36.0-ripo.1/agent-browser-win32-x64-0.36.0-ripo.1.exe",
       sha256: "33bee834f6a6072ec8688b0914726e0262874d758f69f27e8baf7eaac6b5ed15", bytes: 13806080,
