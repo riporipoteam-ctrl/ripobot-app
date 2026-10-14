@@ -4,6 +4,8 @@ import { Loader2, Menu } from "lucide-react";
 import { CLOUD_LINK_SETTINGS, openBot, StoreProvider, useStore } from "@/state/store";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useWelcomeViewer, WelcomeGate } from "@/components/onboarding/WelcomeGate";
+import { AuthPage } from "@/components/AuthPage";
+import { usePublicUser, setPublicUser } from "@/lib/use-public-user";
 import { cloudSignInDue, spotlightsQuiet, type WelcomeViewer } from "@/lib/onboarding";
 import { FirstConversationTour } from "@/components/onboarding/FirstConversationTour";
 import { GuidedTour } from "@/components/onboarding/GuidedTour";
@@ -451,6 +453,29 @@ function Application() {
     initAnalytics();
   }, []);
   const viewer = useWelcomeViewer();
+  const { user, loading, refresh } = usePublicUser();
+
+  // Show auth page if not logged in (and not still checking)
+  if (!loading && !user) {
+    return (
+      <AuthPage
+        onSuccess={(u) => {
+          setPublicUser(u);
+          refresh();
+        }}
+      />
+    );
+  }
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-ink-secondary">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <DesktopCapabilitiesProvider>
       <StoreProvider>
