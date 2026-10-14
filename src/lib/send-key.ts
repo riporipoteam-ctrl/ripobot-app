@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 import { activeLocale } from "./i18n";
 import { isMacPlatform } from "./keyboard-shortcuts";
 
-export const SEND_KEY_KEY = "omb-send-key";
+export const SEND_KEY_KEY = "ripo-send-key";
 
 /** Which Enter sends from a message box (Settings → Appearance). "enter":
  * Enter sends, Shift+Enter adds a line. "shift-enter" and "mod-enter" (Ctrl,

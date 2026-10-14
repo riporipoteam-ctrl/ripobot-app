@@ -92,9 +92,9 @@ async function restart(env: NodeJS.ProcessEnv = {}) {
 
 beforeAll(async () => {
   PORT = await freePortBlock([0, 1], 35_000, 5_000);
-  home = mkdtempSync(join(tmpdir(), "omb-hosted-server-"));
+  home = mkdtempSync(join(tmpdir(), "ripo-hosted-server-"));
   stateFile = join(home, "portal-fixture.json"); state();
-  const data = join(home, ".openmausbot");
+  const data = join(home, ".ripobot");
   const layer = join(home, "enterprise");
   mkdirSync(join(layer, "server"), { recursive: true });
   mkdirSync(join(home, "static"));
@@ -124,14 +124,14 @@ beforeAll(async () => {
   child = spawn(process.execPath, [join(ROOT, "server/index.ts")], { cwd: ROOT, env: fixtureEnv = {
     ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
     ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-    HOME: home, USERPROFILE: home, OMB_PORT: String(PORT), OMB_WEBHOOK_PORT: String(PORT + 1),
-    OMB_STATIC_DIR: join(home, "static"), OMB_BROWSER_CONNECTION: join(home, "browser-connection.json"),
-    OMB_ENTERPRISE_DIR: layer, OMB_LICENSE_KEY: "fixture-only", OMB_ADMIN_URL: "https://admin.example.test",
-    OMB_ADMIN_WORKSPACE: "acme", OMB_PUBLIC_URL: `https://${HOST}`,
+    HOME: home, USERPROFILE: home, RIPO_PORT: String(PORT), RIPO_WEBHOOK_PORT: String(PORT + 1),
+    RIPO_STATIC_DIR: join(home, "static"), RIPO_BROWSER_CONNECTION: join(home, "browser-connection.json"),
+    RIPO_ENTERPRISE_DIR: layer, RIPO_LICENSE_KEY: "fixture-only", RIPO_ADMIN_URL: "https://admin.example.test",
+    RIPO_ADMIN_WORKSPACE: "acme", RIPO_PUBLIC_URL: `https://${HOST}`,
     // These cases exercise portal sessions and set fixtures up over loopback,
     // so they keep the owner explicitly. A hosted workspace's default
     // (service) has its own case at the end, which drops this override.
-    OMB_LOOPBACK_TRUST: "owner",
+    RIPO_LOOPBACK_TRUST: "owner",
   }, stdio: ["ignore", "pipe", "pipe"] });
   child.stdout?.on("data", (chunk) => log += chunk); child.stderr?.on("data", (chunk) => log += chunk);
   const deadline = Date.now() + 20_000;
@@ -143,7 +143,7 @@ beforeAll(async () => {
 }, 30_000);
 afterAll(async () => {
   await waitForExit(child, { signal: "SIGTERM" });
-  const evidenceDir = join(tmpdir(), "openmausbot-verification-evidence");
+  const evidenceDir = join(tmpdir(), "ripobot-verification-evidence");
   mkdirSync(evidenceDir, { recursive: true });
   const logPath = join(evidenceDir, `hosted-access-${Date.now()}-${process.pid}.log`);
   writeFileSync(logPath, log);
@@ -158,7 +158,7 @@ describe("hosted bridge in the full server", () => {
     expect((await call("/")).location).toBe("/api/auth/hosted/start");
     expect((await call("/pair")).location).toBe("/api/auth/hosted/start");
     expect((await call("/", { local: true })).body).toContain("Fixture workspace");
-    expect((await call("/.well-known/openmausbot/environment")).body.capabilities.emailSignIn).toBe(false);
+    expect((await call("/.well-known/ripobot/environment")).body.capabilities.emailSignIn).toBe(false);
     for (const path of ["/api/auth/pair", "/api/auth/pairing", "/api/auth/email/start", "/api/auth/email/verify"]) {
       expect((await call(path, { method: "POST" })).status).toBe(403);
     }
@@ -197,10 +197,10 @@ describe("hosted bridge in the full server", () => {
   }, 17_000);
   it("grants only new local Full tasks under the explicit hosted policy and preserves defaults and existing tasks", async () => {
     state();
-    await restart({ OMB_ADMIN_MEMBERSHIP: "portal" });
+    await restart({ RIPO_ADMIN_MEMBERSHIP: "portal" });
     await policyHealth(false);
     await refuseFullTask();
-    await restart({ OMB_ADMIN_MEMBERSHIP: "portal", OMB_SHARED_WORKSPACE_FULL_ACCESS: "1" });
+    await restart({ RIPO_ADMIN_MEMBERSHIP: "portal", RIPO_SHARED_WORKSPACE_FULL_ACCESS: "1" });
     await policyHealth(true);
     const cookie = await login();
     expect((await call("/api/auth/session", { cookie })).body.scopes).toEqual(["admin", "client"]);
@@ -242,7 +242,7 @@ describe("hosted bridge in the full server", () => {
     expect(rejected.body.error).toContain("provider does not support Full");
   }, 30_000);
   it("fails closed if a configured deployment loses its enterprise hook, with local owner access retained", async () => {
-    await restart({ OMB_ENTERPRISE_DIR: join(home, "absent-layer"), OMB_ADMIN_MEMBERSHIP: "portal", OMB_SHARED_WORKSPACE_FULL_ACCESS: "1" });
+    await restart({ RIPO_ENTERPRISE_DIR: join(home, "absent-layer"), RIPO_ADMIN_MEMBERSHIP: "portal", RIPO_SHARED_WORKSPACE_FULL_ACCESS: "1" });
     await policyHealth(false);
     await refuseFullTask();
     expect((await call("/api/health/hosted")).status).toBe(503);
@@ -256,15 +256,15 @@ describe("hosted bridge in the full server", () => {
   it("uses explicit portal membership without local allow-list synchronization and still revokes quiet streams", async () => {
     await waitForExit(child, { signal: "SIGTERM" });
     state();
-    writeFileSync(join(home, ".openmausbot", "config.json"), JSON.stringify({ signIn: { admins: [], members: [] }, instances: INSTANCES }));
-    child = spawn(process.execPath, [join(ROOT, "server/index.ts")], { cwd: ROOT, env: { ...fixtureEnv, OMB_ADMIN_MEMBERSHIP: "portal" }, stdio: ["ignore", "pipe", "pipe"] });
+    writeFileSync(join(home, ".ripobot", "config.json"), JSON.stringify({ signIn: { admins: [], members: [] }, instances: INSTANCES }));
+    child = spawn(process.execPath, [join(ROOT, "server/index.ts")], { cwd: ROOT, env: { ...fixtureEnv, RIPO_ADMIN_MEMBERSHIP: "portal" }, stdio: ["ignore", "pipe", "pipe"] });
     child.stderr?.on("data", (chunk) => log += chunk);
     await expect.poll(async () => {
       try { return (await call("/api/health", { local: true })).status; } catch { return 0; }
     }, { timeout: 20_000 }).toBe(200);
     const readiness = await call("/api/health/hosted");
     expect(readiness.status).toBe(200);
-    expect(readiness.body).toEqual({ ok: true, service: "openmausbot", membershipAuthority: "portal", workspace: "acme", ...HOSTED_CONTRACT_METADATA });
+    expect(readiness.body).toEqual({ ok: true, service: "ripobot", membershipAuthority: "portal", workspace: "acme", ...HOSTED_CONTRACT_METADATA });
     expect(readiness.contractVersion).toBe("1");
     expect(readiness.cookies).toEqual([]);
     const cookie = await login();
@@ -287,11 +287,11 @@ describe("hosted bridge in the full server", () => {
     expect((await call("/api/auth/session", { cookie: memberCookie })).status).toBe(401);
   }, 30_000);
   it.each([
-    ["standalone", { OMB_ADMIN_URL: undefined, OMB_ADMIN_WORKSPACE: undefined, OMB_ADMIN_MEMBERSHIP: undefined }],
-    ["incomplete hosted configuration", { OMB_ADMIN_URL: undefined, OMB_ADMIN_MEMBERSHIP: "portal" }],
-    ["invalid workspace", { OMB_ADMIN_WORKSPACE: "../private", OMB_ADMIN_MEMBERSHIP: "portal" }],
-    ["invalid membership mode", { OMB_ADMIN_MEMBERSHIP: "invalid" }],
-    ["local membership mode", { OMB_ADMIN_MEMBERSHIP: "local" }],
+    ["standalone", { RIPO_ADMIN_URL: undefined, RIPO_ADMIN_WORKSPACE: undefined, RIPO_ADMIN_MEMBERSHIP: undefined }],
+    ["incomplete hosted configuration", { RIPO_ADMIN_URL: undefined, RIPO_ADMIN_MEMBERSHIP: "portal" }],
+    ["invalid workspace", { RIPO_ADMIN_WORKSPACE: "../private", RIPO_ADMIN_MEMBERSHIP: "portal" }],
+    ["invalid membership mode", { RIPO_ADMIN_MEMBERSHIP: "invalid" }],
+    ["local membership mode", { RIPO_ADMIN_MEMBERSHIP: "local" }],
   ] satisfies [string, NodeJS.ProcessEnv][])("does not attest portal readiness for %s", async (_name, env) => {
     state();
     await restart(env);
@@ -304,10 +304,10 @@ describe("hosted bridge in the full server", () => {
   it.each([
     ["invalid license", { invalid: true }, {}],
     ["missing admin entitlement", { features: [] }, {}],
-    ["missing license", {}, { OMB_LICENSE_KEY: undefined }],
+    ["missing license", {}, { RIPO_LICENSE_KEY: undefined }],
   ] satisfies [string, Parameters<typeof state>[2], NodeJS.ProcessEnv][])("does not attest portal readiness without valid admin entitlement (%s)", async (_name, license, env) => {
     state("admin", false, license);
-    await restart({ OMB_ADMIN_MEMBERSHIP: "portal", OMB_SHARED_WORKSPACE_FULL_ACCESS: "1", ...env });
+    await restart({ RIPO_ADMIN_MEMBERSHIP: "portal", RIPO_SHARED_WORKSPACE_FULL_ACCESS: "1", ...env });
     expect((await call("/api/health/hosted")).status).toBe(503);
     expect((await call("/api/health")).status).toBe(200);
     await policyHealth(false);
@@ -317,7 +317,7 @@ describe("hosted bridge in the full server", () => {
     // Expired a week ago less eight seconds: still inside the 7-day grace
     // (server/enterprise.ts LICENSE_GRACE_DAYS), which ends mid-test.
     state("admin", false, { expiresAt: new Date(Date.now() + 8_000 - 7 * 24 * 60 * 60_000).toISOString() });
-    await restart({ OMB_ADMIN_MEMBERSHIP: "portal", OMB_SHARED_WORKSPACE_FULL_ACCESS: "1" });
+    await restart({ RIPO_ADMIN_MEMBERSHIP: "portal", RIPO_SHARED_WORKSPACE_FULL_ACCESS: "1" });
     expect((await call("/api/health/hosted")).status).toBe(200);
     await policyHealth(true);
     await expect.poll(async () => (await call("/api/health/hosted")).status, { timeout: 10_000, interval: 100 }).toBe(503);
@@ -328,13 +328,13 @@ describe("hosted bridge in the full server", () => {
   it("never activates the shared Full policy in a desktop-managed process", async () => {
     state();
     await policyBot();
-    await restart({ OMB_ADMIN_MEMBERSHIP: "portal", OMB_SHARED_WORKSPACE_FULL_ACCESS: "1", OMB_DESKTOP_PARENT: "1" });
+    await restart({ RIPO_ADMIN_MEMBERSHIP: "portal", RIPO_SHARED_WORKSPACE_FULL_ACCESS: "1", RIPO_DESKTOP_PARENT: "1" });
     await policyHealth(false);
     await refuseFullTask();
   }, 25_000);
   it("offers the Slack management link for real agents to hosted admins and members, without sharing credentials", async () => {
     state();
-    await restart({ OMB_ADMIN_MEMBERSHIP: "portal" });
+    await restart({ RIPO_ADMIN_MEMBERSHIP: "portal" });
     const botId = await policyBot();
     const path = `/api/bots/${botId}/slack-management`;
     const cookie = await login();
@@ -360,13 +360,13 @@ describe("hosted bridge in the full server", () => {
     expect(stranger.status).toBe(403);
     expect(JSON.stringify(stranger.body)).not.toContain("admin.example.test");
     state();
-    await restart({ OMB_ADMIN_MEMBERSHIP: "local" });
+    await restart({ RIPO_ADMIN_MEMBERSHIP: "local" });
     expect((await call(path, { local: true })).body).toEqual({ available: false });
     policyEvidence.push({ slackManagement: management.body, memberStatus: asMember.status, localMembershipAvailable: false });
   }, 30_000);
   it("treats a session-less local caller as a service by default: the Slack worker's calls work, admin changes need a session", async () => {
     state();
-    await restart({ OMB_ADMIN_MEMBERSHIP: "portal", OMB_SHARED_WORKSPACE_FULL_ACCESS: "1", OMB_LOOPBACK_TRUST: undefined });
+    await restart({ RIPO_ADMIN_MEMBERSHIP: "portal", RIPO_SHARED_WORKSPACE_FULL_ACCESS: "1", RIPO_LOOPBACK_TRUST: undefined });
     expect(log).toContain("local requests: service trust (hosted workspace)");
     const admin = await login();
     const adminSession = (await call("/api/auth/session", { cookie: admin })).body;

@@ -42,7 +42,7 @@ function importComputerProvidersInChild(dataDir: string): Promise<void> {
       process.execPath,
       ["--experimental-strip-types", "--input-type=module", "--eval", source],
       {
-        env: { ...process.env, OMB_DATA_DIR: dataDir },
+        env: { ...process.env, RIPO_DATA_DIR: dataDir },
         stdio: ["ignore", "ignore", "pipe"],
       },
     );
@@ -60,13 +60,13 @@ function importComputerProvidersInChild(dataDir: string): Promise<void> {
 
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
-  delete process.env.OMB_APP_VERSION;
-  delete process.env.OMB_ENVIRONMENT_LABEL;
+  delete process.env.RIPO_APP_VERSION;
+  delete process.env.RIPO_ENVIRONMENT_LABEL;
 });
 
 describe("environment identity", () => {
   it("creates the id once, owner-only, and keeps it across restarts", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-env-"));
+    const dir = mkdtempSync(join(tmpdir(), "ripo-env-"));
     dirs.push(dir);
     const id = loadEnvironmentId(dir);
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
@@ -75,7 +75,7 @@ describe("environment identity", () => {
   });
 
   it("publishes one complete id when independent processes start together", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-env-"));
+    const dir = mkdtempSync(join(tmpdir(), "ripo-env-"));
     dirs.push(dir);
 
     const ids = await Promise.all(Array.from({ length: 12 }, () => loadEnvironmentIdInChild(dir)));
@@ -86,7 +86,7 @@ describe("environment identity", () => {
   });
 
   it("fails closed instead of rotating a malformed existing identity", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-env-"));
+    const dir = mkdtempSync(join(tmpdir(), "ripo-env-"));
     dirs.push(dir);
     const file = join(dir, "environment-id");
     writeFileSync(join(dir, "environment-id"), "garbage\n");
@@ -95,19 +95,19 @@ describe("environment identity", () => {
   });
 
   it("rejects UUID-shaped garbage and an unreadable identity path", () => {
-    const malformedDir = mkdtempSync(join(tmpdir(), "omb-env-"));
+    const malformedDir = mkdtempSync(join(tmpdir(), "ripo-env-"));
     dirs.push(malformedDir);
     writeFileSync(join(malformedDir, "environment-id"), "------------------------------------\n");
     expect(() => loadEnvironmentId(malformedDir)).toThrow(/not a valid UUID/);
 
-    const unreadableDir = mkdtempSync(join(tmpdir(), "omb-env-"));
+    const unreadableDir = mkdtempSync(join(tmpdir(), "ripo-env-"));
     dirs.push(unreadableDir);
     mkdirSync(join(unreadableDir, "environment-id"));
     expect(() => loadEnvironmentId(unreadableDir)).toThrow(/Cannot read the existing environment identity/);
   });
 
   it("does not create the data directory merely by importing computer providers", async () => {
-    const parent = mkdtempSync(join(tmpdir(), "omb-provider-import-"));
+    const parent = mkdtempSync(join(tmpdir(), "ripo-provider-import-"));
     dirs.push(parent);
     const dataDir = join(parent, "not-created-yet");
     await importComputerProvidersInChild(dataDir);
@@ -115,8 +115,8 @@ describe("environment identity", () => {
   });
 
   it("describes the server for clients without leaking anything secret", () => {
-    process.env.OMB_APP_VERSION = "0.1.99";
-    process.env.OMB_ENVIRONMENT_LABEL = "cab mini";
+    process.env.RIPO_APP_VERSION = "0.1.99";
+    process.env.RIPO_ENVIRONMENT_LABEL = "cab mini";
     const d = environmentDescriptor({ environmentId: "abc", desktopManaged: true });
     expect(d).toEqual({
       environmentId: "abc",
@@ -132,14 +132,14 @@ describe("environment identity", () => {
       .not.toHaveProperty("sharedComputers");
     expect(environmentDescriptor({ environmentId: "abc", desktopManaged: true, sharedComputers: true }).capabilities)
       .toEqual({ remoteSessions: true, sharedComputers: true, selfUpdate: "desktop-managed", emailSignIn: false });
-    // An OMB Cloud home says so, so its pairing page points to the app's Connect to my Cloud.
+    // An RIPO Cloud home says so, so its pairing page points to the app's Connect to my Cloud.
     expect(environmentDescriptor({ environmentId: "abc", desktopManaged: false, cloudHome: true }).capabilities)
       .toEqual({ remoteSessions: true, cloudHome: true, selfUpdate: "operator", emailSignIn: false });
     expect(environmentDescriptor({ environmentId: "abc", desktopManaged: false, cloudHome: false }).capabilities).not.toHaveProperty("cloudHome");
   });
 
   it("falls back to the checkout's package.json version, then to unknown", () => {
-    delete process.env.OMB_APP_VERSION;
+    delete process.env.RIPO_APP_VERSION;
     expect(serverVersion()).toMatch(/^\d+\.\d+\.\d+/);
   });
 });

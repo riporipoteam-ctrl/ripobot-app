@@ -32,7 +32,7 @@ import { turnStdioMcpServers } from "./turn-mcp.ts";
 
 const DRIVER_KIND = "museCode";
 const PROVIDER_ID = "meta";
-const CLIENT_INFO = { name: "openmausbot", title: "OpenMausBot", version: "1" };
+const CLIENT_INFO = { name: "ripobot", title: "RipoBot", version: "1" };
 const MUSE_CONTEXT_WINDOW = 1_048_576;
 /** Re-send the bot's standing instructions after this many bare turns, as
  * the ACP family does (acp/core.ts ACP_PROMPT_RE_ANCHOR_TURNS). */
@@ -52,7 +52,7 @@ const DEFAULT_MODELS: ModelCatalog = {
   ],
 };
 
-/** OpenMausBot's effort levels, in Muse's words. Muse has no "none" for its
+/** RipoBot's effort levels, in Muse's words. Muse has no "none" for its
  * reasoning models, so the lowest level asks for its shortest pass. */
 const EFFORT_LEVELS: readonly EffortLevel[] = ["low", "medium", "high", "xhigh", "max"];
 const museEffort = (effort: EffortLevel | undefined) => effort === "none" ? "minimal" : effort;
@@ -312,7 +312,7 @@ export const MuseCodeDriver: ProviderDriver<MuseConfig> = {
     };
 
     const refreshModels = async () => {
-      const cwd = mkdtempSync(join(tmpdir(), "omb-muse-models-"));
+      const cwd = mkdtempSync(join(tmpdir(), "ripo-muse-models-"));
       let host: Host | undefined;
       try {
         host = await startHost(["serve", "--disable-shell", "--disable-write", "--no-session-log"], cwd, "models", false);
@@ -546,7 +546,7 @@ export const MuseCodeDriver: ProviderDriver<MuseConfig> = {
       attach(state, host);
       if (servers.length && !host.grantedMcp) {
         emit({ type: "runtime.notice", threadId: state.threadId, turnId,
-          message: "This Muse Code cannot take OpenMausBot's tools (browser, teammates, apps). Update Muse Code to use them." });
+          message: "This Muse Code cannot take RipoBot's tools (browser, teammates, apps). Update Muse Code to use them." });
       }
       const config = servers.length && host.grantedMcp ? { config: { mcpServers } } : {};
       const resumeId = cursor ?? state.sessionId;

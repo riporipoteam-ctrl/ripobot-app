@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import { useAdvancedMode } from "./interface-mode";
 
-export const SHOW_THREADS_KEY = "omb-show-threads";
+export const SHOW_THREADS_KEY = "ripo-show-threads";
 
 // Only a renderer preference: no conversation or server configuration belongs
 // here. Keep a session choice even if private/blocked storage rejects reads or

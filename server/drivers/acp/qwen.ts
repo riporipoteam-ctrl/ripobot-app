@@ -1,4 +1,4 @@
-// Qwen Code — Alibaba's `qwen --acp` CLI. Custom-only in OpenMausBot:
+// Qwen Code — Alibaba's `qwen --acp` CLI. Custom-only in RipoBot:
 // the official pane has no Qwen Cloud catalog; live local hosts land in
 // Custom and are written into ~/.qwen/settings.json modelProviders.
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -92,7 +92,7 @@ export function readQwenModelCatalog(env: Record<string, string | undefined> = p
 }
 
 function envKeyFor(hostId: string): string {
-  return `OPENMAUSBOT_QWEN_${hostId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+  return `RIPOBOT_QWEN_${hostId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
 }
 
 /** Upsert an OpenAI-compatible provider row so `qwen -m` can reach the host. */
@@ -234,7 +234,7 @@ const support: AcpSupport = {
     docsUrl: "https://qwenlm.github.io/qwen-code-docs/en/users/overview/",
   },
   // A raw -m only changes the model within the saved provider. ACP switches
-  // the complete route and confirms it before any prompt leaves OMB.
+  // the complete route and confirms it before any prompt leaves RIPO.
   spawnArgs: (config, turn) => ["--acp", ...qwenApprovalArgs(config.fullAuto, turn.approvalMode)],
   // Qwen's live session/load returns its cached MCP clients, ignoring fresh
   // credentials. Cold-load the same conversation when those inputs change.

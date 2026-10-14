@@ -301,7 +301,7 @@ export function drainSteeredMessages(
  * anyone's person texts, nor with its own work from another request, and
  * unattributed local sends (the loopback owner) are one identity — the
  * transcript already names them all the same.
- * Team incidents reports are OpenMausBot's, whichever bot broke (none
+ * Team incidents reports are RipoBot's, whichever bot broke (none
  * carries a request's origin): the ones that waited behind a busy Chief are
  * answered as one turn.
  * A spoken line never drains with a typed line or another call's line:

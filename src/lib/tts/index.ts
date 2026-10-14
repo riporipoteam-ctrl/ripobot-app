@@ -14,7 +14,38 @@
 // transcripts, and keeping it in one place is the same reasoning as the
 // server-computed approval key.
 
-import { localSystemVoiceActive, remoteSystemVoice, resolveLocalSystemVoice } from "@/lib/local-voice";
+import { localSystemVoiceActive, remoteSystemVoice, remoteVoiceProvider, resolveLocalSystemVoice } from "@/lib/local-voice";
+
+/** The browser's built-in speech synthesis: free, keyless, and present in
+ * every desktop and mobile browser. */
+export function browserSpeechAvailable(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.speechSynthesis !== "undefined" &&
+    typeof window.SpeechSynthesisUtterance !== "undefined"
+  );
+}
+
+/** The website's voice fallback: when the harness has no voice provider
+ * configured, read aloud with the browser's built-in voices. It never
+ * overrides an explicit device choice — a paired client that picked "Host
+ * voice" keeps its choice, so no key on the host still means no speech
+ * rather than a surprise browser voice. */
+export function browserVoiceFallbackActive(): boolean {
+  return browserSpeechAvailable() && remoteVoiceProvider() !== "host";
+}
+
+/** Prefer an English voice when the browser offers one; otherwise the
+ * browser's default. Voices load lazily, so an empty list just means the
+ * default speaks. */
+function pickBrowserVoice(): SpeechSynthesisVoice | null {
+  try {
+    const voices = window.speechSynthesis.getVoices();
+    return voices.find((voice) => voice.lang?.toLowerCase().startsWith("en")) ?? voices[0] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export type SpeechStatus = "idle" | "preparing" | "speaking";
 
@@ -144,15 +175,28 @@ export class Speaker {
       if (this.request === controller) this.request = null;
       return;
     }
-    let utterances: string[];
+    let prepared: TtsPrepareBody;
     try {
-      utterances = await this.prepare(text, opts.voiceId, controller.signal);
+      prepared = await this.prepare(text, opts.voiceId, controller.signal);
     } catch (e) {
       if (live()) this.set({ ...IDLE, error: e instanceof Error ? e.message : String(e) });
       if (this.request === controller) this.request = null;
       return;
     }
     if (!live()) return;
+    if (!prepared.ready) {
+      // No voice provider configured on the harness: read aloud with the
+      // browser's built-in voices instead of showing a setup error. The
+      // speaker button stays usable out of the box this way.
+      if (browserVoiceFallbackActive()) {
+        await this.speakWithBrowserVoice(text, opts, live);
+      } else if (live()) {
+        this.set({ ...IDLE, error: "Set up a voice provider in an agent profile on this computer, then pick a voice for the agent." });
+      }
+      if (this.request === controller) this.request = null;
+      return;
+    }
+    const utterances = prepared.utterances ?? [];
     if (!utterances.length) {
       this.set(IDLE);
       if (this.request === controller) this.request = null;
@@ -208,10 +252,45 @@ export class Speaker {
       return Promise.resolve();
     }
 
-    const synth = window.speechSynthesis;
     const utterance = new window.SpeechSynthesisUtterance(value);
     const selected = resolveLocalSystemVoice(remoteSystemVoice(opts.botId));
     if (selected) utterance.voice = selected;
+    return this.runLocalUtterance(utterance, value, opts, live, {
+      startError: "This Mac could not start its selected voice.",
+      playError: "This Mac could not play its selected voice.",
+    });
+  }
+
+  /** Website fallback: the harness has no voice provider configured, so read
+   * aloud with the browser's built-in voices — free and keyless. */
+  private speakWithBrowserVoice(
+    text: string,
+    opts: SpeakOptions,
+    live: () => boolean,
+  ): Promise<void> {
+    const value = text.trim();
+    if (!value) {
+      this.set(IDLE);
+      return Promise.resolve();
+    }
+
+    const utterance = new window.SpeechSynthesisUtterance(value);
+    const selected = pickBrowserVoice();
+    if (selected) utterance.voice = selected;
+    return this.runLocalUtterance(utterance, value, opts, live, {
+      startError: "This browser could not start its voice.",
+      playError: "This browser could not play its voice.",
+    });
+  }
+
+  private runLocalUtterance(
+    utterance: SpeechSynthesisUtterance,
+    value: string,
+    opts: SpeakOptions,
+    live: () => boolean,
+    errors: { startError: string; playError: string },
+  ): Promise<void> {
+    const synth = window.speechSynthesis;
     this.localUtterance = utterance;
 
     return new Promise((resolve) => {
@@ -241,17 +320,17 @@ export class Speaker {
       utterance.onend = () => finish(true);
       utterance.onerror = (event) => {
         const interrupted = event.error === "canceled" || event.error === "interrupted";
-        finish(false, interrupted ? undefined : "This Mac could not play its selected voice.");
+        finish(false, interrupted ? undefined : errors.playError);
       };
       try {
         synth.speak(utterance);
       } catch {
-        finish(false, "This Mac could not start its selected voice.");
+        finish(false, errors.startError);
       }
     });
   }
 
-  private async prepare(text: string, voiceId: string | undefined, signal: AbortSignal): Promise<string[]> {
+  private async prepare(text: string, voiceId: string | undefined, signal: AbortSignal): Promise<TtsPrepareBody> {
     const res = await fetch("/api/tts/prepare", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -260,10 +339,7 @@ export class Speaker {
     });
     const body: TtsPrepareBody = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error ?? `the voice service returned ${res.status}`);
-    if (!body.ready) {
-      throw new Error("Set up a voice provider in an agent profile on this computer, then pick a voice for the agent.");
-    }
-    return body.utterances ?? [];
+    return body;
   }
 
   private async render(text: string, voiceId: string | undefined, signal: AbortSignal): Promise<Blob> {

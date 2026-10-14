@@ -5,7 +5,7 @@
 // The previous community `agy` print-mode bridge mutated the user's global
 // ~/.gemini MCP config and could not surface interactive approvals. Official
 // ACP mounts MCP servers per session and uses the same trusted approval cards
-// as OpenMausBot's other ACP engines.
+// as RipoBot's other ACP engines.
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
 import { antigravityAccount } from "./antigravity-account.ts";
 import type {
@@ -69,7 +69,7 @@ const support: AcpSupport = {
   selectModel: { configId: "model" },
   // Google's server reads its new-session default from this variable
   // (model_selection.get_default_model_id in agy_acp_server 1.1.1). Starting
-  // on OMB's model skips a switch that re-fetches the account's model list
+  // on RIPO's model skips a switch that re-fetches the account's model list
   // from Google: 1.3-1.8 s on every new or cold-resumed conversation.
   sessionModelEnv: "AGY_ACP_DEFAULT_MODEL",
   // configureSession sets the permission mode on every turn and nothing in

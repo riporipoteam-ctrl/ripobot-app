@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-ripo.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 
@@ -17,7 +17,7 @@ const TOKEN = "external-runtime-busy-fixture-0123456789abcdef";
 it.each(["already busy", "became busy during approval"])(
   "queues an idle external caller's ask behind a peer that is %s, without losing or repeating approval",
   async scenario => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-external-busy-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-external-busy-"));
     const gate = join(scratch, "finish-peer");
     const prompts = join(scratch, "prompts.jsonl");
     let fixture: VerificationServer | undefined;

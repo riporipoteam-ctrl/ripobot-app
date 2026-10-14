@@ -17,7 +17,7 @@ import {
 } from "./managed-companion-tunnel.mjs";
 
 const TOKEN = `eyJ${"a".repeat(120)}=`;
-const ENDPOINT = "https://c-installation.openmausbot.com";
+const ENDPOINT = "https://c-installation.ripobot.sitey.my";
 const BINARY = "/trusted/cloudflared";
 const GUARDIAN = "/trusted/managed-companion-guardian.mjs";
 const RUNTIME = "/trusted/electron";
@@ -26,13 +26,13 @@ const ORIGIN_TARGET =
     ? {
         pid: 31337,
         socketPath:
-          "\\\\.\\pipe\\openmausbot-companion-origin-31337-12345678-1234-1234-1234-123456789abc",
+          "\\\\.\\pipe\\ripobot-companion-origin-31337-12345678-1234-1234-1234-123456789abc",
       }
-    : { pid: 31337, socketPath: "/tmp/omb-companion-origin-test/origin.sock" };
+    : { pid: 31337, socketPath: "/tmp/ripo-companion-origin-test/origin.sock" };
 const temporaryDirectories = [];
 
 function temporaryDirectory() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omb-managed-tunnel-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ripo-managed-tunnel-"));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -68,7 +68,7 @@ function fakeChild(pid = 4242) {
 function healthyResponse() {
   return {
     ok: true,
-    text: async () => JSON.stringify({ app: "openmausbot" }),
+    text: async () => JSON.stringify({ app: "ripobot" }),
   };
 }
 
@@ -169,7 +169,7 @@ describe("cloudflared binary resolution", () => {
     const resourcesPath = path.join(
       path.parse(process.cwd()).root,
       "Applications",
-      "OpenMausBot",
+      "RipoBot",
       "Contents",
       "Resources",
     );
@@ -200,7 +200,7 @@ describe("cloudflared binary resolution", () => {
         appPath: "/checkout",
         platform: "linux",
         arch: "x64",
-        environment: { OMB_CLOUDFLARED_PATH: "./untrusted-cloudflared" },
+        environment: { RIPO_CLOUDFLARED_PATH: "./untrusted-cloudflared" },
         exists: () => true,
       }),
     ).toBeNull();

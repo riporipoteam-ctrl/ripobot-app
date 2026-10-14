@@ -88,7 +88,7 @@ describe("permission proxy", () => {
   };
 
   beforeEach(async () => {
-    scratch = mkdtempSync(join(tmpdir(), "omb-perm-proxy-"));
+    scratch = mkdtempSync(join(tmpdir(), "ripo-perm-proxy-"));
     asks = [];
     conns = [];
     answerWith = () => null;
@@ -129,7 +129,7 @@ describe("permission proxy", () => {
 
   it("withholds an excluded question without losing the CLI permission callback", async () => {
     const exited = once(proxy, "exit"); proxy.kill(); await exited; results.clear();
-    startProxy(brokerSocketPath(scratch, "test"), { ...process.env, OMB_PERMISSION_TOOL_SCOPE: JSON.stringify({ allow: ["native:*"] }) });
+    startProxy(brokerSocketPath(scratch, "test"), { ...process.env, RIPO_PERMISSION_TOOL_SCOPE: JSON.stringify({ allow: ["native:*"] }) });
     rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     expect((await waitFor(2)).result.tools.map((tool: { name: string }) => tool.name)).toEqual(["approve"]);
     rpc({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "ask_user", arguments: { question: "Must not ask" } } });
@@ -238,7 +238,7 @@ describe("permission proxy", () => {
     // is how the note ended up recorded as the person's chosen option.
     answerWith = () => ({
       behavior: "answer",
-      message: "OpenMausBot: nobody answered in time. Use your best judgment and continue.",
+      message: "RipoBot: nobody answered in time. Use your best judgment and continue.",
       source: "timeout",
     });
     rpc({
@@ -254,7 +254,7 @@ describe("permission proxy", () => {
   it("treats the turn ending the same way — system words are not the user's answer", async () => {
     answerWith = () => ({
       behavior: "answer",
-      message: "OpenMausBot: the turn is ending — wrap up.",
+      message: "RipoBot: the turn is ending — wrap up.",
       source: "system",
     });
     rpc({
@@ -270,7 +270,7 @@ describe("permission proxy", () => {
     // A question is only ever denied when nobody is there to be asked. Saying
     // "allow, nothing answered" there would tell the model a person declined
     // to choose, which is not what happened.
-    answerWith = () => ({ behavior: "deny", message: "OpenMausBot: permission broker unavailable" });
+    answerWith = () => ({ behavior: "deny", message: "RipoBot: permission broker unavailable" });
     rpc({
       jsonrpc: "2.0",
       id: 2,

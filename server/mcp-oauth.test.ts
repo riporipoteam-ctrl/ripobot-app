@@ -597,7 +597,7 @@ describe("McpOAuthManager sign-in from a browser on another computer", () => {
     const callback = await returnAddress(started);
     expect(callback.origin + callback.pathname).toBe("https://cloud.example/mcp-oauth/callback");
     const page = await manager.publicCallback("cloud.example", callback.search);
-    expect(page).toEqual({ status: 200, text: "Signed in. You can close this tab and return to OpenMausBot." });
+    expect(page).toEqual({ status: 200, text: "Signed in. You can close this tab and return to RipoBot." });
     expect(manager.status("docs", started.flowId, "alice")?.phase).toBe("succeeded");
     expect(oauth.isValid(`Bearer ${await manager.accessToken("docs", mcp.url)}`)).toBe(true);
 
@@ -615,7 +615,7 @@ describe("McpOAuthManager sign-in from a browser on another computer", () => {
     const forged = new URLSearchParams(callback.search);
     forged.set("state", "forged");
     for (const [host, search] of [["cloud.example", `?${forged}`], ["attacker.example", callback.search], [undefined, callback.search], ["cloud.example", ""]] as const) {
-      expect(await manager.publicCallback(host, search)).toEqual({ status: 400, text: "Invalid sign-in callback. Return to OpenMausBot and try again." });
+      expect(await manager.publicCallback(host, search)).toEqual({ status: 400, text: "Invalid sign-in callback. Return to RipoBot and try again." });
     }
     expect(manager.status("docs", started.flowId, "alice")?.phase).toBe("waiting");
     expect(oauth.counts.token).toBe(0);
@@ -688,7 +688,7 @@ describe("mcpCallbackOrigin", () => {
 
   it("returns null for plain http, a path or credentials", () => {
     expect(mcpCallbackOrigin("http://192.168.1.5:3000", [])).toBeNull();
-    expect(mcpCallbackOrigin(null, ["http://me.example", "https://me.example/omb", "https://user:pw@me.example", "not a url"])).toBeNull();
+    expect(mcpCallbackOrigin(null, ["http://me.example", "https://me.example/ripo", "https://user:pw@me.example", "not a url"])).toBeNull();
     expect(mcpCallbackOrigin(null, [])).toBeNull();
   });
 });

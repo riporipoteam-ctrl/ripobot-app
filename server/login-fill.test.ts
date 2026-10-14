@@ -57,7 +57,7 @@ describe("fill_login on a saved login's own page", () => {
     // The search box and the hidden field are left alone, and no mark stays behind.
     expect(page.field("input[name=q]").value).toBe("");
     expect(page.field("input[name=csrf]").value).toBe("token-not-a-secret");
-    expect(page.window.document.querySelectorAll("[data-omb-login]")).toHaveLength(0);
+    expect(page.window.document.querySelectorAll("[data-ripo-login]")).toHaveLength(0);
     expect(remembered).toContainEqual(["password", PASSWORD]);
     expectNoSecret(outcome, page, [PASSWORD]);
   });

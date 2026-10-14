@@ -1,5 +1,5 @@
-// What the app says about the person's OpenMausBot Cloud plan, in one place:
-// Settings → OpenMausBot Cloud, the Cloud card in Settings → General, the
+// What the app says about the person's RipoBot Cloud plan, in one place:
+// Settings → RipoBot Cloud, the Cloud card in Settings → General, the
 // cards at the bottom left (the card after the update, the free trial's
 // notices and This computer's My Cloud card) and the Add a Cloud dialog all
 // read it, so no two of them can disagree. The rule the owner set: after
@@ -33,9 +33,9 @@ export type CloudPlanView =
   | { kind: "paid"; label: string; checking: boolean; trial?: true }
   /** A plan that is not active (a payment problem, or it ended) or a Cloud still there without one. */
   | { kind: "attention"; label: string | null }
-  /** A payment OMB Cloud received and is linking to this account. */
+  /** A payment RIPO Cloud received and is linking to this account. */
   | { kind: "purchase"; label: string | null; paidAt?: number }
-  /** OMB Cloud cannot be asked right now. `label`: the plan last verified. */
+  /** RIPO Cloud cannot be asked right now. `label`: the plan last verified. */
   | { kind: "unverified"; label: string | null }
   /** This computer's sign-in ended. The plan is unaffected. */
   | { kind: "reauth"; label: string | null; reason: "expired" | "access-ended" };
@@ -70,8 +70,8 @@ export function buyOfferAllowed(view: CloudPlanView): boolean {
 export function cloudPlanLine(view: CloudPlanView): string | null {
   switch (view.kind) {
     case "paid": return t(view.trial ? "cloudAccount.trialPlan" : "cloudAccount.pro", { plan: view.label });
-    case "attention": return t("cloudAccount.inactive", { plan: view.label ?? "MausBot Cloud" });
-    case "purchase": return t("cloudAccount.purchaseReceived", { plan: view.label ?? "MausBot Cloud" });
+    case "attention": return t("cloudAccount.inactive", { plan: view.label ?? "RipoBot Cloud" });
+    case "purchase": return t("cloudAccount.purchaseReceived", { plan: view.label ?? "RipoBot Cloud" });
     case "unverified": return view.label ? t("cloudAccount.lastPlan", { plan: view.label }) : null;
     case "reauth": return view.label ? t("cloudAccount.planName", { plan: view.label }) : null;
     case "free": return t("cloudAccount.free");
@@ -270,7 +270,7 @@ export const CHECKOUT_WAIT_MS = 30 * 60_000;
 
 /** The Add a Cloud dialog's one state→view function: the buying journey
  * only. Payment problems, an ended sign-in or a Cloud that can't be reached
- * go to Settings → OpenMausBot Cloud ("settings"), which has one message and
+ * go to Settings → RipoBot Cloud ("settings"), which has one message and
  * one action for each.
  * - checking: the account or the offer is not known yet;
  * - offer: someone signed out or with no plan, with what is for sale

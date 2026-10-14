@@ -67,7 +67,7 @@ export const CONTROL_BUSY =
   `to keep waiting, take a screenshot (each computer call waits up to ${WAIT_WORDS}) instead of ending your turn.`;
 /** The check itself failed: timed out, refused, or answered nonsense. */
 export const CONTROL_UNCONFIRMED =
-  "OpenMausBot could not confirm that this computer is free, so this call was NOT performed and nothing happened on the screen. " +
+  "RipoBot could not confirm that this computer is free, so this call was NOT performed and nothing happened on the screen. " +
   "Retry in a few seconds.";
 
 export interface ControlState {
@@ -105,8 +105,8 @@ export function createControlClient(options?: {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }): ControlClient {
-  const url = options?.url ?? process.env.OMB_CONTROL_URL ?? "";
-  const token = options?.token ?? process.env.OMB_CONTROL_TOKEN ?? "";
+  const url = options?.url ?? process.env.RIPO_CONTROL_URL ?? "";
+  const token = options?.token ?? process.env.RIPO_CONTROL_TOKEN ?? "";
   const cacheMs = options?.cacheMs ?? 750;
   const timeoutMs = options?.timeoutMs ?? READ_TIMEOUT_MS;
   const fetchImpl = options?.fetchImpl ?? fetch;

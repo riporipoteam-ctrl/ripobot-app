@@ -25,7 +25,7 @@ export const placeTranslate: PlaceTranslate = (key, params) => t(key as LocaleKe
 /** What the app knows about where it runs and who is looking. */
 export interface PlaceSeat {
   server: ServerKind;
-  /** This desktop is signed in to a paid OpenMausBot Cloud plan. */
+  /** This desktop is signed in to a paid RipoBot Cloud plan. */
   plan: boolean;
   role: "admin" | "user";
   mode: "simple" | "advanced";
@@ -147,7 +147,7 @@ export function openPlaceAction(
     case "manage-computers": appSettings("computer"); return true;
     case "add-boat-key": appSettings("connections"); return true;
     case "open-vm-settings":
-      window.sessionStorage?.setItem("openmausbot.settings.section", "computer");
+      window.sessionStorage?.setItem("ripobot.settings.section", "computer");
       appSettings("computer");
       return true;
     case "open-team-map": dispatch({ type: "showTeamMap" }); return true;

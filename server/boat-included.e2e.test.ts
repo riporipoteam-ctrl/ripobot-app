@@ -17,7 +17,7 @@ import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const INCLUDED = `box_omb_${randomUUID()}`;
+const INCLUDED = `box_ripo_${randomUUID()}`;
 const OWN = "box_own_person_key";
 const INCLUDED_BOX = "bx_23456789";
 let stub: Server;
@@ -70,8 +70,8 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => stub.listen(0, "127.0.0.1", resolve));
   stubBase = `http://127.0.0.1:${(stub.address() as { port: number }).port}`;
 
-  home = mkdtempSync(join(tmpdir(), "omb-boat-included-"));
-  const dataDir = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "ripo-boat-included-"));
+  const dataDir = join(home, ".ripobot");
   mkdirSync(dataDir, { recursive: true });
   // One deliberately unknown engine: nothing probes an installed CLI.
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({ instances: { fixture: { driver: "not-a-real-driver" } } }));
@@ -91,10 +91,10 @@ beforeAll(async () => {
       PATH: process.env.PATH,
       ...(process.env.PATHEXT ? { PATHEXT: process.env.PATHEXT } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-      HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
-      OMB_BOAT_API: `${stubBase}/boat/api/v1`,
-      OMB_CLOUD_BOAT_URL: `${stubBase}/relay/api/box/v1`,
-      OMB_CLOUD_BOAT_TOKEN: INCLUDED,
+      HOME: home, USERPROFILE: home, RIPO_DATA_DIR: dataDir, RIPO_PORT: String(port), RIPO_WEBHOOK_PORT: String(port + 1),
+      RIPO_BOAT_API: `${stubBase}/boat/api/v1`,
+      RIPO_CLOUD_BOAT_URL: `${stubBase}/relay/api/box/v1`,
+      RIPO_CLOUD_BOAT_TOKEN: INCLUDED,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -124,7 +124,7 @@ it("refuses an own Boat key while this installation has computers on the include
   expect(refused.status).toBe(409);
   expect(refused.body.error).toBe("that Boat token cannot access the remembered cloud computers from this installation");
   expect((await api("GET", "/api/config")).body.box).toEqual({ configured: true, included: true });
-  expect(readFileSync(join(home, ".openmausbot", "config.json"), "utf8")).not.toContain(OWN);
+  expect(readFileSync(join(home, ".ripobot", "config.json"), "utf8")).not.toContain(OWN);
   expect(crossed()).toEqual([]);
 });
 
@@ -138,7 +138,7 @@ it("once they are gone, the own key wins; clearing it falls back to the included
   const cleared = await api("PUT", "/api/config", { box: { token: "" } });
   expect(cleared.status, JSON.stringify(cleared.body)).toBe(200);
   expect(cleared.body.box).toEqual({ configured: true, included: true });
-  expect(readFileSync(join(home, ".openmausbot", "config.json"), "utf8")).not.toContain(INCLUDED);
+  expect(readFileSync(join(home, ".ripobot", "config.json"), "utf8")).not.toContain(INCLUDED);
   expect(requests.some((request) => request.side === "boat" && request.auth === `Bearer ${OWN}`)).toBe(true);
   expect(crossed()).toEqual([]);
   expect(log).not.toContain(INCLUDED);

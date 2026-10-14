@@ -51,13 +51,13 @@ const press = (label: string, Component = ProSettingsCard) => {
 
 it("for someone who may buy: what Cloud does, the Admin's lowest price and money-back, Start free trial (the dialog) and Compare plans", async () => {
   const html = await card(signedOut);
-  for (const text of ["MausBot Cloud", "Keeps your bots and routines running 24/7, even when this computer is off.", "MausBot Cloud plans from $29/month + tax.",
-    "14-day money-back on every plan.", "OpenMausBot on this computer stays free and open source.", "Compare plans", "Start free trial", "Sign in to your Cloud plan"]) expect(html).toContain(text);
-  for (const gone of ["OMB", "$89", "launch price", "New features first", "Get Pro", "OpenMausBot Pro", "OpenMausBot Cloud"]) expect(html).not.toContain(gone);
+  for (const text of ["RipoBot Cloud", "Keeps your bots and routines running 24/7, even when this computer is off.", "RipoBot Cloud plans from $29/month + tax.",
+    "14-day money-back on every plan.", "RipoBot on this computer stays free and open source.", "Compare plans", "Start free trial", "Sign in to your Cloud plan"]) expect(html).toContain(text);
+  for (const gone of ["RIPO", "$89", "launch price", "New features first", "Get Pro", "RipoBot Pro", "RipoBot Cloud"]) expect(html).not.toContain(gone);
   press("Start free trial");
   expect(f.dispatch).toHaveBeenCalledWith({ type: "openCloudAdd", source: "app_settings" });
   press("Compare plans"); await flush();
-  expect(openExternal).toHaveBeenCalledWith("https://www.openmausbot.com/pricing?src=app_settings");
+  expect(openExternal).toHaveBeenCalledWith("https://ripobot.sitey.my/pricing?src=app_settings");
   press("Sign in to your Cloud plan");
   expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "cloudAccount", cloudLink: true });
 });
@@ -74,20 +74,20 @@ it("without a trial it says Add a Cloud; signed in, no sign-in link; without the
 
 it("someone with a plan sees that plan and the way to it, never an offer, and Cloud is never asked", async () => {
   for (const [state, text] of [
-    [plan({ entitlement: paid("max") }), "Max active · verified by MausBot Cloud"],
+    [plan({ entitlement: paid("max") }), "Max active · verified by RipoBot Cloud"],
     [plan({ entitlement: paid("pro", "inactive") }), "Pro · not active right now"],
     [plan({ purchase: { state: "confirming", tier: "personal" } }), "Personal · payment received"],
-    [{ status: "unavailable", lastPlan: { tier: "personal", active: true } }, "Personal · checking with MausBot Cloud…"],
+    [{ status: "unavailable", lastPlan: { tier: "personal", active: true } }, "Personal · checking with RipoBot Cloud…"],
     [{ status: "reauth-required", message: "expired", lastPlan: { tier: "max", active: true } }, "Sign in again to use My Cloud on this computer. Your plan is not affected."],
   ] as const) {
     const html = await card(state as CloudAccountState);
-    expect(html).toContain(text); expect(html).toContain("MausBot Cloud settings");
+    expect(html).toContain(text); expect(html).toContain("RipoBot Cloud settings");
     expect(html).not.toContain("Start free trial"); expect(html).not.toContain("$29");
   }
   expect(bridge.offer).not.toHaveBeenCalled();
   for (const state of [{ status: "unavailable" }, { status: "connecting" }, { status: "signed-out", message: "restoring" }] as CloudAccountState[]) expect(await card(state)).toBe("");
   await card(plan({ entitlement: paid("max") }));
-  press("MausBot Cloud settings");
+  press("RipoBot Cloud settings");
   expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "cloudAccount" });
 });
 
@@ -111,7 +111,7 @@ it("never offers a plan to anyone who pays, may pay, or whose state is unknown; 
 // Live uses the current Cloud offer and navigation, without reviving the old marketing popup.
 it("for a Live call, offers the current Cloud plans only to signed-out or verified free accounts", async () => {
   const out = await card(signedOut, LiveProPrompt);
-  for (const text of ["Live calls from your phone need a Pro plan", "Personal, Pro or Max", "MausBot Cloud plans from $29/month", "Start free trial", "Compare plans", "Sign in to your Cloud plan"]) expect(out).toContain(text);
+  for (const text of ["Live calls from your phone need a Pro plan", "Personal, Pro or Max", "RipoBot Cloud plans from $29/month", "Start free trial", "Compare plans", "Sign in to your Cloud plan"]) expect(out).toContain(text);
   press("Sign in to your Cloud plan", LiveProPrompt);
   expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "cloudAccount", cloudLink: true });
   press("Start free trial", LiveProPrompt);
@@ -125,21 +125,21 @@ it("for a Live call, offers the current Cloud plans only to signed-out or verifi
 it("for a Live call, a paid, pending or unknown plan is never sold another plan", async () => {
   for (const [state, text] of [
     [plan({ entitlement: paid("pro", "inactive") }), "Pro · not active right now"],
-    [plan({ machine: { status: "payment-problem", origin: "https://home.fly.dev" } }), "MausBot Cloud · not active right now"],
+    [plan({ machine: { status: "payment-problem", origin: "https://home.fly.dev" } }), "RipoBot Cloud · not active right now"],
     [plan({ purchase: { state: "confirming", tier: "personal" } }), "Personal · payment received"],
-    [plan({ entitlement: paid("max") }), "Max active · verified by MausBot Cloud"],
-    [{ status: "unavailable", lastPlan: { tier: "personal", active: false } }, "Personal · checking with MausBot Cloud…"],
+    [plan({ entitlement: paid("max") }), "Max active · verified by RipoBot Cloud"],
+    [{ status: "unavailable", lastPlan: { tier: "personal", active: false } }, "Personal · checking with RipoBot Cloud…"],
     [{ status: "reauth-required", message: "expired", lastPlan: { tier: "max", active: false } }, "Sign in again to use My Cloud on this computer"],
     [{ status: "unavailable" }, null], [{ status: "connecting" }, null], [{ status: "signed-out", message: "restoring" }, null],
   ] as const) {
     const html = await card(state as CloudAccountState, LiveProPrompt);
     expect(html).toContain("Live calls from your phone need a Pro plan");
     if (text) expect(html).toContain(text);
-    expect(html).toContain("MausBot Cloud settings");
+    expect(html).toContain("RipoBot Cloud settings");
     for (const offer of ["Start free trial", "Compare plans", "$29", "Add a Cloud"]) expect(html).not.toContain(offer);
   }
   expect(bridge.offer).not.toHaveBeenCalled();
-  press("MausBot Cloud settings", LiveProPrompt);
+  press("RipoBot Cloud settings", LiveProPrompt);
   expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "cloudAccount" });
 });
 it("for a Live call, a browser or remote server only explains the requirement", async () => {
@@ -147,6 +147,6 @@ it("for a Live call, a browser or remote server only explains the requirement", 
     vi.stubGlobal("window", { ogb });
     const html = await card(signedOut, LiveProPrompt);
     expect(html).toContain("Live calls from your phone need a Pro plan");
-    for (const more of ["Start free trial", "Compare plans", "Sign in to your Cloud plan", "MausBot Cloud settings"]) expect(html).not.toContain(more);
+    for (const more of ["Start free trial", "Compare plans", "Sign in to your Cloud plan", "RipoBot Cloud settings"]) expect(html).not.toContain(more);
   }
 });

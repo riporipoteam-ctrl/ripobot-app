@@ -17,7 +17,7 @@ import {
   discoverOpenCodeModels,
   openCodeOwnedDirectories,
   openCodeProviderKeysAllowed,
-  openMausOwnsWorkingFolder,
+  ripoOwnsWorkingFolder,
   parseOpenCodeModelsOutput,
   preferredOpenCodeModel,
   resetOpenCodeModelCache,
@@ -149,7 +149,7 @@ describe("OpenCode catalog", () => {
   });
 
   it("recognizes an OpenCode Go login stored by the CLI", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-auth-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-auth-"));
     const authDir = join(scratch, "opencode");
     mkdirSync(authDir, { recursive: true });
     writeFileSync(join(authDir, "auth.json"), JSON.stringify({
@@ -176,7 +176,7 @@ describe("OpenCode catalog", () => {
     // the CLI is xdg-flavoured everywhere. Looking only in Library/Application
     // Support is the bug that told signed-in users to sign in. No XDG override
     // here on purpose: this is the exact real-world shape.
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-home-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-home-"));
     const authDir = join(scratch, ".local", "share", "opencode");
     mkdirSync(authDir, { recursive: true });
     writeFileSync(join(authDir, "auth.json"), JSON.stringify({
@@ -199,7 +199,7 @@ describe("OpenCode catalog", () => {
   });
 
   it("recognizes an existing OpenCode Zen login", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-oauth-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-oauth-"));
     const authDir = join(scratch, "opencode");
     mkdirSync(authDir, { recursive: true });
     writeFileSync(join(authDir, "auth.json"), JSON.stringify({
@@ -222,7 +222,7 @@ describe("OpenCode catalog", () => {
   });
 
   it("treats OpenCode's anonymous free catalog as runnable without a saved key", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-free-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-free-"));
     const driver = createOpenCodeDriver(async () => catalog("opencode/big-pickle"));
     const instance = await driver.create({
       instanceId: "opencode-free",
@@ -245,7 +245,7 @@ describe("OpenCode catalog", () => {
   });
 
   it("runs a Zen model through ACP using the exact discovered id", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-zen-only-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-zen-only-"));
     const authDir = join(scratch, "opencode");
     mkdirSync(authDir, { recursive: true });
     writeFileSync(join(authDir, "auth.json"), JSON.stringify({
@@ -344,7 +344,7 @@ describe("OpenCode catalog", () => {
     },
   );
 
-  it("points a rejected Zen key at the key OpenMaus saves", () => {
+  it("points a rejected Zen key at the key Ripo saves", () => {
     expect(describeOpenCodeAccountError("invalid_credentials", "opencode/big-pickle")).toContain("Settings → API keys");
     // one next action, and one a Cloud owner (who has no terminal there) can take
     for (const model of [undefined, "opencode/big-pickle", "opencode-go/minimax-m3"]) {
@@ -368,7 +368,7 @@ describe("OpenCode catalog", () => {
   });
 
   it("passes the person's provider keys through, as the CLI would see them", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-go-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-go-"));
     try {
       const dump = join(scratch, "env.json");
       const driver = createOpenCodeDriver(async () => catalog("opencode-go/minimax-m3"));
@@ -381,10 +381,10 @@ describe("OpenCode catalog", () => {
           ANTHROPIC_API_KEY: "anthropic-shell-key",
           GEMINI_API_KEY: "gemini-shell-key",
           CLINE_API_KEY: "cline-provider-key",
-          // OpenMaus's own saved keys for other engines never ride along.
+          // Ripo's own saved keys for other engines never ride along.
           XAI_API_KEY: "saved-for-grok",
           MISTRAL_API_KEY: "saved-for-mistral",
-          OMB_ANTHROPIC_API_KEY: "workspace-anthropic",
+          RIPO_ANTHROPIC_API_KEY: "workspace-anthropic",
           FAKE_ACP_DUMP: dump,
         },
         enabled: true,
@@ -399,7 +399,7 @@ describe("OpenCode catalog", () => {
       expect(child.env.CLINE_API_KEY).toBe("cline-provider-key");
       expect(child.env.XAI_API_KEY).toBeUndefined();
       expect(child.env.MISTRAL_API_KEY).toBeUndefined();
-      expect(child.env.OMB_ANTHROPIC_API_KEY).toBeUndefined();
+      expect(child.env.RIPO_ANTHROPIC_API_KEY).toBeUndefined();
       await instance.dispose();
     } finally {
       await removeTempDir(scratch);
@@ -438,7 +438,7 @@ describe("OpenCode catalog", () => {
   // instance environment was put there on purpose (config.ts
   // injectedEnvironment), as claude.ts treats the workspace Anthropic key.
   it("keeps the server's own provider keys out on a Cloud home or a managed desktop", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-managed-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-managed-"));
     setOpenCodeProviderKeyPolicy(() => false);
     for (const key of OPENCODE_PROVIDER_ENV) vi.stubEnv(key, `operator-${key}`);
     try {
@@ -468,7 +468,7 @@ describe("OpenCode catalog", () => {
   // over in the instance environment. Those names go through; every other
   // provider key the server's own environment holds still does not.
   it("lets the owner's saved provider keys through on a Cloud home, and only those", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-own-keys-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-own-keys-"));
     setOpenCodeProviderKeyPolicy(() => false);
     for (const key of OPENCODE_PROVIDER_ENV) vi.stubEnv(key, `operator-${key}`);
     try {
@@ -555,7 +555,7 @@ describe("OpenCode catalog discovery from the ACP session", () => {
   });
 
   it("builds the catalog from ACP and adds OpenCode 1's metadata", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-discover-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-discover-"));
     try {
       const found = await discoverOpenCodeModels({
         ...process.env, HOME: scratch, FAKE_ACP_MODELS: "opencode/big-pickle,opencode-go/minimax-m3",
@@ -569,7 +569,7 @@ describe("OpenCode catalog discovery from the ACP session", () => {
   });
 
   it("reads OpenCode 1's metadata again when a first run in a new home loses the database race", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-discover-race-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-discover-race-"));
     try {
       const found = await discoverOpenCodeModels({
         ...process.env, HOME: scratch, FAKE_ACP_MODELS: "opencode/big-pickle",
@@ -585,7 +585,7 @@ describe("OpenCode catalog discovery from the ACP session", () => {
   // OpenCode 2 rejects `models --verbose`; before, that left the picker on
   // the invented, dead x-preview-f-free.
   it("still lists every model on OpenCode 2, where models --verbose fails", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-discover-v2-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-discover-v2-"));
     try {
       const found = await discoverOpenCodeModels({
         ...process.env, HOME: scratch, FAKE_ACP_MODELS_LIST: "v2",
@@ -616,7 +616,7 @@ describe("OpenCode turns without a sign-in gate", () => {
     resetOpenCodeModelCache();
   });
   const open = async (instanceId: string, environmentFor: (scratch: string) => Record<string, string>) => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-gate-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-gate-"));
     const environment = environmentFor(scratch);
     const driver = createOpenCodeDriver(async () => ({ default: "", options: [] }));
     const instance = await driver.create({
@@ -686,7 +686,7 @@ describe("OpenCode after a login added since its process started", () => {
     resetOpenCodeModelCache();
   });
   const open = async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-login-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-login-"));
     const modelsFile = join(scratch, "models");
     writeFileSync(modelsFile, "opencode/big-pickle");
     // the instance catalog already lists the new model (refreshed after login)
@@ -759,7 +759,7 @@ describe("OpenCode catalog probes", () => {
     } catch {
       return;
     }
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-probe-folder-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-probe-folder-"));
     try {
       const rpc = join(scratch, "rpc.jsonl");
       await discoverOpenCodeModels({ ...process.env, HOME: scratch, FAKE_ACP_MODELS: "opencode/big-pickle", FAKE_ACP_RPC_APPEND_FILE: rpc }, FAKE_CLI);
@@ -782,7 +782,7 @@ describe("OpenCode catalog probes", () => {
   });
 });
 
-describe("OpenCode access to folders OpenMaus owns", () => {
+describe("OpenCode access to folders Ripo owns", () => {
   it("names the attachments folder and only this bot's shared folder", () => {
     expect(openCodeOwnedDirectories("bot-7")).toEqual([ATTACHMENTS_DIR, workspaceDir("bot-7")]);
     expect(openCodeOwnedDirectories("..")).toEqual([ATTACHMENTS_DIR]);
@@ -799,7 +799,7 @@ describe("OpenCode access to folders OpenMaus owns", () => {
     ["the bot's shared folder (a room's)", workspaceDir("bot-7")],
     ["a folder inside the shared one", join(workspaceDir("bot-7"), "memory")],
     ["the attachments folder", ATTACHMENTS_DIR],
-    ["OpenMaus's data folder", dirname(ATTACHMENTS_DIR)],
+    ["Ripo's data folder", dirname(ATTACHMENTS_DIR)],
     ["a project folder", join(tmpdir(), "project")],
   ])("never allows the working folder or a folder above it: %s", (_label, cwd) => {
     const inside = (path: string, folder: string) => {
@@ -813,19 +813,19 @@ describe("OpenCode access to folders OpenMaus owns", () => {
     expect(allowed).not.toContain(join(TASK_WORKSPACES_DIR, "bot-7"));
   });
 
-  it("switches off project config only in OpenMaus's own working folders", () => {
-    expect(openMausOwnsWorkingFolder(join(TASK_WORKSPACES_DIR, "bot-7", "thread-1"))).toBe(true);
-    expect(openMausOwnsWorkingFolder(workspaceDir("bot-7"))).toBe(true);
-    expect(openMausOwnsWorkingFolder(TASK_WORKSPACES_DIR)).toBe(false);
-    expect(openMausOwnsWorkingFolder(join(tmpdir(), "project"))).toBe(false);
-    expect(openMausOwnsWorkingFolder(`${TASK_WORKSPACES_DIR}-elsewhere`)).toBe(false);
+  it("switches off project config only in Ripo's own working folders", () => {
+    expect(ripoOwnsWorkingFolder(join(TASK_WORKSPACES_DIR, "bot-7", "thread-1"))).toBe(true);
+    expect(ripoOwnsWorkingFolder(workspaceDir("bot-7"))).toBe(true);
+    expect(ripoOwnsWorkingFolder(TASK_WORKSPACES_DIR)).toBe(false);
+    expect(ripoOwnsWorkingFolder(join(tmpdir(), "project"))).toBe(false);
+    expect(ripoOwnsWorkingFolder(`${TASK_WORKSPACES_DIR}-elsewhere`)).toBe(false);
   });
 
   // OpenCode merges OPENCODE_PERMISSION over the person's config and an
   // object replaces a string (checked with `opencode debug config` on
-  // 1.18.27), so OpenMaus's folder map turned their "deny" into "ask".
-  it("keeps the person's single folder rule ahead of OpenMaus's folders", () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-folder-rule-"));
+  // 1.18.27), so Ripo's folder map turned their "deny" into "ask".
+  it("keeps the person's single folder rule ahead of Ripo's folders", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-folder-rule-"));
     try {
       const configDir = join(scratch, "config", "opencode");
       mkdirSync(configDir, { recursive: true });
@@ -851,7 +851,7 @@ describe("OpenCode access to folders OpenMaus owns", () => {
   });
 
   it("carries the person's deny into a turn's folder policy", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-deny-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-deny-"));
     const dump = join(scratch, "env.json");
     mkdirSync(join(scratch, "opencode"), { recursive: true });
     writeFileSync(join(scratch, "opencode", "opencode.json"), JSON.stringify({ permission: { external_directory: "deny" } }));
@@ -882,7 +882,7 @@ describe("OpenCode access to folders OpenMaus owns", () => {
   });
 
   it.each([["ask", false], ["full", true]] as const)("sets OpenCode's folder policy for %s turns", async (approvalMode, full) => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-permission-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-permission-"));
     const dump = join(scratch, "env.json");
     const driver = createOpenCodeDriver(async () => catalog("opencode/big-pickle"));
     const instance = await driver.create({
@@ -903,7 +903,7 @@ describe("OpenCode access to folders OpenMaus owns", () => {
         expect(policy).toMatchObject({ "*": "allow", external_directory: "allow" });
         return;
       }
-      // the person's own rules stay, first; OpenMaus's folders are allowed
+      // the person's own rules stay, first; Ripo's folders are allowed
       // after them; nothing else is widened. A project folder of the
       // person's keeps its own OpenCode config.
       expect(JSON.parse(readFileSync(dump, "utf8")).env.OPENCODE_DISABLE_PROJECT_CONFIG).toBeUndefined();
@@ -933,7 +933,7 @@ describe("OpenCode session variants", () => {
   ];
   const fixtures: Array<{ scratch: string; instance: ProviderInstance; recorder: EventRecorder }> = [];
   const fixture = async (variants: Record<string, unknown>, environment: Record<string, string> = {}) => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-variants-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-variants-"));
     const dump = join(scratch, "rpc");
     const driver = createOpenCodeDriver(async () => catalog(model, secondModel, plainModel));
     const instance = await driver.create({
@@ -1146,7 +1146,7 @@ describe("OpenCode model choice without a saved model", () => {
   // OpenCode 2 with a key starts every session on a paid model (measured:
   // opencode/claude-sonnet-5-5 on 2.0.20). An empty pick must not bill.
   it("runs a free model, not OpenCode's own paid default", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-paid-default-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-opencode-paid-default-"));
     const dump = join(scratch, "rpc");
     const driver = createOpenCodeDriver(async () => ({ default: "", options: [] }));
     const instance = await driver.create({

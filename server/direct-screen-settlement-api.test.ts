@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { launchVerificationServer, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, type VerificationServer } from "../scripts/control-ripo.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { openSse, type SseRecorder } from "./testing/sse.ts";
 import { withoutTurnClock } from "./testing/turn-clock-text.ts";
@@ -34,7 +34,7 @@ describe.skipIf(process.platform === "win32")("direct final-screen settlement", 
     expect((await api("POST", `/api/bots/${botId}/messages`, { text: "FIRST_SCREEN", threadId })).status).toBe(202);
     await expect.poll(() => existsSync(join(fixture, "provider.json")), { timeout: 10_000 }).toBe(true);
     const dump = JSON.parse(readFileSync(join(fixture, "provider.json"), "utf8"));
-    const token = dump.mcpConfig.mcpServers.browser.env.OMB_MCP_TOKEN_BROWSER;
+    const token = dump.mcpConfig.mcpServers.browser.env.RIPO_MCP_TOKEN_BROWSER;
     expect((await api("POST", "/api/internal/browser/mcp", {
       method: "tools/call", params: { name: "agent_browser_screenshot", arguments: {} },
     }, token)).status).toBe(200);
@@ -46,7 +46,7 @@ describe.skipIf(process.platform === "win32")("direct final-screen settlement", 
   };
 
   beforeEach(async () => {
-    fixture = mkdtempSync(join(tmpdir(), "omb-screen-settle-"));
+    fixture = mkdtempSync(join(tmpdir(), "ripo-screen-settle-"));
     evidence = [];
     const browser = join(fixture, "agent-browser");
     writeFileSync(browser, [

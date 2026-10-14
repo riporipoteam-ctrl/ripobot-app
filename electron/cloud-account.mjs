@@ -1,7 +1,7 @@
 import { createManagedDesktopStore, retryDelay, unreadableRecord } from "./managed-desktop.mjs";
 import { CLOUD_MACHINE_CONNECTABLE, parseCloudCredit, parseCloudOffer, parseCloudPurchase, parseCloudSummary, parseCloudTrial, parsePairingGrant, parsePublicOffer, withoutTrial } from "./cloud-home.mjs";
 
-export const CLOUD_ORIGIN = "https://cloud.openmausbot.com";
+export const CLOUD_ORIGIN = "https://cloud.ripobot.sitey.my";
 const TOKEN = /^omc_[A-Za-z0-9_-]{43}$/;
 const CODE = /^[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$/;
 const PRIVATE_CODE = /^[A-Za-z0-9_-]{43}$/;
@@ -19,7 +19,7 @@ const SETUP_REFRESH_MS = 15_000;
 const CHECKING_AFTER = 2;
 /** The longest sign-in window accepted from the Admin (it may allow 15 minutes). */
 const MAX_ENROLL_SECONDS = 1800;
-/** What OpenMausBot Cloud sells (its public config) is asked again this often, or after a failed ask this soon. */
+/** What RipoBot Cloud sells (its public config) is asked again this often, or after a failed ask this soon. */
 const OFFER_MS = 10 * 60_000, OFFER_RETRY_MS = 30_000;
 /** A checkout this app opened: while it may still be paid, the session is
  * asked every 15 seconds for this long; it is remembered this long, so the
@@ -45,7 +45,7 @@ export function checkoutDestination(value, { fixture = false } = {}) {
 export function cloudOrigin(value = CLOUD_ORIGIN, fixture = false) {
   const url = new URL(value);
   if (value !== url.origin || (value !== CLOUD_ORIGIN && !(fixture && url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname)))) {
-    throw new Error("Invalid MausBot Cloud address.");
+    throw new Error("Invalid RipoBot Cloud address.");
   }
   return value;
 }
@@ -56,7 +56,7 @@ export const createCloudAccountStore = createManagedDesktopStore;
 const text = (value, max) => typeof value === "string" && value.length > 0 && value.length <= max && !/[\x00-\x1f\x7f]/.test(value);
 const timestamp = value => Number.isSafeInteger(value) && value > 0;
 /** The paid plan last verified for this sign-in, kept beside the credential
- * for display only: what Settings shows while OMB Cloud cannot be asked, or
+ * for display only: what Settings shows while RIPO Cloud cannot be asked, or
  * after this computer's sign-in has ended. It activates nothing, and is never
  * an entitlement. */
 function planHint(value) {
@@ -117,7 +117,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
   const current = stamp => !closed && generation === stamp;
   // This app's version rides on every signed-in request, so the Admin knows
   // which app a device runs now, not only the one it signed in with.
-  const versionHeader = text(appVersion, 40) && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/.test(appVersion) ? { "x-openmausbot-version": appVersion } : {};
+  const versionHeader = text(appVersion, 40) && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/.test(appVersion) ? { "x-ripobot-version": appVersion } : {};
   async function request(route, { method = "GET", body, token, signal = controller.signal, path = `/api/cloud/desktop/${route}` } = {}) {
     const response = await fetcher(`${origin}${path}`, {
       method, redirect: "error", credentials: "omit", cache: "no-store",
@@ -162,7 +162,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       !(input.expiresAt === null || timestamp(input.expiresAt)) || !Number.isSafeInteger(input.version) || input.version < 0) throw new Error("Invalid Cloud entitlement.");
     const plan = input.plan === "free" ? "free" : "pro";
     if (input.status === "active" && (plan !== "pro" || input.expiresAt === null || input.expiresAt <= now())) throw new Error("Invalid active Cloud entitlement.");
-    if (newer && !newerPlans.has(input.plan)) { newerPlans.add(input.plan); warn(`[cloud] OMB Cloud sent plan "${input.plan}", newer than this app; treating it as paid.`); }
+    if (newer && !newerPlans.has(input.plan)) { newerPlans.add(input.plan); warn(`[cloud] RIPO Cloud sent plan "${input.plan}", newer than this app; treating it as paid.`); }
     const tier = typeof input.tier === "string" && TIER.test(input.tier) ? input.tier : newer ? input.plan : undefined;
     return { plan, ...(tier ? { tier } : {}), status: input.status,
       expiresAt: input.expiresAt, version: input.version };
@@ -199,7 +199,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
   const signOut = () => forget();
   async function synchronize(stamp) {
     if (!grant || !current(stamp)) return state();
-    // A sign-in this computer holds lasts as long as OMB Cloud said; after
+    // A sign-in this computer holds lasts as long as RIPO Cloud said; after
     // that, signing in again is the one next step (the plan is unaffected).
     if (grant.expiresAt <= now()) { stopTimer(); return publish(view("reauth-required", "expired")); }
     try {
@@ -333,7 +333,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
     if (typeof plan !== "string" || !TIER.test(plan) || !CHECKOUT_SOURCES.includes(source)) throw new Error("Invalid Cloud checkout.");
     const current = state();
     if (current.status === "signed-out" && !grant) return { outcome: "signing-in", state: await begin({ plan, source }) };
-    if (current.status !== "connected" || !grant) throw new Error("Sign in to MausBot Cloud before choosing a plan.");
+    if (current.status !== "connected" || !grant) throw new Error("Sign in to RipoBot Cloud before choosing a plan.");
     const signedIn = grant;
     let destination;
     try {
@@ -392,13 +392,13 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
     begin: () => begin(),
     checkout: openCheckout,
     /** Whether this app is waiting on a checkout it opened: the window
-     * coming back, or openmausbot://cloud, asks the session at once. */
+     * coming back, or ripobot://cloud, asks the session at once. */
     checkoutPending: watching,
     /** After this computer's sign-in ended (it lasts a set time, or was
      * removed): forget it and start a new sign-in in one step, never showing
      * "signed out" in between. */
     async signInAgain() {
-      if (state().status !== "reauth-required") throw new Error("This computer is still signed in to MausBot Cloud.");
+      if (state().status !== "reauth-required") throw new Error("This computer is still signed in to RipoBot Cloud.");
       publish({ status: "connecting" });
       const forgotten = await forget({ quiet: true });
       if (forgotten.status === "unavailable") return forgotten;
@@ -413,7 +413,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
     async openDashboard() { await openBrowser(`${origin}/cloud`); return state(); },
     /** What this person may buy now, for wording an offer: signed in, the
      * session's own `offer` (this account's trial, credit and money-back);
-     * otherwise OpenMausBot Cloud's public config, asked with no sign-in or
+     * otherwise RipoBot Cloud's public config, asked with no sign-in or
      * cookie only when an offer is about to be shown, at most every 10
      * minutes (30 seconds after a failed ask). An Admin that sends no session
      * offer gets the public plans, never a trial: whether this account may
@@ -436,12 +436,12 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
     async interest(kind) {
       if (kind !== "another_cloud") throw new Error("Invalid Cloud interest.");
       const signedIn = grant;
-      if (!signedIn || state().status !== "connected") throw new Error("Sign in to MausBot Cloud first.");
+      if (!signedIn || state().status !== "connected") throw new Error("Sign in to RipoBot Cloud first.");
       const result = await request("interest", { method: "POST", body: { kind }, token: signedIn.token });
       if (result?.ok !== true) throw new Error("Invalid Cloud response.");
     },
     homeTarget,
-    /** Ask OMB Cloud to grow this account's Cloud disk to `sizeGb` (at most
+    /** Ask RIPO Cloud to grow this account's Cloud disk to `sizeGb` (at most
      * the plan's own maximum), for a move that needs the room now rather than
      * as the disk fills. `supported: false`: this Admin cannot do that yet. */
     async growDisk(sizeGb) {
@@ -472,7 +472,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
   };
 }
 
-/** My Cloud's line under its name in both server menus, as OMB Cloud last
+/** My Cloud's line under its name in both server menus, as RIPO Cloud last
  * verified it: its free trial's end while one runs (not yet past it), "Always
  * on" while it is paid for, "Stopped" when it is not (a trial that ended, a
  * payment problem, a subscription that ended), and nothing while this
@@ -489,7 +489,7 @@ export function cloudMenuSublabel(state, date) {
 
 /** What the person's own Cloud, open in this app's window, may show of the
  * plan in its Settings: the plan's name and whether it is active, and, as
- * OMB Cloud last verified them, a free trial and its AI credit. `notice`:
+ * RIPO Cloud last verified them, a free trial and its AI credit. `notice`:
  * the trial's popup due now (main's cloud-trial-notice.mjs decides it, once a
  * day for both pages). Never the account, a credential or an address. */
 export function cloudPlanSnapshot(state, { notice = null } = {}) {

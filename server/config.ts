@@ -1,4 +1,4 @@
-// Config + data dirs. One file, ~/.openmausbot/config.json, env fallbacks:
+// Config + data dirs. One file, ~/.ripobot/config.json, env fallbacks:
 //   { "xai": {"key":"xai-…"}, "composio": {"apiKey":"ak_…"}, "box": {"token":"…"},
 //     "instances": { "<instanceId>": {"driver":"grok", …} } }
 import { readFileSync, mkdirSync, existsSync, renameSync, statSync } from "node:fs";
@@ -355,7 +355,7 @@ const onboardingConfigSchema = z.object({
   version: z.number().int().min(0).max(1000).optional(),
   reelSeen: z.boolean().optional(),
   hintsSeen: z.array(z.string().trim().min(1).max(60)).max(100).optional(),
-  /** OMB Cloud home only: when a bot's turn first finished on this machine
+  /** RIPO Cloud home only: when a bot's turn first finished on this machine
    * (cloud-home.ts firstCloudTurnPatch). Written by the server, read by the
    * Cloud's setup checklist. */
   firstTurnAt: z.string().trim().max(40).optional(),
@@ -493,17 +493,20 @@ const appConfigSchema = z.object({
    * is read loosely (storedAppConfigSchema). */
   opencodeGo: z.object({ apiKey: optionalText, providerKeys: z.record(z.string(), z.string()).optional() }).optional(),
   /** Voice settings and the selected voice id. `provider` picks the
-   * engine: "elevenlabs" (default; needs `key`), "fish" (needs its own
-   * `fishKey`; `fishModel` picks its speech model), "system" (the Mac's
-   * built-in voices, no key), "xai" (Grok TTS, reusing `xai.key`), or
+   * engine: "pollinations" (default; needs `pollinationsKey`, a free key
+   * from enter.pollinations.ai — with no key the website falls back to the
+   * browser's built-in voices), "elevenlabs" (needs `key`), "fish" (needs
+   * its own `fishKey`; `fishModel` picks its speech model), "system" (the
+   * Mac's built-in voices, no key), "xai" (Grok TTS, reusing `xai.key`), or
    * "chatterbox" (a local OpenAI-compatible Chatterbox server; `baseUrl`
    * and `model` are settings, not secrets). Cloud keys stay separate so
    * switching providers never overwrites or misuses the other key. */
   tts: z.object({
     key: optionalText,
     fishKey: optionalText,
+    pollinationsKey: optionalText,
     voice: optionalText,
-    provider: z.enum(["elevenlabs", "fish", "system", "chatterbox", "xai"]).optional(),
+    provider: z.enum(["elevenlabs", "fish", "system", "chatterbox", "xai", "pollinations"]).optional(),
     baseUrl: z
       .string()
       .trim()
@@ -582,7 +585,7 @@ const appConfigSchema = z.object({
   }).strict().optional(),
   threads: threadsConfigSchema.optional(),
   /** The authorization decision log (server/decision-log.ts): days of month
-   * files kept, at least; OMB_DECISION_RETENTION_DAYS wins when set. */
+   * files kept, at least; RIPO_DECISION_RETENTION_DAYS wins when set. */
   decisions: z.object({ retentionDays: z.number().int().min(1).max(3650).optional() }).strict().optional(),
   localVm: localVmConfigSchema.optional(),
   features: featureConfigSchema.optional(),
@@ -654,7 +657,7 @@ export interface AppConfig {
   /** A named host from the user's SSH config. Authentication stays with SSH. */
   vps?: { sshAlias?: string };
   opencodeGo?: { apiKey?: string; providerKeys?: Record<string, string> };
-  tts?: { key?: string; fishKey?: string; voice?: string; provider?: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai"; baseUrl?: string; model?: string; fishModel?: FishTtsModel };
+  tts?: { key?: string; fishKey?: string; pollinationsKey?: string; voice?: string; provider?: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "pollinations"; baseUrl?: string; model?: string; fishModel?: FishTtsModel };
   /** The decision model; see the schema above and server/decider. */
   decider?: { enabled?: boolean; provider?: "jev" | "off"; key?: string; baseUrl?: string; jobs?: { roomRouting?: boolean } };
   imageGen?: ImageGenerationConfig;
@@ -932,7 +935,7 @@ export function builtInBrowserEnabled(cfg: AppConfig, _env: NodeJS.ProcessEnv = 
  *
  * Deliberately NOT a Settings toggle: this is a maintainer-only escape hatch
  * for an unfinished feature, not a user preference. Someone who needs it
- * enables it by hand in `~/.openmausbot/config.json`
+ * enables it by hand in `~/.ripobot/config.json`
  * (`{"features": {"sharedComputers": true}}`) and restarts the server. */
 export function sharedComputersEnabled(cfg: AppConfig): boolean {
   return cfg.features?.sharedComputers === true;
@@ -949,7 +952,7 @@ export function claudeUserMcpEnabled(cfg: AppConfig): boolean {
 
 /** Opt-in generated titles for new bot threads: a cheap provider one-shot
  * names the row instead of the first-message snippet. Off until enabled by
- * hand in ~/.openmausbot/config.json
+ * hand in ~/.ripobot/config.json
  * (`{"features": {"llmThreadTitles": true}}`); a one-shot that fails or
  * answers anything unusable leaves the snippet untouched. */
 export function llmThreadTitlesEnabled(cfg: AppConfig): boolean {
@@ -959,7 +962,7 @@ export function llmThreadTitlesEnabled(cfg: AppConfig): boolean {
 
 /** Opt-in shared skills library (skills lane S1): one store at the data dir
  * that bots reference by assignment instead of per-workspace copies. Off
- * unless enabled by hand in ~/.openmausbot/config.json
+ * unless enabled by hand in ~/.ripobot/config.json
  * (`{"features": {"skillsLibrary": true}}`); while off, every skills
  * surface keeps today's byte-identical per-bot behavior. */
 export function skillsLibraryEnabled(cfg: AppConfig): boolean {
@@ -1007,8 +1010,8 @@ export function changedInstanceIds(before: Record<string, unknown>, after: Recor
     .filter((id) => !isDeepStrictEqual(before[id], after[id]));
 }
 
-// OMB_DATA_DIR isolates test/soak rigs from the user's real fleet.
-export const DATA_DIR = process.env.OMB_DATA_DIR ?? join(homedir(), ".openmausbot");
+// RIPO_DATA_DIR isolates test/soak rigs from the user's real fleet.
+export const DATA_DIR = process.env.RIPO_DATA_DIR ?? join(homedir(), ".ripobot");
 const LEGACY_DATA_DIR = join(homedir(), ".opengrokbot");
 export const EVENTS_DIR = join(DATA_DIR, "events");
 export const NATIVE_DIR = join(DATA_DIR, "native");
@@ -1095,22 +1098,22 @@ export function loadConfig(): AppConfig {
   if (process.env.CEREBRAS_API_KEY !== undefined) cfg.cerebras.key = process.env.CEREBRAS_API_KEY;
   cfg.groq = { ...cfg.groq };
   // Keep the workspace key separate from an operator's OpenCode Groq key.
-  if (process.env.OMB_GROQ_API_KEY !== undefined) cfg.groq.key = process.env.OMB_GROQ_API_KEY;
+  if (process.env.RIPO_GROQ_API_KEY !== undefined) cfg.groq.key = process.env.RIPO_GROQ_API_KEY;
   cfg.meta = { ...cfg.meta };
   // Keep the workspace key separate from a Muse Code login's META_API_KEY.
-  if (process.env.OMB_META_API_KEY !== undefined) cfg.meta.key = process.env.OMB_META_API_KEY;
+  if (process.env.RIPO_META_API_KEY !== undefined) cfg.meta.key = process.env.RIPO_META_API_KEY;
   cfg.xai = { ...cfg.xai };
   if (process.env.XAI_API_KEY !== undefined) cfg.xai.key = process.env.XAI_API_KEY;
   // Deliberately not ANTHROPIC_API_KEY: a key in the server's own env is
   // never the workspace key, so an operator's stray variable cannot flip
   // every Claude bot onto pay-as-you-go billing.
   cfg.anthropic = { ...cfg.anthropic };
-  if (process.env.OMB_ANTHROPIC_API_KEY !== undefined) cfg.anthropic.key = process.env.OMB_ANTHROPIC_API_KEY;
-  if (process.env.OMB_ANTHROPIC_API_URL !== undefined) cfg.anthropic.url = process.env.OMB_ANTHROPIC_API_URL;
+  if (process.env.RIPO_ANTHROPIC_API_KEY !== undefined) cfg.anthropic.key = process.env.RIPO_ANTHROPIC_API_KEY;
+  if (process.env.RIPO_ANTHROPIC_API_URL !== undefined) cfg.anthropic.url = process.env.RIPO_ANTHROPIC_API_URL;
   cfg.openai = { ...cfg.openai };
-  if (process.env.OMB_OPENAI_API_KEY !== undefined) cfg.openai.key = process.env.OMB_OPENAI_API_KEY;
+  if (process.env.RIPO_OPENAI_API_KEY !== undefined) cfg.openai.key = process.env.RIPO_OPENAI_API_KEY;
   cfg.openrouter = { ...cfg.openrouter };
-  if (process.env.OMB_OPENROUTER_API_KEY !== undefined) cfg.openrouter.key = process.env.OMB_OPENROUTER_API_KEY;
+  if (process.env.RIPO_OPENROUTER_API_KEY !== undefined) cfg.openrouter.key = process.env.RIPO_OPENROUTER_API_KEY;
   cfg.openaiCompat = { ...cfg.openaiCompat };
   if (process.env.OPENAI_COMPAT_API_KEY !== undefined) cfg.openaiCompat.key = process.env.OPENAI_COMPAT_API_KEY;
   if (process.env.OPENAI_COMPAT_URL !== undefined) cfg.openaiCompat.url = process.env.OPENAI_COMPAT_URL;
@@ -1123,26 +1126,27 @@ export function loadConfig(): AppConfig {
   cfg.opencodeGo = { ...cfg.opencodeGo };
   if (process.env.OPENCODE_API_KEY !== undefined) cfg.opencodeGo.apiKey = process.env.OPENCODE_API_KEY;
   cfg.tts = { ...cfg.tts };
-  if (process.env.OMB_TTS_KEY !== undefined) cfg.tts.key = process.env.OMB_TTS_KEY;
+  if (process.env.RIPO_TTS_KEY !== undefined) cfg.tts.key = process.env.RIPO_TTS_KEY;
   // A preset ElevenLabs voice (Cloud Pro sets one) is only a default: a voice or
   // another speech provider the person picked in Settings always wins.
-  const presetVoice = process.env.OMB_TTS_DEFAULT_VOICE?.trim();
+  const presetVoice = process.env.RIPO_TTS_DEFAULT_VOICE?.trim();
   if (presetVoice && !cfg.tts.voice?.trim() && (cfg.tts.provider ?? "elevenlabs") === "elevenlabs") cfg.tts.voice = presetVoice;
-  if (process.env.OMB_FISH_AUDIO_API_KEY !== undefined) cfg.tts.fishKey = process.env.OMB_FISH_AUDIO_API_KEY;
+  if (process.env.RIPO_FISH_AUDIO_API_KEY !== undefined) cfg.tts.fishKey = process.env.RIPO_FISH_AUDIO_API_KEY;
+  if (process.env.POLLINATIONS_API_KEY !== undefined) cfg.tts.pollinationsKey = process.env.POLLINATIONS_API_KEY;
   cfg.decider = { ...cfg.decider };
-  if (process.env.OMB_JEV_API_KEY !== undefined) cfg.decider.key = process.env.OMB_JEV_API_KEY;
+  if (process.env.RIPO_JEV_API_KEY !== undefined) cfg.decider.key = process.env.RIPO_JEV_API_KEY;
   cfg.live = { ...cfg.live };
-  if (process.env.OMB_OPENAI_LIVE_KEY !== undefined) cfg.live.key = process.env.OMB_OPENAI_LIVE_KEY;
+  if (process.env.RIPO_OPENAI_LIVE_KEY !== undefined) cfg.live.key = process.env.RIPO_OPENAI_LIVE_KEY;
   cfg.imageGen = { ...cfg.imageGen };
-  if (process.env.OMB_OPENAI_IMAGE_KEY !== undefined) cfg.imageGen.key = process.env.OMB_OPENAI_IMAGE_KEY;
-  if (process.env.OMB_CUSTOM_IMAGE_KEY !== undefined) cfg.imageGen.customApiKey = process.env.OMB_CUSTOM_IMAGE_KEY;
+  if (process.env.RIPO_OPENAI_IMAGE_KEY !== undefined) cfg.imageGen.key = process.env.RIPO_OPENAI_IMAGE_KEY;
+  if (process.env.RIPO_CUSTOM_IMAGE_KEY !== undefined) cfg.imageGen.customApiKey = process.env.RIPO_CUSTOM_IMAGE_KEY;
   // The sign-in allow-list: env is how a headless box or a container is
   // bootstrapped before anyone can reach Settings.
   const splitEmails = (value: string) => value.split(/[,\s]+/).map((entry) => entry.trim().toLowerCase()).filter(Boolean);
-  if (process.env.OMB_SIGNIN_EMAILS !== undefined || process.env.OMB_SIGNIN_MEMBER_EMAILS !== undefined) {
+  if (process.env.RIPO_SIGNIN_EMAILS !== undefined || process.env.RIPO_SIGNIN_MEMBER_EMAILS !== undefined) {
     cfg.signIn = { ...cfg.signIn };
-    if (process.env.OMB_SIGNIN_EMAILS !== undefined) cfg.signIn.admins = splitEmails(process.env.OMB_SIGNIN_EMAILS);
-    if (process.env.OMB_SIGNIN_MEMBER_EMAILS !== undefined) cfg.signIn.members = splitEmails(process.env.OMB_SIGNIN_MEMBER_EMAILS);
+    if (process.env.RIPO_SIGNIN_EMAILS !== undefined) cfg.signIn.admins = splitEmails(process.env.RIPO_SIGNIN_EMAILS);
+    if (process.env.RIPO_SIGNIN_MEMBER_EMAILS !== undefined) cfg.signIn.members = splitEmails(process.env.RIPO_SIGNIN_MEMBER_EMAILS);
   }
   return cfg;
 }
@@ -1185,21 +1189,22 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
     [patch.xai?.key, "XAI_API_KEY"],
     [patch.mistral?.key, "MISTRAL_API_KEY"],
     [patch.cerebras?.key, "CEREBRAS_API_KEY"],
-    [patch.groq?.key, "OMB_GROQ_API_KEY"],
-    [patch.meta?.key, "OMB_META_API_KEY"],
-    [patch.anthropic?.key, "OMB_ANTHROPIC_API_KEY"],
+    [patch.groq?.key, "RIPO_GROQ_API_KEY"],
+    [patch.meta?.key, "RIPO_META_API_KEY"],
+    [patch.anthropic?.key, "RIPO_ANTHROPIC_API_KEY"],
     [patch.openaiCompat?.key, "OPENAI_COMPAT_API_KEY"],
-    [patch.openai?.key, "OMB_OPENAI_API_KEY"],
-    [patch.openrouter?.key, "OMB_OPENROUTER_API_KEY"],
+    [patch.openai?.key, "RIPO_OPENAI_API_KEY"],
+    [patch.openrouter?.key, "RIPO_OPENROUTER_API_KEY"],
     [patch.composio?.apiKey, "COMPOSIO_API_KEY"],
     [patch.box?.token, "BOX_TOKEN"],
     [patch.opencodeGo?.apiKey, "OPENCODE_API_KEY"],
-    [patch.tts?.key, "OMB_TTS_KEY"],
-    [patch.tts?.fishKey, "OMB_FISH_AUDIO_API_KEY"],
-    [patch.decider?.key, "OMB_JEV_API_KEY"],
-    [patch.imageGen?.key, "OMB_OPENAI_IMAGE_KEY"],
-    [patch.imageGen?.customApiKey, "OMB_CUSTOM_IMAGE_KEY"],
-    [patch.live?.key, "OMB_OPENAI_LIVE_KEY"],
+    [patch.tts?.key, "RIPO_TTS_KEY"],
+    [patch.tts?.fishKey, "RIPO_FISH_AUDIO_API_KEY"],
+    [patch.tts?.pollinationsKey, "POLLINATIONS_API_KEY"],
+    [patch.decider?.key, "RIPO_JEV_API_KEY"],
+    [patch.imageGen?.key, "RIPO_OPENAI_IMAGE_KEY"],
+    [patch.imageGen?.customApiKey, "RIPO_CUSTOM_IMAGE_KEY"],
+    [patch.live?.key, "RIPO_OPENAI_LIVE_KEY"],
   ];
   for (const [value, name] of secrets) {
     if (value === undefined) continue;
@@ -1210,7 +1215,7 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
   // must follow the same set-when-truthy / delete-when-cleared rule as keys.
   const settings: Array<[value: string | undefined, name: string]> = [
     [patch.openaiCompat?.url, "OPENAI_COMPAT_URL"],
-    [patch.anthropic?.url, "OMB_ANTHROPIC_API_URL"],
+    [patch.anthropic?.url, "RIPO_ANTHROPIC_API_URL"],
     [patch.openaiCompat?.model, "OPENAI_COMPAT_MODEL"],
     [patch.openaiCompat?.provider, "OPENAI_COMPAT_PROVIDER"],
   ];
@@ -1230,52 +1235,52 @@ export const WORKSPACE_CREDENTIAL_ENV = [
   "XAI_API_KEY",
   "MISTRAL_API_KEY",
   "CEREBRAS_API_KEY",
-  "OMB_GROQ_API_KEY",
-  "OMB_META_API_KEY",
-  "OMB_ANTHROPIC_API_KEY",
-  "OMB_ANTHROPIC_API_URL",
-  "OMB_HOSTED_MODEL_TOKEN",
-  "OMB_HOSTED_MODELS",
+  "RIPO_GROQ_API_KEY",
+  "RIPO_META_API_KEY",
+  "RIPO_ANTHROPIC_API_KEY",
+  "RIPO_ANTHROPIC_API_URL",
+  "RIPO_HOSTED_MODEL_TOKEN",
+  "RIPO_HOSTED_MODELS",
   "OPENAI_COMPAT_API_KEY",
   "OPENAI_COMPAT_URL",
-  "OMB_OPENAI_API_KEY",
-  "OMB_OPENROUTER_API_KEY",
+  "RIPO_OPENAI_API_KEY",
+  "RIPO_OPENROUTER_API_KEY",
   "BOX_TOKEN",
   "OPENCODE_API_KEY",
-  "OMB_TTS_KEY",
-  "OMB_FISH_AUDIO_API_KEY",
-  "OMB_JEV_API_KEY",
-  "OMB_OPENAI_IMAGE_KEY",
-  "OMB_CUSTOM_IMAGE_KEY",
-  "OMB_OPENAI_LIVE_KEY",
+  "RIPO_TTS_KEY",
+  "RIPO_FISH_AUDIO_API_KEY",
+  "RIPO_JEV_API_KEY",
+  "RIPO_OPENAI_IMAGE_KEY",
+  "RIPO_CUSTOM_IMAGE_KEY",
+  "RIPO_OPENAI_LIVE_KEY",
   "COMPOSIO_API_KEY",
-  "OMB_COMPOSIO_BROKER_TOKEN",
+  "RIPO_COMPOSIO_BROKER_TOKEN",
   // Cloud Pro's included Boat, voice and decision relay tokens
   // (included-services.ts), used only in-process by the Boat, voice and
   // decider modules, and the trial's Claude credit token, which reaches only
   // its own chat engine (cloud-credit-provider.ts), in memory.
-  "OMB_CLOUD_BOAT_TOKEN",
-  "OMB_CLOUD_VOICE_TOKEN",
-  "OMB_CLOUD_DECIDER_TOKEN",
-  "OMB_CLOUD_AI_TOKEN",
+  "RIPO_CLOUD_BOAT_TOKEN",
+  "RIPO_CLOUD_VOICE_TOKEN",
+  "RIPO_CLOUD_DECIDER_TOKEN",
+  "RIPO_CLOUD_AI_TOKEN",
   // Harness-private hints are not credentials, but exposing them to a shell-capable
   // agent points straight at app-owned state (the browser master is delivered in
-  // memory; OMB_BOAT_API is where this server's own Boat client sends an own key).
-  "OMB_BROWSER_CONNECTION",
-  "OMB_USER_DATA",
-  "OMB_BOAT_API",
+  // memory; RIPO_BOAT_API is where this server's own Boat client sends an own key).
+  "RIPO_BROWSER_CONNECTION",
+  "RIPO_USER_DATA",
+  "RIPO_BOAT_API",
 ] as const;
 
 /** Secrets of whoever operates this server, not of the workspace: the license
  * key, a fleet container's installation credential, and everything a hosting
- * control plane injects under `OMB_CLOUD_` (the readiness token, the bootstrap
+ * control plane injects under `RIPO_CLOUD_` (the readiness token, the bootstrap
  * document and its gateway token). Only this process reads them. The prefix
- * ends in an underscore on purpose: `OMB_CLOUDFLARED_PATH` is not one of them.
+ * ends in an underscore on purpose: `RIPO_CLOUDFLARED_PATH` is not one of them.
  * What an engine is meant to receive arrives under another name through its
  * instance environment (the hosted model token as ANTHROPIC_API_KEY or
- * OPENMAUSBOT_COMPANY_API_KEY), so nothing here is ever an engine's input. */
-export const CONTROL_PLANE_ENV = ["OMB_LICENSE_KEY", "OMB_INSTALLATION_CREDENTIAL"] as const;
-export const CONTROL_PLANE_ENV_PREFIX = "OMB_CLOUD_";
+ * RIPOBOT_COMPANY_API_KEY), so nothing here is ever an engine's input. */
+export const CONTROL_PLANE_ENV = ["RIPO_LICENSE_KEY", "RIPO_INSTALLATION_CREDENTIAL"] as const;
+export const CONTROL_PLANE_ENV_PREFIX = "RIPO_CLOUD_";
 
 /** Drop every control-plane secret from a child-process env (in place). No
  * driver allowlist re-admits these. Names compare case-insensitively because
@@ -1320,7 +1325,7 @@ export const PROVIDER_CREDENTIAL_ENV = [
 
 /** Provider keys OpenCode reads from its environment, as it does in a
  * terminal: with ANTHROPIC_API_KEY set, `opencode` lists Anthropic's models.
- * Keys OpenMaus saves for another engine (xAI, Mistral, the workspace
+ * Keys Ripo saves for another engine (xAI, Mistral, the workspace
  * Anthropic key) are workspace credentials under other names and never
  * ride along. */
 export const OPENCODE_PROVIDER_ENV = [
@@ -1345,17 +1350,17 @@ const OPENCODE_PROVIDER_KEY_NAME = /^[A-Z][A-Z0-9_]{0,59}_(?:API_KEY|KEY|TOKEN)$
 const OPENCODE_PROVIDER_KEY_VALUE = /^[\x21-\x7e]{1,4096}$/;
 
 /** Why OpenCode can't be given a key under this name, or undefined. A name
- * OpenMaus keeps for itself or another engine would never reach OpenCode:
+ * Ripo keeps for itself or another engine would never reach OpenCode:
  * every engine keeps only the credential names it reads (credentialEnv). */
 function openCodeProviderKeyNameRefusal(name: string): string | undefined {
   if (!OPENCODE_PROVIDER_KEY_NAME.test(name)) {
     return "Use the name the provider reads its key from: capitals, ending in _API_KEY, _KEY or _TOKEN, such as VENICE_API_KEY.";
   }
   if (name === "OPENCODE_API_KEY") return "Save the OpenCode key in the OpenCode API key box instead.";
-  const reserved = name.startsWith("OPENCODE_") || name.startsWith("OMB_")
+  const reserved = name.startsWith("OPENCODE_") || name.startsWith("RIPO_")
     || (WORKSPACE_CREDENTIAL_ENV as readonly string[]).includes(name)
     || ((PROVIDER_CREDENTIAL_ENV as readonly string[]).includes(name) && !(OPENCODE_PROVIDER_ENV as readonly string[]).includes(name));
-  return reserved ? `OpenMaus keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
+  return reserved ? `Ripo keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
 }
 
 /** The saved OpenCode provider keys that can be used, by name. A hand-edited
@@ -1404,7 +1409,7 @@ export function onConfigSaved(listener: (before: JsonObject, after: JsonObject) 
   return () => { configSaveListeners.delete(listener); };
 }
 
-/** Merge a partial config into ~/.openmausbot/config.json (secrets never
+/** Merge a partial config into ~/.ripobot/config.json (secrets never
  * echoed back — callers report configured-or-not booleans only). */
 export function saveConfig(
   patch: Partial<Omit<AppConfig, "threads" | "newBots">> & {
@@ -1705,9 +1710,9 @@ function injectedEnvironment(cfg: AppConfig, instanceId: string, driver: string)
   // OpenAI-compatible key and URL belong to every other openai-compat
   // instance ("Other" in Settings).
   if (driver === "openai-compat" && instanceId === OPENAI_API_INSTANCE) {
-    if (cfg.openai?.key) environment.set("OMB_OPENAI_API_KEY", cfg.openai.key);
+    if (cfg.openai?.key) environment.set("RIPO_OPENAI_API_KEY", cfg.openai.key);
   } else if (driver === "openai-compat" && instanceId === OPENROUTER_API_INSTANCE) {
-    if (cfg.openrouter?.key) environment.set("OMB_OPENROUTER_API_KEY", cfg.openrouter.key);
+    if (cfg.openrouter?.key) environment.set("RIPO_OPENROUTER_API_KEY", cfg.openrouter.key);
   } else {
     if (driver === "openai-compat" && cfg.openaiCompat?.key)
       environment.set("OPENAI_COMPAT_API_KEY", cfg.openaiCompat.key);
@@ -1732,7 +1737,7 @@ export const CLAUDE_API_INSTANCE = "claudeApi";
 const API_KEY_FLEET: InstanceConfigMap = {
   [OPENAI_API_INSTANCE]: {
     driver: "openai-compat", displayName: "OpenAI", access: "api", icon: { kind: "preset", preset: "openai" },
-    config: { url: "https://api.openai.com/v1", apiKeyEnv: "OMB_OPENAI_API_KEY", catalog: "openai" },
+    config: { url: "https://api.openai.com/v1", apiKeyEnv: "RIPO_OPENAI_API_KEY", catalog: "openai" },
   },
   [CLAUDE_API_INSTANCE]: {
     driver: "claudeAgent", displayName: "Claude (API key)", access: "api", icon: { kind: "preset", preset: "anthropic" },
@@ -1741,7 +1746,7 @@ const API_KEY_FLEET: InstanceConfigMap = {
   [XAI_API_INSTANCE]: { driver: "grok", displayName: "xAI", access: "api", icon: { kind: "preset", preset: "xai" } },
   [OPENROUTER_API_INSTANCE]: {
     driver: "openai-compat", displayName: "OpenRouter", access: "api", icon: { kind: "preset", preset: "openrouter" },
-    config: { url: "https://openrouter.ai/api/v1", apiKeyEnv: "OMB_OPENROUTER_API_KEY" },
+    config: { url: "https://openrouter.ai/api/v1", apiKeyEnv: "RIPO_OPENROUTER_API_KEY" },
   },
 };
 
@@ -1765,7 +1770,25 @@ export function instanceConfigs(cfg: AppConfig): InstanceConfigMap {
   // CLI"), so a default `gemini` instance could only ever show unavailable.
   // The driver stays registered for enterprise licences, which keep Gemini
   // CLI — `{"instances": {"gemini": {"driver": "geminiAgent"}}}` restores it.
+  // The bundled default engine: Pollinations' legacy OpenAI-compatible
+  // endpoint serves keyless (verified live 2026-10-14: real replies and
+  // tool_calls with no Authorization header at all). The openai-compat
+  // driver needs a non-empty key to mark an instance available, so the
+  // per-instance loop below injects a "keyless" placeholder for this
+  // instance only when no real key is configured; a real key pasted in
+  // Settings (instance environment) or POLLINATIONS_API_KEY on the server
+  // always wins over the placeholder.
+  const POLLINATIONS_INSTANCE = {
+    driver: "openai-compat",
+    displayName: "RipoBot Brain",
+    config: {
+      url: "https://text.pollinations.ai/openai",
+      apiKeyEnv: "POLLINATIONS_API_KEY",
+      model: "openai",
+    },
+  } as const;
   const DEFAULT_FLEET: InstanceConfigMap = {
+    pollinations: { ...POLLINATIONS_INSTANCE },
     grok: { driver: "grokAgent" },
     kimi: { driver: "kimiAgent" },
     droid: { driver: "droidAgent" },
@@ -1797,6 +1820,7 @@ export function instanceConfigs(cfg: AppConfig): InstanceConfigMap {
   // never see. Custom-only engines stay in CUSTOM_ONLY so a one-off test map
   // is not expanded, matching the claude/grok/codex product-fleet probe.
   const PRODUCT_FLEET_ADDITIONS = {
+    pollinations: { ...POLLINATIONS_INSTANCE },
     chatgpt: { driver: "codex", displayName: "ChatGPT plan", config: { authMode: "chatgpt-plan" } },
     cursor: { driver: "cursorAgent" },
     openaiCompat: { driver: "openai-compat" },
@@ -1853,6 +1877,16 @@ export function instanceConfigs(cfg: AppConfig): InstanceConfigMap {
     const ownsRouting = instanceOwnsRouting(cfg, entry, routingDefaults);
     if (!ownsRouting) {
       for (const [key, value] of injectedEnvironment(cfg, id, entry.driver)) environment[key] = value;
+    }
+    if (id === "pollinations" && entry.driver === "openai-compat") {
+      // Keyless default engine: the legacy Pollinations endpoint ignores the
+      // Authorization header, but the driver needs a non-empty key to mark
+      // the instance available. Inject the placeholder only when no real key
+      // is configured — a key pasted in Settings (instance environment) or
+      // POLLINATIONS_API_KEY on the server always wins.
+      if (!environment.POLLINATIONS_API_KEY?.trim() && !process.env.POLLINATIONS_API_KEY?.trim()) {
+        environment.POLLINATIONS_API_KEY = "keyless";
+      }
     }
     entry.environment = environment;
     if (entry.driver === "groq" && cfg.groq?.url && !ownsRouting) {

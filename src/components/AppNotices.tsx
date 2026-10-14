@@ -1,11 +1,11 @@
 // The one place the desktop app's notices appear (src/lib/notices.ts): at the
 // bottom left, one at a time, in order:
-// 1. the card after the update, offering OpenMausBot Cloud's free trial to
+// 1. the card after the update, offering RipoBot Cloud's free trial to
 //    someone with no plan (CloudTrialIntro);
 // 2. the free trial's own notice, for someone in one (CloudTrialNotice);
 // 3. This computer's My Cloud card, for someone with a plan (CloudNotice);
 // 4. "Star us on GitHub".
-// Before all four, while it lasts: MausBot's Product Hunt launch, once, for
+// Before all four, while it lasts: RipoBot's Product Hunt launch, once, for
 // everyone on either page (ProductHuntCard).
 // Never over setup, a dialog, busy work or an update, and only in the desktop
 // app: This computer's page has all four; the person's own Cloud page has

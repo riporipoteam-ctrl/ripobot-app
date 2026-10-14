@@ -16,7 +16,7 @@ import { CONSENT_RULE, escapeNotes, quoteInNote } from "../peer-provenance.ts";
 import type { Assignment, EnvelopeNames, Level, OriginSource, TurnEvidence } from "./types.ts";
 
 /** Every envelope opens with this; model text that imitates it is escaped. */
-export const ENVELOPE_MARK = "[OpenMausBot assignment";
+export const ENVELOPE_MARK = "[RipoBot assignment";
 
 /** The person's request, an answer, a question, a summary. */
 const QUOTE_MAX = 400;
@@ -153,7 +153,7 @@ function evidenceLine(evidence: TurnEvidence | undefined): string {
 export function composeReport(a: Assignment, names: EnvelopeNames): string {
   const assignee = `@${label(names.assignee, a.assignee.botId)}`;
   const id = label(a.id, "unknown");
-  const lines = [`[OpenMausBot report from ${assignee} on assignment ${id}: ${outcomeLabel(a)}]`, evidenceLine(a.evidence)];
+  const lines = [`[RipoBot report from ${assignee} on assignment ${id}: ${outcomeLabel(a)}]`, evidenceLine(a.evidence)];
   if (a.outcome === "needs_input") {
     const question = quote(a.question, QUOTE_MAX);
     lines.push(`It ended on a question the person has not answered${question ? `: "${question}"` : ""}.`);
@@ -187,9 +187,9 @@ export function composeResume(a: Assignment, names: EnvelopeNames, reports: read
 
 /** Model-written text with every imitation of an envelope opening defused:
  * the bracket becomes a parenthesis, so only the harness opens one. The
- * work is escapeNotes (peer-provenance.ts), which reads "[OpenMausBot <word>" (and "[OMB <word>") in
+ * work is escapeNotes (peer-provenance.ts), which reads "[RipoBot <word>" (and "[RIPO <word>") in
  * any case, bracket form (fullwidth and the rest), spacing, look-alike
- * letters or invisible characters, and leaves tickets like "[OMB-2470]"
+ * letters or invisible characters, and leaves tickets like "[RIPO-2470]"
  * and ordinary brackets alone. */
 export function escapeEnvelope(text: string): string {
   return escapeNotes(text);

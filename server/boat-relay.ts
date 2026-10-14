@@ -1,13 +1,13 @@
-// The one place OpenMausBot still speaks Boat's retired box API. boat.ts
+// The one place RipoBot still speaks Boat's retired box API. boat.ts
 // speaks only Boat's public API v1 (/sandboxes paths, sandbox and sandboxes
-// envelopes, deletion operations of kind "sandbox"). OMB Cloud's Admin relay
-// (openmaus-cloud server/cloud-services.ts) still serves only the old dialect:
+// envelopes, deletion operations of kind "sandbox"). RIPO Cloud's Admin relay
+// (ripo-cloud server/cloud-services.ts) still serves only the old dialect:
 // /boxes paths under a base ending in /api/box/v1, and box and boxes
 // envelopes. A sandbox keeps the same bx_ id under both.
 //
 // So an included credential wired to such a base is translated here, at the
 // transport, and nowhere else. The Admin chooses the base it wires into each
-// home (OMB_CLOUD_BOAT_URL): a relay that serves v1 under a base ending in
+// home (RIPO_CLOUD_BOAT_URL): a relay that serves v1 under a base ending in
 // /api/v1 is spoken to directly. Delete this file once no home is wired to
 // /api/box/v1 (docs/cloud-pro.md, "Included Boat computers, voice and
 // decisions").

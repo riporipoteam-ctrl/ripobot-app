@@ -1,6 +1,6 @@
 import { Loader2, Square, Volume2 } from "lucide-react";
 
-import { speaker } from "@/lib/tts";
+import { browserVoiceFallbackActive, speaker } from "@/lib/tts";
 import { useSpeech } from "@/lib/tts/useSpeech";
 import type { ConfigStatus } from "@/state/store";
 import { cn } from "@/lib/cn";
@@ -29,8 +29,12 @@ type SpeakArgs = {
 /** What reading one message aloud needs, for the button and the menu row. */
 export function useSpeakAction({ text, botId, messageId, voiceId, tts, localVoice }: SpeakArgs) {
   const speech = useSpeech();
-  const configured = localVoice || Boolean(tts?.configured);
-  const ready = localVoice || (configured && Boolean(voiceId || tts?.voice));
+  // The browser's built-in voices read aloud with no harness provider at
+  // all, so the button works out of the box on the website — unless this
+  // device explicitly chose the host's voice.
+  const browserVoice = browserVoiceFallbackActive();
+  const configured = localVoice || browserVoice || Boolean(tts?.configured);
+  const ready = localVoice || browserVoice || (configured && Boolean(voiceId || tts?.voice));
   const mine = speech.messageId === messageId && speech.status !== "idle";
   const preparing = mine && speech.status === "preparing";
   const label = !configured

@@ -1,4 +1,4 @@
-// On an OMB Cloud home a device that is not one of the owner's own (a guest,
+// On an RIPO Cloud home a device that is not one of the owner's own (a guest,
 // or the owner's own device paired with chat-only access) writes only in the
 // conversations it opened (docs/cloud-pro.md). Its composer is replaced by a
 // "New conversation" button everywhere else, instead of a send that fails.

@@ -222,12 +222,12 @@ describe("phone setup flow", () => {
     expect(secureAddressRequestLapsed(account("connecting"), waiting)).toBe(false);
     expect(secureAddressRequestLapsed(account("error"), waiting)).toBe(false);
     expect(secureAddressRequestLapsed(
-      { ...account("ready"), endpoint: "https://c-opaque.openmausbot.com" },
+      { ...account("ready"), endpoint: "https://c-opaque.ripobot.sitey.my" },
       waiting,
     )).toBe(false);
     expect(secureAddressRequestLapsed(account("ready"), {
       enabled: true,
-      endpoints: [{ kind: "hosted", url: "https://c-opaque.openmausbot.com", priority: 0 }],
+      endpoints: [{ kind: "hosted", url: "https://c-opaque.ripobot.sitey.my", priority: 0 }],
     })).toBe(false);
     // Remote access off, unknown or unavailable: not this case.
     expect(secureAddressRequestLapsed(account("ready"), { enabled: false })).toBe(false);
@@ -480,7 +480,7 @@ describe("phone setup flow", () => {
   });
 
   it("requires pairing(true) to return a healthy live pairing window", () => {
-    const token = `omb_pair_${"a".repeat(43)}`;
+    const token = `ripo_pair_${"a".repeat(43)}`;
     const fresh = {
       code: "123456",
       token,

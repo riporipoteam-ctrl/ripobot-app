@@ -1,4 +1,4 @@
-// Who may use a Mac lent to an OMB Cloud home (docs/cloud-pro.md, "Let my
+// Who may use a Mac lent to an RIPO Cloud home (docs/cloud-pro.md, "Let my
 // Cloud use this Mac"). A Cloud home is one person's server, but not every
 // turn on it is theirs: a guest the owner paired, a webhook's payload, or a
 // line someone else slipped into a running turn must never reach the Mac.

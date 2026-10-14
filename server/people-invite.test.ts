@@ -74,7 +74,7 @@ function send(path: string, init: CallInit, headers: Record<string, string>): Pr
 }
 
 /** The box itself: a loopback Host and Origin, nothing forwarded. This is the
- * owner, the way `openmausbot` on the server or a bootstrap script talks. */
+ * owner, the way `ripobot` on the server or a bootstrap script talks. */
 const owner = (path: string, init: CallInit = {}) => send(path, init, { host: `127.0.0.1:${port}`, origin: `http://127.0.0.1:${port}` });
 
 /** A browser somewhere else, reaching the server through its proxy. */
@@ -100,13 +100,13 @@ const as = (cookie: string) => (path: string, init: CallInit = {}) => remote(pat
 beforeAll(async () => {
   port = await freePortBlock([0, 1]);
   stub = await startControlPlaneStub();
-  home = mkdtempSync(join(tmpdir(), "omb-people-invite-"));
+  home = mkdtempSync(join(tmpdir(), "ripo-people-invite-"));
   const staticDir = join(home, "static");
-  mkdirSync(join(home, ".openmausbot"), { recursive: true });
+  mkdirSync(join(home, ".ripobot"), { recursive: true });
   mkdirSync(join(staticDir, "assets"), { recursive: true });
   writeFileSync(join(staticDir, "index.html"), "<!doctype html><title>Served UI</title>");
   // No sign-in list on disk and none in the environment: nobody is welcome yet.
-  writeFileSync(join(home, ".openmausbot", "config.json"), JSON.stringify({ instances: { fixture: { driver: "people-invite-test-shadow" } } }));
+  writeFileSync(join(home, ".ripobot", "config.json"), JSON.stringify({ instances: { fixture: { driver: "people-invite-test-shadow" } } }));
   child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
     cwd: ROOT,
     env: {
@@ -114,13 +114,13 @@ beforeAll(async () => {
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,
       USERPROFILE: home,
-      OMB_PORT: String(port),
-      OMB_WEBHOOK_PORT: String(port + 1),
-      OMB_STATIC_DIR: staticDir,
-      OMB_PUBLIC_URL: `https://${HOST}`,
-      OMB_ENVIRONMENT_LABEL: "acme",
-      OMB_BROWSER_CONNECTION: join(home, "browser-test-connection.json"),
-      OMB_CONTROL_PLANE_URL: stub.url,
+      RIPO_PORT: String(port),
+      RIPO_WEBHOOK_PORT: String(port + 1),
+      RIPO_STATIC_DIR: staticDir,
+      RIPO_PUBLIC_URL: `https://${HOST}`,
+      RIPO_ENVIRONMENT_LABEL: "acme",
+      RIPO_BROWSER_CONNECTION: join(home, "browser-test-connection.json"),
+      RIPO_CONTROL_PLANE_URL: stub.url,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -156,7 +156,7 @@ describe("adding people to a hosted workspace", () => {
   let bobTicket = "";
 
   it("offers no email sign-in until the owner names the first admin", async () => {
-    expect((await remote("/.well-known/openmausbot/environment")).body.capabilities.emailSignIn).toBe(false);
+    expect((await remote("/.well-known/ripobot/environment")).body.capabilities.emailSignIn).toBe(false);
     const early = await remote("/api/auth/email/start", { body: { email: ADA } });
     expect(early.status).toBe(404);
     expect(early.body.error).toMatch(/not set up/);
@@ -164,7 +164,7 @@ describe("adding people to a hosted workspace", () => {
     const saved = await owner("/api/config", { method: "PUT", body: { signIn: { admins: [ADA], members: [] } } });
     expect(saved.status).toBe(200);
     expect((await owner("/api/config")).body.signIn).toEqual({ admins: [ADA], members: [] });
-    expect((await remote("/.well-known/openmausbot/environment")).body.capabilities.emailSignIn).toBe(true);
+    expect((await remote("/.well-known/ripobot/environment")).body.capabilities.emailSignIn).toBe(true);
     expect(stub.calls).not.toContain("POST /api/auth/email-otp/send-verification-otp");
   });
 

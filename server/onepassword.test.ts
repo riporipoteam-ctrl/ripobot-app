@@ -16,7 +16,7 @@ function setup(options: { token?: string | null; fail?: () => Error | null; now?
     token: TOKEN,
     fail: options.fail,
     vaults: {
-      v1: { title: "Shared with OMB", items: [
+      v1: { title: "Shared with RIPO", items: [
         { id: "i1", title: "Example", urls: ["https://accounts.example.com/login", "accounts.example.com"], username: "alice@example.com", password: VAULT_PASSWORD, totp: KEY },
         { id: "i2", title: "Two sites", urls: ["https://crm.example.org", "https://www.crm.example.org/"], username: "team", password: "fake-crm-pass" },
         { id: "i3", title: "No website", urls: [], username: "x", password: "fake-x-pass" },
@@ -57,8 +57,8 @@ describe("the 1Password SDK adapter", () => {
 describe("1Password logins", () => {
   it("lists every Login item with a website and a password, by exact host, read-only and for every bot", async () => {
     const { source, calls } = setup();
-    expect(await source.refresh()).toEqual({ connected: true, vaults: ["Shared with OMB"], items: 2 });
-    expect(calls).toEqual(["createClient OpenMausBot", "vaults.list", "items.list v1", "items.getAll v1 i1,i2,i5"]);
+    expect(await source.refresh()).toEqual({ connected: true, vaults: ["Shared with RIPO"], items: 2 });
+    expect(calls).toEqual(["createClient RipoBot", "vaults.list", "items.list v1", "items.getAll v1 i1,i2,i5"]);
     const rows = source.list();
     expect(rows.map((row) => [row.host, row.username, row.hasTotp, row.source, row.bots])).toEqual([
       ["accounts.example.com", "alice@example.com", true, "1password", "all"],

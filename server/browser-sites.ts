@@ -318,7 +318,7 @@ const defaultEngine = (target: BrowserSitesTarget, args: string[]) =>
 /** The running browser's cookies and storage, as the engine itself saves them
  * (`state save` into a private scratch file), or null when it is stopped. */
 async function runningState(target: BrowserSitesTarget, deps: BrowserSitesDeps): Promise<SavedState | null> {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-browser-state-"));
+  const scratch = mkdtempSync(join(tmpdir(), "ripo-browser-state-"));
   try {
     const path = join(scratch, "state.json");
     const answer = await (deps.engine ?? defaultEngine)(target, ["state", "save", path]);

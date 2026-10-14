@@ -98,7 +98,7 @@ export function keepWarmSettings(settings: Record<string, unknown> | null, denyC
   };
 }
 
-export const KEEP_WARM_DENY_HOOK = `process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: "OpenMausBot keep-warm ping: no tools" } }));\n`;
+export const KEEP_WARM_DENY_HOOK = `process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: "RipoBot keep-warm ping: no tools" } }));\n`;
 
 const count = (value: unknown): number => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
 
@@ -148,7 +148,7 @@ export function runKeepWarmPing(opts: {
   const { contract } = opts;
   let dir: string;
   try {
-    dir = mkdtempSync(join(tmpdir(), "omb-keepwarm-"));
+    dir = mkdtempSync(join(tmpdir(), "ripo-keepwarm-"));
   } catch (error) {
     return Promise.resolve({ ok: false, reason: `the ping could not start: ${(error as Error).message}` });
   }
@@ -172,7 +172,7 @@ export function runKeepWarmPing(opts: {
     }
     args = keepWarmArgs(contract.args, { sessionId: opts.sessionId, mcpConfigPath, settingsPath, systemPromptPath });
     // The harness's hook helper must never hear about a ping.
-    for (const key of Object.keys(env)) if (key.startsWith("OMB_HOOK_")) delete env[key];
+    for (const key of Object.keys(env)) if (key.startsWith("RIPO_HOOK_")) delete env[key];
     // In the packaged app process.execPath is Electron: the deny hook runs it as node.
     if (process.versions.electron) env.ELECTRON_RUN_AS_NODE = "1";
   } catch (error) {

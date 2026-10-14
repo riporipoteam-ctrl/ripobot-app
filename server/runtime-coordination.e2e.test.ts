@@ -12,7 +12,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, verificationServerArgs, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb, verificationServerArgs, verificationServerEnvironment } from "../scripts/control-ripo.ts";
 import { ENVELOPE_MARK } from "./runtime/envelope.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
@@ -22,9 +22,9 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 /** Every resume of a requester opens with this. */
 const SETTLED = "Your downstream room requests have settled.";
 /** The report envelope's opening (composeReport). */
-const REPORT_FROM_MIRA = "[OpenMausBot report from @Mira";
+const REPORT_FROM_MIRA = "[RipoBot report from @Mira";
 /** The first line of a turn a restart cut and ran again (restartNote). */
-const RERUN_NOTE = "OpenMausBot restarted while your previous turn here was running";
+const RERUN_NOTE = "RipoBot restarted while your previous turn here was running";
 /** What a requester hears about teammates a restart cut. */
 const TEAMMATES_CUT = "A restart cut these teammates' turns";
 

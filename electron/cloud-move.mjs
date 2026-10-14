@@ -1,7 +1,7 @@
 // Copy this computer here, the desktop's half (docs/copy-workspace.md;
 // server/cloud-move-http.ts is the receiving server's). One action copies this
 // computer's workspace to a server the person owns and added in this app, their
-// OMB Cloud included, by one code path:
+// RIPO Cloud included, by one code path:
 //
 //   1. this computer's server exports its ordinary encrypted workspace backup
 //      (the backup policy decides what travels: never a credential, sign-in,
@@ -27,7 +27,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { CLOUD_HOME_NAME } from "./cloud-home.mjs";
 
-const MAGIC = Buffer.from("OMB-WORKSPACE-1\n");
+const MAGIC = Buffer.from("RIPO-WORKSPACE-1\n");
 const MIN_BYTES = MAGIC.length + 16 + 12 + 16;
 /** The largest backup a server accepts (server/cloud-move.ts CLOUD_MOVE_MAX_BYTES). */
 export const CLOUD_MOVE_MAX_BYTES = 10 * 1024 ** 3 + 256 * 1024 ** 2;
@@ -38,7 +38,7 @@ const MAX_PART_BYTES = 64 * 1024 ** 2;
 const MIN_PART_BYTES = 512 * 1024;
 const SPACE_MARGIN = 256 * 1024 ** 2;
 const GB = 1024 ** 3;
-/** A Cloud whose disk grows does so in steps of this size (openmaus-cloud VOLUME_EXTEND). */
+/** A Cloud whose disk grows does so in steps of this size (ripo-cloud VOLUME_EXTEND). */
 const DISK_STEP_GB = 10;
 // A failed upload keeps its archive this long, so Try again continues it.
 const REUSE_MS = 30 * 60_000;
@@ -233,7 +233,7 @@ const sentence = value => typeof value === "string" && value.trim()
  * A destination (main's destinationFor) is `{id, name, origin, kind, grant}`:
  * `grant()` opens one single-use admin pairing window there ({origin, code}).
  * Only the Cloud (`kind: "cloud"`) has `disk()`, the disk its plan has and may
- * grow to (cloud-home.mjs cloudPlanDisk), and `grow(sizeGb)`, which asks OMB
+ * grow to (cloud-home.mjs cloudPlanDisk), and `grow(sizeGb)`, which asks RIPO
  * Cloud to grow it now (cloud-account.mjs growDisk). */
 export function createCloudMove({ localRequest, fetchImpl = fetch, tempRoot, availableBytes, now = Date.now, sleep = defaultSleep,
   onState = () => {}, retryDelaysMs = [1_000, 3_000, 8_000, 15_000, 30_000], pollMs = 2_000, restartTimeoutMs = 10 * 60_000, jobTimeoutMs = 3 * 3600_000,
@@ -291,7 +291,7 @@ export function createCloudMove({ localRequest, fetchImpl = fetch, tempRoot, ava
       body: JSON.stringify({ code: grant.code, label: "Copy from desktop" }), signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
     });
     const body = await readJson(response);
-    if (!response.ok || typeof body?.token !== "string" || !body.token.startsWith("omb_sess_")) fail("cloud_unavailable", `This app could not sign in to ${there()} for the copy. Try again.`);
+    if (!response.ok || typeof body?.token !== "string" || !body.token.startsWith("ripo_sess_")) fail("cloud_unavailable", `This app could not sign in to ${there()} for the copy. Try again.`);
     return { origin: dest.origin, token: body.token };
   }
   async function closeSession(session) {
@@ -358,7 +358,7 @@ export function createCloudMove({ localRequest, fetchImpl = fetch, tempRoot, ava
       const response = await localRequest(`/api/workspace-backup/download/${exported.id}`, { method: "GET", signal, redirect: "error" });
       const declared = response.headers.get("content-length");
       if (!response.ok || !response.body || (declared !== null && Number(declared) !== exported.bytes)) { await discard(response); fail("export_failed", "This computer's workspace could not be prepared for the copy."); }
-      const file = join(directory, "workspace.ombbackup"), hash = createHash("sha256"), header = Buffer.alloc(MAGIC.length);
+      const file = join(directory, "workspace.ripobackup"), hash = createHash("sha256"), header = Buffer.alloc(MAGIC.length);
       let bytes = 0;
       await pipeline(Readable.fromWeb(response.body), async function* (source) {
         for await (const chunk of source) {
@@ -483,13 +483,13 @@ export function createCloudMove({ localRequest, fetchImpl = fetch, tempRoot, ava
         // The Cloud's launcher always starts it again; a server's does when
         // it is one of ours (server/restart.ts), and otherwise it installs at its next start.
         fail("restart_timeout", target?.kind === "cloud" ? "My Cloud is taking longer than usual to restart. Check it again in a few minutes."
-          : `${There()} hasn't come back yet. If it doesn't start again on its own, start OpenMausBot there; it finishes installing the copy when it starts.`);
+          : `${There()} hasn't come back yet. If it doesn't start again on its own, start RipoBot there; it finishes installing the copy when it starts.`);
       }
     }
   }
 
   /** The Cloud only: the plan's disk can hold the copy, but today's disk
-   * cannot. Ask OMB Cloud to grow it now, then wait until the Cloud has the room. */
+   * cannot. Ask RIPO Cloud to grow it now, then wait until the Cloud has the room. */
   async function makeRoom(dest, session, fit, signal) {
     publish({ phase: "growing", action: "move" });
     const details = { freeBytes: fit.freeBytes, neededBytes: fit.neededBytes, maxBytes: fit.maxBytes };

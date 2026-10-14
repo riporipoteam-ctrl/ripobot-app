@@ -64,7 +64,7 @@ export interface FillLoginOutcome {
   filled?: FilledField[];
 }
 
-const MARK = "data-omb-login";
+const MARK = "data-ripo-login";
 
 /** In-page: find the visible login fields, mark them, and say which exist.
  * Plain JS in a string: what the page runs is exactly what is written here. */

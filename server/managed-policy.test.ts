@@ -135,7 +135,7 @@ describe("organisation desktop policy overlay", () => {
 
 // Every computer claim in index.ts goes through bindTurnComputer. Run its
 // actual guard (not a copy), and the refusal it asks, against a synthetic
-// policy and, for an OMB Cloud home, the Cloud home switch.
+// policy and, for an RIPO Cloud home, the Cloud home switch.
 describe("claim-time computer refusal in bindTurnComputer", () => {
   const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const start = source.indexOf("\nasync function bindTurnComputer(");
@@ -160,7 +160,7 @@ describe("claim-time computer refusal in bindTurnComputer", () => {
     await expect(bindTurnComputer({}, "computer:host")).resolves.toBe("claimed");
   });
 
-  it("refuses this computer and a Local VM on an OMB Cloud home, and nothing else", async () => {
+  it("refuses this computer and a Local VM on an RIPO Cloud home, and nothing else", async () => {
     expect(refusalStart).toBeGreaterThan(0);
     const { managed } = overlay(null);
     const bindTurnComputer = bind(managed, true);

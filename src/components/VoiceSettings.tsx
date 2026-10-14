@@ -60,7 +60,7 @@ export function VoiceSettings({
   const usesLocalSystem = localMacClient && deviceProvider === "system";
   // Host configuration still controls host-rendered cloud audio. A
   // paired Mac owns its installed-voice choice locally.
-  const provider = tts?.provider ?? "elevenlabs";
+  const provider = tts?.provider ?? "pollinations";
   const cloudProvider = provider === "fish"
     ? {
         id: "fish" as const,
@@ -70,24 +70,37 @@ export function VoiceSettings({
         placeholder: "Paste your Fish Audio API key",
         keyUrl: "https://fish.audio/app/api-keys/",
       }
-    : provider === "elevenlabs"
+    : provider === "pollinations"
       ? {
-          id: "elevenlabs" as const,
-          name: "ElevenLabs",
-          credential: "ttsKey" as const,
-          configField: "key" as const,
-          placeholder: "Paste your ElevenLabs API key",
-          keyUrl: "https://elevenlabs.io/app/settings/api-keys",
+          id: "pollinations" as const,
+          name: "Pollinations",
+          // No desktop-bridge credential: the key saves through /api/config
+          // like every other setting on the website.
+          credential: null,
+          configField: "pollinationsKey" as const,
+          placeholder: "Paste your Pollinations API key",
+          keyUrl: "https://enter.pollinations.ai/keys",
         }
-      : null;
+      : provider === "elevenlabs"
+        ? {
+            id: "elevenlabs" as const,
+            name: "ElevenLabs",
+            credential: "ttsKey" as const,
+            configField: "key" as const,
+            placeholder: "Paste your ElevenLabs API key",
+            keyUrl: "https://elevenlabs.io/app/settings/api-keys",
+          }
+        : null;
   const key = cloudProvider ? voiceKeyDraftValue(keyDraft, cloudProvider.id) : "";
   const hostProviderLabel = provider === "fish"
     ? "Host · Fish Audio"
-    : provider === "elevenlabs"
-      ? "Host · ElevenLabs"
-      : provider === "chatterbox"
-        ? "Host · Chatterbox"
-        : provider === "xai" ? t("voice.grok.host") : "Host voice";
+    : provider === "pollinations"
+      ? "Host · Pollinations"
+      : provider === "elevenlabs"
+        ? "Host · ElevenLabs"
+        : provider === "chatterbox"
+          ? "Host · Chatterbox"
+          : provider === "xai" ? t("voice.grok.host") : "Host voice";
   const systemVoicesAvailable = capabilities.host.platform === "darwin";
   const hostConfigured = Boolean(tts?.configured);
   // Cloud Pro's voice: it works with no saved key, and a key pasted here
@@ -153,7 +166,7 @@ export function VoiceSettings({
     onPatch({ voice: voiceId });
   };
 
-  const setProvider = (next: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai") => {
+  const setProvider = (next: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "pollinations") => {
     if (next === provider || switching || (next === "system" && !systemVoicesAvailable)) return;
     setSwitching(true);
     setKeyDraft({ provider: null, value: "" });
@@ -171,7 +184,7 @@ export function VoiceSettings({
     if (!nextKey || !cloudProvider || keyDraft.provider !== cloudProvider.id) return Promise.resolve();
     setSaving(true);
     setError(null);
-    const request = window.ogb?.setCredential
+    const request = cloudProvider.credential && window.ogb?.setCredential
       ? window.ogb.setCredential(cloudProvider.credential, nextKey)
       : api("/api/config", {
           method: "PUT",
@@ -272,6 +285,7 @@ export function VoiceSettings({
           <div className="mb-2 text-[13px] text-ink-secondary">Voice engine</div>
           <div className="grid grid-cols-2 gap-1 rounded-xl bg-inset p-1" role="radiogroup" aria-label="Voice engine">
             {([
+              { value: "pollinations", label: "Pollinations", available: true },
               { value: "elevenlabs", label: "ElevenLabs", available: true },
               { value: "fish", label: "Fish Audio", available: true },
               { value: "system", label: "Built-in Mac voices", available: systemVoicesAvailable },

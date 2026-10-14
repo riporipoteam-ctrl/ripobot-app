@@ -75,7 +75,7 @@ describe("browser profile manager", () => {
     expect(html).toContain('<option value="chrome" selected="">My Chrome</option>');
     expect(html).toContain("Bots on this profile act inside your real Chrome, signed in as you");
     expect(html).toContain("chrome://inspect/#remote-debugging");
-    // Its sign-ins are Chrome's own: OMB neither lists nor clears them.
+    // Its sign-ins are Chrome's own: RIPO neither lists nor clears them.
     expect(html).not.toContain("Signed-in sites");
     // The bot on it gets the same explanation instead of a sites list.
     const botHtml = renderToStaticMarkup(createElement(BrowserProfilesManager, { bot }));

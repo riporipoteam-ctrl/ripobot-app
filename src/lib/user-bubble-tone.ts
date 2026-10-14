@@ -9,7 +9,7 @@
 
 import type { CSSProperties } from "react";
 import { contrastRatio, mixSrgb, toneForSurface } from "./color-contrast";
-import { MAUS_COLORS, type MausColor } from "./mascot";
+import { RIPO_COLORS, type RipoColor } from "./mascot";
 
 const WHITE = "#ffffff";
 const INK = "#101410";
@@ -81,8 +81,8 @@ function darkInkOn(fill: string): string {
   return contrastRatio(INK, fill) >= BUBBLE_TEXT_MIN ? INK : WHITE;
 }
 
-export function userBubbleTone(color: MausColor): UserBubbleTone {
-  const palette = MAUS_COLORS[color];
+export function userBubbleTone(color: RipoColor): UserBubbleTone {
+  const palette = RIPO_COLORS[color];
   const background = toneForSurface(palette, WHITE, BUBBLE_TEXT_MIN);
   const secondary = quietWhite(background, Math.min(6.2, Math.max(BUBBLE_TEXT_MIN, contrastRatio(WHITE, background) - 0.6)));
   let tertiary = quietWhite(background, BUBBLE_TEXT_MIN);
@@ -140,7 +140,7 @@ export function quoteSurface(inset: string, background: string): string {
   return mixSrgb(inset, background, 0.7);
 }
 
-export function userBubbleStyle(color: MausColor): CSSProperties {
+export function userBubbleStyle(color: RipoColor): CSSProperties {
   const tone = userBubbleTone(color);
   return {
     backgroundColor: tone.background,

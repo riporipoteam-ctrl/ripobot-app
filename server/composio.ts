@@ -19,11 +19,11 @@ import { serviceSlugFor, serviceSlugForCandidates } from "./connector-verdict.ts
 const DEFAULT_BACKEND_ORIGIN = "https://backend.composio.dev";
 
 function apiBase() {
-  return (process.env.OMB_COMPOSIO_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3.1`).replace(/\/$/, "");
+  return (process.env.RIPO_COMPOSIO_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3.1`).replace(/\/$/, "");
 }
 
 function toolkitBase() {
-  return (process.env.OMB_COMPOSIO_TOOLKITS_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3`).replace(/\/$/, "");
+  return (process.env.RIPO_COMPOSIO_TOOLKITS_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3`).replace(/\/$/, "");
 }
 
 const sessionResponseSchema = z.object({
@@ -180,7 +180,7 @@ export function applyManagedBrokerMessage(message: unknown): boolean {
   const parsed = managedBrokerMessageSchema.safeParse(message);
   if (
     !parsed.success ||
-    parsed.data.type !== "openmausbot:managed-composio" ||
+    parsed.data.type !== "ripobot:managed-composio" ||
     !Object.hasOwn(parsed.data, "access")
   ) {
     return false;
@@ -200,8 +200,8 @@ export function setManagedBrokerAccess(access: unknown): void {
 
 function brokerAccess(): { url: string; token: string } | null {
   if (managedBrokerAccess !== undefined) return managedBrokerAccess;
-  const url = process.env.OMB_COMPOSIO_BROKER_URL?.trim();
-  const token = process.env.OMB_COMPOSIO_BROKER_TOKEN?.trim();
+  const url = process.env.RIPO_COMPOSIO_BROKER_URL?.trim();
+  const token = process.env.RIPO_COMPOSIO_BROKER_TOKEN?.trim();
   if (!url || !token) return null;
   if (!managedBrokerToken.test(token)) throw new Error("The connected-apps service token is invalid");
   return { url: normalizeManagedBrokerUrl(url), token };
@@ -275,7 +275,7 @@ export function configured(cfg: AppConfig): boolean {
   return connectionMode(cfg) !== "unavailable";
 }
 
-/** Three answers, not two. The desktop shell sets OMB_CREDENTIAL_STORE to
+/** Three answers, not two. The desktop shell sets RIPO_CREDENTIAL_STORE to
  * "unavailable" when it could not read credentials.bin this launch; without
  * that signal an unreadable store is indistinguishable from a user who never
  * connected anything, and the UI wipes a list it should have kept. */
@@ -283,7 +283,7 @@ export type ConnectorAvailability = "configured" | "unconfigured" | "unreadable"
 
 export function connectorAvailability(
   cfg: AppConfig,
-  storeState: string | undefined = process.env.OMB_CREDENTIAL_STORE,
+  storeState: string | undefined = process.env.RIPO_CREDENTIAL_STORE,
 ): ConnectorAvailability {
   if (configured(cfg)) return "configured";
   return storeState === "unavailable" ? "unreadable" : "unconfigured";
@@ -294,13 +294,13 @@ export function connectorAvailability(
  * build, a fixture, a fresh self-hosted server: the user has to add a key)
  * from the installed desktop app whose managed service has not answered
  * (something really is wrong). Only the packaged desktop app, the one child
- * started with OMB_DESKTOP_PARENT=1, registers with the managed service, so
+ * started with RIPO_DESKTOP_PARENT=1, registers with the managed service, so
  * only there is a missing service an outage. */
 export type ConnectorSetup = "ready" | "needs-setup" | "service-unavailable";
 
 export function connectorSetup(
   cfg: AppConfig,
-  desktopManaged: boolean = process.env.OMB_DESKTOP_PARENT === "1",
+  desktopManaged: boolean = process.env.RIPO_DESKTOP_PARENT === "1",
 ): ConnectorSetup {
   if (configured(cfg)) return "ready";
   return desktopManaged ? "service-unavailable" : "needs-setup";
@@ -350,7 +350,7 @@ function trustedAuthUrl(value: string | undefined, slug: string): string {
 }
 
 /** Composio's own hosts are always trusted. A backend the operator pointed
- * the app at explicitly (OMB_COMPOSIO_API — a dev or test stub) may hand back
+ * the app at explicitly (RIPO_COMPOSIO_API — a dev or test stub) may hand back
  * a Session on its own origin, since the API itself was already trusted that
  * far; any other host is refused. */
 export function trustedSessionMcpUrl(value: string): boolean {
@@ -362,7 +362,7 @@ export function trustedSessionMcpUrl(value: string): boolean {
   }
   if (mcp.protocol === "https:" && (mcp.hostname === "composio.dev" || mcp.hostname.endsWith(".composio.dev"))) return true;
   if (mcp.protocol !== "https:" && !(mcp.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(mcp.hostname))) return false;
-  const override = process.env.OMB_COMPOSIO_API;
+  const override = process.env.RIPO_COMPOSIO_API;
   if (!override) return false;
   try {
     return new URL(override).origin === mcp.origin;
@@ -500,7 +500,7 @@ export async function prepareProjectSession(
     ) {
       return {
         apiKey: trimmed,
-        userId: existing.config?.user_id ?? current.userId ?? `openmausbot_${randomUUID()}`,
+        userId: existing.config?.user_id ?? current.userId ?? `ripobot_${randomUUID()}`,
         sessionId: existing.session_id,
       };
     }
@@ -510,7 +510,7 @@ export async function prepareProjectSession(
     priorUserId = existing?.config?.user_id ?? priorUserId;
   }
 
-  const userId = priorUserId ?? `openmausbot_${randomUUID()}`;
+  const userId = priorUserId ?? `ripobot_${randomUUID()}`;
   const sessionRequest: SessionCreateRequest = {
     user_id: userId,
     manage_connections: {
@@ -627,15 +627,15 @@ export async function mcpIntegration(
       // The provider-facing bridge receives only this boot's loopback token.
       // Project/broker credentials stay in the harness process, so a coding
       // agent that prints its environment cannot export a durable secret.
-      OMB_CONNECTOR_UPSTREAM_URL: `${context.harnessUrl}/api/internal/connectors/mcp`,
-      OMB_CONNECTOR_UPSTREAM_HEADERS: JSON.stringify({ authorization: `Bearer ${context.commsToken}` }),
-      OMB_HARNESS_URL: context.harnessUrl,
+      RIPO_CONNECTOR_UPSTREAM_URL: `${context.harnessUrl}/api/internal/connectors/mcp`,
+      RIPO_CONNECTOR_UPSTREAM_HEADERS: JSON.stringify({ authorization: `Bearer ${context.commsToken}` }),
+      RIPO_HARNESS_URL: context.harnessUrl,
       // Distinct from the agents proxy token: Codex flattens mounted MCP env
       // variables into one process environment, so a shared name would let
       // the later agents mount overwrite this connector-scoped capability.
-      OMB_CONNECTOR_TOKEN: context.commsToken,
-      OMB_BOT_ID: context.botId,
-      OMB_THREAD_ID: context.threadId,
+      RIPO_CONNECTOR_TOKEN: context.commsToken,
+      RIPO_BOT_ID: context.botId,
+      RIPO_THREAD_ID: context.threadId,
       ...(allowlist?.env ? { [CONNECTOR_ALLOWED_TOOLS_ENV]: allowlist.env } : {}),
       ...(serviceSlugs?.env ? { [CONNECTOR_SERVICE_SLUGS_ENV]: serviceSlugs.env } : {}),
     },
@@ -1058,12 +1058,12 @@ async function collectConnectorTools(cfg: AppConfig): Promise<Record<string, Con
   const candidates = connected ? Object.keys(connected) : [];
   const initialize = await relayMcp(cfg, {
     jsonrpc: "2.0",
-    id: "omb-grants-initialize",
+    id: "ripo-grants-initialize",
     method: "initialize",
     params: {
       protocolVersion: "2025-03-26",
       capabilities: {},
-      clientInfo: { name: "openmausbot-grant-editor", version: "1" },
+      clientInfo: { name: "ripobot-grant-editor", version: "1" },
     },
   });
   if (initialize.status !== 200) {
@@ -1081,14 +1081,14 @@ async function collectConnectorTools(cfg: AppConfig): Promise<Record<string, Con
   for (let page = 0; page < TOOLS_LIST_PAGES_MAX; page += 1) {
     const list = await relayMcp(cfg, {
       jsonrpc: "2.0",
-      id: "omb-grants-tools",
+      id: "ripo-grants-tools",
       method: "tools/list",
       params: cursor ? { cursor } : {},
     }, transportSessionId);
     if (list.status !== 200) {
       throw new Error(await responseErrorFromBytes(list.status, list.bytes));
     }
-    const frame = parseMcpResponse(new TextDecoder().decode(list.bytes), "omb-grants-tools");
+    const frame = parseMcpResponse(new TextDecoder().decode(list.bytes), "ripo-grants-tools");
     const error = frame && typeof frame.error === "object" && frame.error !== null
       ? (frame.error as { message?: unknown }).message
       : undefined;
@@ -1284,7 +1284,7 @@ export async function authorizeService(cfg: AppConfig, slug: string, requestedAl
     if (serviceAccounts.every((account) => /^(initializing|initiated|expired)$/i.test(account.status ?? ""))) {
       // Retry without replacing a named account or revoking a former grant:
       // EXPIRED can describe either an abandoned flow or an expired credential.
-      alias = `omb-retry-${randomUUID()}`;
+      alias = `ripo-retry-${randomUUID()}`;
     } else {
       throw inputError("Add an account alias so the existing connection is not replaced");
     }

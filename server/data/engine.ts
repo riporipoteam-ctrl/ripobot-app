@@ -1,11 +1,11 @@
-// The Data surface's engine: DuckDB inside the OMB server, one database per
+// The Data surface's engine: DuckDB inside the RIPO server, one database per
 // bot, the same on desktop, headless server and Cloud (D1, D2 in
 // _plans/data-surface-2026-10-09/PLAN.md).
 //
 // The binding is loaded on first use through a dynamic require so esbuild
 // never bundles it: the packaged app ships no node_modules, so the binding
 // travels as a resource tree (resources/duckdb, staged by
-// scripts/prepare-duckdb.mjs) and the Docker image sets OMB_DUCKDB_DIR. A
+// scripts/prepare-duckdb.mjs) and the Docker image sets RIPO_DUCKDB_DIR. A
 // binding that cannot load never throws at import; `unavailable()` says why.
 //
 // Each bot gets two connections, "bot" and "panel", so the person's paging
@@ -69,9 +69,9 @@ export interface DataEngineOptions {
  * resource tree or an explicit override. Null means the server's own
  * node_modules (a checkout, the npm package). */
 export function duckdbDirectory(env: NodeJS.ProcessEnv = process.env): string | null {
-  if (env.OMB_DUCKDB_DIR) return env.OMB_DUCKDB_DIR;
-  if (env.OMB_RESOURCES_PATH) {
-    const staged = join(env.OMB_RESOURCES_PATH, "duckdb");
+  if (env.RIPO_DUCKDB_DIR) return env.RIPO_DUCKDB_DIR;
+  if (env.RIPO_RESOURCES_PATH) {
+    const staged = join(env.RIPO_RESOURCES_PATH, "duckdb");
     if (existsSync(staged)) return staged;
   }
   return null;
@@ -83,7 +83,7 @@ export function duckdbDirectory(env: NodeJS.ProcessEnv = process.env): string | 
  * file's folder upwards, so an anchor inside <dir>/node_modules finds
  * <dir>/node_modules/@duckdb and @resvg first. */
 export function nativeRequire(directory: string | null = duckdbDirectory()): NodeJS.Require {
-  return createRequire(directory ? join(directory, "node_modules", "openmausbot-duckdb-anchor.js") : import.meta.url);
+  return createRequire(directory ? join(directory, "node_modules", "ripobot-duckdb-anchor.js") : import.meta.url);
 }
 
 function loadBinding(directory: string | null): Binding {
@@ -97,15 +97,15 @@ export function instanceSettings(folder: string, dataDir: string, duckdbVersion:
   const quarterOfRam = Math.floor(totalmem() / 4);
   const memoryMiB = Math.max(256, Math.floor(Math.min(2 * 1024 ** 3, quarterOfRam) / 1024 ** 2));
   return {
-    memory_limit: env.OMB_DUCKDB_MEMORY_LIMIT || `${memoryMiB}MiB`,
+    memory_limit: env.RIPO_DUCKDB_MEMORY_LIMIT || `${memoryMiB}MiB`,
     temp_directory: join(folder, DATA_TMP_DIR),
-    max_temp_directory_size: env.OMB_DUCKDB_MAX_TEMP_SIZE || "20GB",
+    max_temp_directory_size: env.RIPO_DUCKDB_MAX_TEMP_SIZE || "20GB",
     threads: String(Math.max(1, Math.min(4, cpus().length || 1))),
     // Extensions are tied to the exact DuckDB version; a bump gets a fresh folder (D16).
     extension_directory: join(dataDir, "duckdb-extensions", duckdbVersion),
     autoinstall_known_extensions: "false",
     autoload_known_extensions: "true",
-    // Persistent secrets sit unencrypted on disk; OMB's broker issues temporary ones (D15).
+    // Persistent secrets sit unencrypted on disk; RIPO's broker issues temporary ones (D15).
     allow_persistent_secrets: "false",
     preserve_insertion_order: "false",
   };
@@ -557,7 +557,7 @@ class BotDb implements BotDatabase {
     const text = target.trim().replace(/;+\s*$/, "");
     const looksLikeName = /^[\w."$ -]+$/.test(text) && !/\s(?:from|select|with|values)\s/i.test(text) && !/^(?:select|with|from|values|pivot|unpivot|show|describe)\b/i.test(text);
     if (looksLikeName) return this.resolveTable(text);
-    return `(${text}) AS omb_described`;
+    return `(${text}) AS ripo_described`;
   }
 
   async describe(target: string, options: RunOptions): Promise<DescribeResult> {
@@ -615,9 +615,9 @@ class BotDb implements BotDatabase {
 
     if (numeric || temporal) {
       const value = numeric ? `CAST(${id} AS DOUBLE)` : `epoch(CAST(${id} AS TIMESTAMP))`;
-      const sql = `WITH omb_range AS (SELECT min(${value}) AS lo, max(${value}) AS hi FROM ${from} WHERE ${id} IS NOT NULL)
-SELECT coalesce(LEAST(floor((${value} - omb_range.lo) / nullif(omb_range.hi - omb_range.lo, 0) * ${bins}), ${bins - 1}), 0)::INTEGER AS bin, count(*) AS n, min(omb_range.lo), min(omb_range.hi)
-FROM ${from}, omb_range WHERE ${id} IS NOT NULL GROUP BY bin ORDER BY bin`;
+      const sql = `WITH ripo_range AS (SELECT min(${value}) AS lo, max(${value}) AS hi FROM ${from} WHERE ${id} IS NOT NULL)
+SELECT coalesce(LEAST(floor((${value} - ripo_range.lo) / nullif(ripo_range.hi - ripo_range.lo, 0) * ${bins}), ${bins - 1}), 0)::INTEGER AS bin, count(*) AS n, min(ripo_range.lo), min(ripo_range.hi)
+FROM ${from}, ripo_range WHERE ${id} IS NOT NULL GROUP BY bin ORDER BY bin`;
       const rows = (await this.statement("panel", sql, options, (o, conn) => this.read(o, conn, sql))).rows;
       if (!rows.length) return result;
       const lo = Number(rows[0][2]);
@@ -768,8 +768,8 @@ class Engine implements DataEngine {
       const detail = (error instanceof Error ? error.message : String(error)).split("\n")[0].trim();
       const where = directory ? `from ${directory}` : "from the server's node_modules";
       const action = directory
-        ? "Reinstall OpenMausBot, or point OMB_DUCKDB_DIR at a folder holding node_modules/@duckdb."
-        : "Run pnpm install, or set OMB_DUCKDB_DIR to a folder holding node_modules/@duckdb.";
+        ? "Reinstall RipoBot, or point RIPO_DUCKDB_DIR at a folder holding node_modules/@duckdb."
+        : "Run pnpm install, or set RIPO_DUCKDB_DIR to a folder holding node_modules/@duckdb.";
       this.loaded = { reason: `DuckDB did not load ${where}: ${detail}. ${action}` };
     }
     return this.loaded;

@@ -4,9 +4,10 @@ import * as chatterbox from "./chatterbox.ts";
 import * as elevenlabs from "./elevenlabs.ts";
 import * as grok from "./grok.ts";
 import * as fish from "./fish.ts";
+import * as pollinations from "./pollinations.ts";
 import * as systemVoices from "./system-voices.ts";
 
-export type VoiceProvider = "elevenlabs" | "fish" | "system" | "chatterbox" | "xai";
+export type VoiceProvider = "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "pollinations";
 
 export class NoVoiceConfigured extends Error {
   // a plain field rather than a constructor parameter property: the harness
@@ -29,9 +30,29 @@ export class NoVoiceConfigured extends Error {
  * included with Cloud Pro. Settings' own-key flows read cfg.tts.key instead. */
 const elevenLabs = (cfg: AppConfig) => voiceCredential(cfg.tts?.key);
 
+/** The Pollinations key: saved in Settings, else the server env var. The
+ * audio endpoint requires one (free at enter.pollinations.ai/keys) — with
+ * none set the provider reports "not configured" and the website reads
+ * aloud with the browser's built-in voices instead. */
+const pollinationsKey = (cfg: AppConfig) =>
+  cfg.tts?.pollinationsKey?.trim() || process.env.POLLINATIONS_API_KEY?.trim() || "";
+
 export function voiceProvider(cfg: AppConfig): VoiceProvider {
   const provider = cfg.tts?.provider;
-  return provider === "xai" || provider === "fish" || provider === "system" || provider === "chatterbox" ? provider : "elevenlabs";
+  if (
+    provider === "xai" ||
+    provider === "fish" ||
+    provider === "system" ||
+    provider === "chatterbox" ||
+    provider === "pollinations" ||
+    provider === "elevenlabs"
+  ) {
+    return provider;
+  }
+  // Pollinations is the default on a fresh setup. Never strand an existing
+  // ElevenLabs setup that predates the provider field: a saved ElevenLabs
+  // credential keeps selecting ElevenLabs until the person picks otherwise.
+  return elevenLabs(cfg) ? "elevenlabs" : "pollinations";
 }
 
 /** The system provider needs no credential — it is only ever offered where
@@ -43,6 +64,7 @@ export function providerConfigured(cfg: AppConfig): boolean {
   if (provider === "system") return systemVoices.systemVoicesAvailable();
   if (provider === "chatterbox") return Boolean(cfg.tts?.baseUrl?.trim());
   if (provider === "fish") return Boolean(cfg.tts?.fishKey);
+  if (provider === "pollinations") return Boolean(pollinationsKey(cfg));
   return Boolean(elevenLabs(cfg));
 }
 
@@ -54,6 +76,7 @@ export function voiceConfigured(cfg: AppConfig): boolean {
   }
   if (provider === "chatterbox") return Boolean(cfg.tts?.baseUrl?.trim() && cfg.tts?.voice);
   if (provider === "fish") return Boolean(cfg.tts?.fishKey && cfg.tts?.voice);
+  if (provider === "pollinations") return Boolean(pollinationsKey(cfg) && cfg.tts?.voice);
   return Boolean(elevenLabs(cfg) && cfg.tts?.voice);
 }
 
@@ -67,6 +90,7 @@ export function voiceReady(cfg: AppConfig, voiceId?: string): boolean {
   }
   if (provider === "chatterbox") return Boolean(cfg.tts?.baseUrl?.trim() && (voiceId || cfg.tts?.voice));
   if (provider === "fish") return Boolean(cfg.tts?.fishKey && (voiceId || cfg.tts?.voice));
+  if (provider === "pollinations") return Boolean(pollinationsKey(cfg) && (voiceId || cfg.tts?.voice));
   return Boolean(elevenLabs(cfg) && (voiceId || cfg.tts?.voice));
 }
 
@@ -90,14 +114,17 @@ export function describeVoice(cfg: AppConfig) {
   };
 }
 
-export function verifyKey(provider: "elevenlabs" | "fish", key: string) {
-  return provider === "fish" ? fish.verifyKey(key) : elevenlabs.verifyKey(key);
+export function verifyKey(provider: "elevenlabs" | "fish" | "pollinations", key: string) {
+  if (provider === "fish") return fish.verifyKey(key);
+  if (provider === "pollinations") return pollinations.verifyKey(key);
+  return elevenlabs.verifyKey(key);
 }
 
 export async function listVoices(cfg: AppConfig, run?: systemVoices.Runner): Promise<elevenlabs.Voice[]> {
   const provider = voiceProvider(cfg);
   if (provider === "xai") return cfg.xai?.key ? grok.listVoices(cfg.xai.key) : [];
   if (provider === "system") return systemVoices.listSystemVoices(run);
+  if (provider === "pollinations") return pollinationsKey(cfg) ? pollinations.listVoices() : [];
   if (provider === "chatterbox") {
     const baseUrl = cfg.tts?.baseUrl?.trim();
     return baseUrl ? chatterbox.listChatterboxVoices(baseUrl) : [];
@@ -153,6 +180,17 @@ export function speak(cfg: AppConfig, text: string, voiceId?: string, run?: syst
     const voice = voiceId || cfg.tts?.voice;
     if (!voice) throw new NoVoiceConfigured("voice");
     return fish.synthesize(text, voice, key, cfg.tts?.fishModel);
+  }
+  if (provider === "pollinations") {
+    const key = pollinationsKey(cfg);
+    if (!key) {
+      throw new NoVoiceConfigured(
+        "key",
+        "Add a free Pollinations key (enter.pollinations.ai/keys) in Settings on the computer to turn on server voice.",
+      );
+    }
+    const voice = voiceId || cfg.tts?.voice || pollinations.DEFAULT_POLLINATIONS_VOICE;
+    return pollinations.synthesize(text, voice, key);
   }
   const credential = elevenLabs(cfg);
   if (!credential) throw new NoVoiceConfigured("key");

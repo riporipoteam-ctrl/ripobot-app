@@ -5,12 +5,12 @@
 //
 // On Windows, Google's Antigravity runtime unpacks 0.34-1.26 GB every time it
 // starts and leaves it behind whenever it is stopped by force. Folders in
-// OMB's own temp folder are also swept automatically; the system temp folder
+// RIPO's own temp folder are also swept automatically; the system temp folder
 // is searched only here, when the person asks, because other apps start the
 // same runtime (server/drivers/antigravity-temp.ts).
 //
 // Admin-scoped by default (server/request-auth.ts lists no client rule for
-// these paths): it deletes files on the machine running OpenMausBot. Hidden
+// these paths): it deletes files on the machine running RipoBot. Hidden
 // on a hosted team workspace, like every other engine setting there. The
 // answers carry sizes and counts, never paths.
 import type { LeftoverRemoval, LeftoverScan } from "../drivers/antigravity-temp.ts";

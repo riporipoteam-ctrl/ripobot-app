@@ -23,7 +23,7 @@ export function usePlaceViews(bot: Bot): Record<Place, { view: PlaceView; reacha
   const seat = usePlaceSeat(state.config, capabilities.host.platform);
   const backend = bot.cloudBackend === "vps" ? "vps" : "box";
   // Places the enrolled organisation disallows, or this server never
-  // offers (an OMB Cloud home), are not reachable.
+  // offers (an RIPO Cloud home), are not reachable.
   const allowed = state.config?.managedPolicy?.computers ?? { thisComputer: true, localVm: true, box: true, vps: true };
   const providerSupportsLocal = instanceSupportsLocalComputer(state.instances, bot);
   const local = {

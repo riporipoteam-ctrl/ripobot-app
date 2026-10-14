@@ -1,7 +1,7 @@
 // 1Password as a second source of logins for fill_login (Settings → Logins →
 // Connect 1Password). The person pastes a service account token, which
 // 1Password itself limits to the vaults it was given (one, such as "Shared
-// with OMB"); the token is kept in the sealed login store
+// with RIPO"); the token is kept in the sealed login store
 // (server/login-store.ts), never in config.json or a log.
 //
 // Not a parallel system: a 1Password Login item with a website is one more
@@ -65,7 +65,7 @@ export function loginFields(fields: readonly SdkField[]): OnePasswordItemFields 
 
 /** A client over the official SDK, signed in with a service account token. */
 export async function sdkOnePasswordClient(sdk: OnePasswordSdk, token: string, version: string): Promise<OnePasswordClient> {
-  const client = await sdk.createClient({ auth: token, integrationName: "OpenMausBot", integrationVersion: version });
+  const client = await sdk.createClient({ auth: token, integrationName: "RipoBot", integrationVersion: version });
   return {
     vaults: async () => (await client.vaults.list()).map((vault) => ({ id: vault.id, title: vault.title })),
     loginItems: async (vaultId) => (await client.items.list(vaultId))

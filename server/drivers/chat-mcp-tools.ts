@@ -34,7 +34,7 @@ export interface ChatToolSession {
   validate(name: string, args: unknown): void;
   /** A searched server's search_tools and describe_tool read only its
    * catalog, so they need no card; call_tool is shown as the tool it runs.
-   * OpenMausBot's own agents server needs none either, as on Claude
+   * RipoBot's own agents server needs none either, as on Claude
    * (pre-allowed mcp__agents) and Codex (auto-approved mount): the harness
    * authorizes each of its routes itself. */
   view(name: string, args: Record<string, unknown>): ChatToolCallView;
@@ -201,7 +201,7 @@ class ChatMcpClient {
       return deadline - Date.now();
     };
     const initialized = await this.call("initialize", {
-      protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "openmausbot-chat", version: "1" },
+      protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "ripobot-chat", version: "1" },
     }, signal, remaining());
     if (!object(initialized)) throw new Error("MCP initialization returned an invalid result");
     if (signal.aborted) throw aborted();

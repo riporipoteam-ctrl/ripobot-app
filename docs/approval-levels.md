@@ -3,18 +3,18 @@
 Approval levels belong to a bot and apply to its next provider turn, including
 when that provider resumes an existing native thread. Each level is one of the
 provider's own permission modes, passed through. A native tool request that
-reaches you is one the provider left for you. OpenMausBot only answers from an
+reaches you is one the provider left for you. RipoBot only answers from an
 explicit grant: Full Access, a saved exact command or MCP read-shaped tool, or
 the narrow built-in web-search allowance under Approve for me. In Full Access,
-OMB also applies its own configuration tools without another approval.
+RIPO also applies its own configuration tools without another approval.
 
 | Level | Behavior |
 | --- | --- |
 | **Ask for approval** | Requests approval for commands and file changes, the way the provider's supervised mode does. |
 | **Auto-accept edits** | Approves file edits automatically; other actions can still require approval. Offered where the provider has such a mode (Claude, Grok, Antigravity). |
 | **Approve for me** | Uses the provider's automatic review on Codex, Claude, Cursor, and Grok to approve routine actions and ask about others. Providers without an equivalent fall back to asking. |
-| **Full access** | Enables the provider's permissive mode for commands, edits, and selected-computer actions, including potentially destructive or sensitive work. Residual native permission prompts are answered for you. OMB profile changes, routine actions, team setup, bot deletion, and enabled skill authoring apply without a second approval. Peer-review prompts are skipped within the bot's authorized scope. Work handed on with `coordinate_bots` uses the receiving bot's setting, never the sender's — except from a Chief of Staff, whose level flows down (below). Actual questions and missing credentials still need your input. |
-| **Custom (`config.toml`)** | Codex only. OpenMausBot reads and reapplies the effective approval and sandbox settings from your Codex configuration. |
+| **Full access** | Enables the provider's permissive mode for commands, edits, and selected-computer actions, including potentially destructive or sensitive work. Residual native permission prompts are answered for you. RIPO profile changes, routine actions, team setup, bot deletion, and enabled skill authoring apply without a second approval. Peer-review prompts are skipped within the bot's authorized scope. Work handed on with `coordinate_bots` uses the receiving bot's setting, never the sender's — except from a Chief of Staff, whose level flows down (below). Actual questions and missing credentials still need your input. |
+| **Custom (`config.toml`)** | Codex only. RipoBot reads and reapplies the effective approval and sandbox settings from your Codex configuration. |
 
 Full access applies the moment you pick it: no confirmation dialog, no
 second step. It can be turned on from any client that can reach the app's
@@ -59,7 +59,7 @@ or grant another bot access to a different workspace.
 The effective setting belongs to the source conversation. An existing Ask
 thread remains Ask even if the bot default is Full; a Full thread works without
 these extra prompts even if the bot default is Ask. Ask, Auto, and Custom retain
-their existing OMB configuration review cards. Full actions return an applied
+their existing RIPO configuration review cards. Full actions return an applied
 result and leave a settled receipt, so the bot continues in the same turn.
 Invalid input, unavailable services, or failed writes return errors, not a
 request to approve again. An expired native permission request is not turned
@@ -121,7 +121,7 @@ conversations, including newly delegated work. Saved entries are visible and
 revocable in the bot's Access settings.
 
 The harness's own agents tools (coordinating teammates, threads, memory) never
-ask on Claude, Codex or API models: OpenMausBot authorizes each of those
+ask on Claude, Codex or API models: RipoBot authorizes each of those
 routes itself.
 
 Auto-accept edits and Ask card whatever the provider asks about. Approve for
@@ -208,12 +208,12 @@ multi-question card renders its structured form on current apps instead.
 These settings apply on each turn, including resumed conversations. Switching
 to a different provider while elevated requires leaving Full/Custom first;
 choose Ask. Switching models within Antigravity keeps the selected level.
-Native modes require a CLI version that supports them; OpenMausBot does not
+Native modes require a CLI version that supports them; RipoBot does not
 silently substitute unrestricted access when a mode is rejected.
 
 ### Read-only integration tools
 
-OpenMausBot's built-in agents MCP server describes its scoped reads with
+RipoBot's built-in agents MCP server describes its scoped reads with
 explicit read-only, non-destructive, idempotent, closed-world metadata:
 `list_bots`, `list_rooms`, `list_threads`, `assignment_status`,
 `session_search`, `session_read`, `list_routines`, and `skills_list`.
@@ -229,7 +229,7 @@ The level set follows the provider-boundary approach in
 [T3 Code's permission modes](https://github.com/pingdotgg/t3code/blob/e16b8b059c9f5ff6dfed1addecffb831c6aee043/docs/user/permission-modes.md):
 Supervised, Auto-accept edits, Auto, and Full access, each a provider mode
 rather than an app rule, with a remembered approval that belongs to the
-provider's session. Its quieter default is Full access; OpenMausBot keeps Ask
+provider's session. Its quieter default is Full access; RipoBot keeps Ask
 as the default, and Full access is one pick away, applied without a
 confirmation.
 

@@ -1,12 +1,12 @@
-// What this server knows of its person's OMB Cloud plan, for what Pro
+// What this server knows of its person's RIPO Cloud plan, for what Pro
 // unlocks: starting a Live call (server/live-call-controller.ts).
 //
 // Only the desktop app's Cloud sign-in knows the plan. It applies the rule
 // (electron/pro-plan.mjs) and hands this server the answer alone, never the
-// account: OMB_PRO_PLAN when it starts the server, then each change over the
+// account: RIPO_PRO_PLAN when it starts the server, then each change over the
 // utility process's private parent port. The server holds that answer as the
 // last known one. A server the desktop app did not start (dev, tests,
-// headless or Docker) says Pro with OMB_PRO_PLAN=1; a Cloud home is the
+// headless or Docker) says Pro with RIPO_PRO_PLAN=1; a Cloud home is the
 // plan's own machine and always counts.
 import { liveCallsAllowed, proPlanFromEnvironment, proPlanFromMessage } from "../electron/pro-plan.mjs";
 

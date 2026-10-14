@@ -1,7 +1,7 @@
 // A bot set to work on its cloud computer starts that computer only when it
 // actually uses it. The real server, the fake Claude CLI and one stub that
 // plays the Admin's Boat relay (the included cloud computers of an
-// OpenMausBot Cloud plan). Every relay request is recorded, so each journey
+// RipoBot Cloud plan). Every relay request is recorded, so each journey
 // can say exactly which calls a person's action cost: a chat that never
 // touches the screen costs none, and the first computer call creates the
 // computer once. Disposable home; no network.
@@ -21,7 +21,7 @@ import { withoutTurnClock } from "./testing/turn-clock-text.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const FAKE_CLAUDE = join(ROOT, "server/testing/fake-claude-cli.ts");
-const INCLUDED = `box_omb_${randomUUID()}`;
+const INCLUDED = `box_ripo_${randomUUID()}`;
 // A one-pixel JPEG: what the relay hands back as a screen frame.
 const FRAME = Buffer.from("/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==", "base64");
 
@@ -91,10 +91,10 @@ describe("a cloud computer starts only when the bot uses it", () => {
   /** select_computer, as the agents tools call it for this turn. */
   const selectComputer = (sent: any, surface?: string) => {
     const agents = sent.mcpConfig.mcpServers.agents;
-    const upstream = agents.env.OMB_GATE_UPSTREAM ? JSON.parse(agents.env.OMB_GATE_UPSTREAM).env : agents.env;
+    const upstream = agents.env.RIPO_GATE_UPSTREAM ? JSON.parse(agents.env.RIPO_GATE_UPSTREAM).env : agents.env;
     return fetch(`${base}/api/internal/computer/select`, {
       method: surface ? "POST" : "GET",
-      headers: { authorization: `Bearer ${upstream.OMB_COMMS_TOKEN}`, "content-type": "application/json" },
+      headers: { authorization: `Bearer ${upstream.RIPO_COMMS_TOKEN}`, "content-type": "application/json" },
       ...(surface ? { body: JSON.stringify({ surface }) } : {}),
     }).then(response => response.json() as Promise<any>);
   };
@@ -107,9 +107,9 @@ describe("a cloud computer starts only when the bot uses it", () => {
    * harness-mcp-proxy sends it for the engine. */
   const computerCall = async (sent: any, method: string, params: unknown = {}) => {
     const env = sent.mcpConfig.mcpServers.computer.env;
-    const response = await fetch(new URL("/api/internal/computer/mcp", env.OMB_HARNESS_URL), {
+    const response = await fetch(new URL("/api/internal/computer/mcp", env.RIPO_HARNESS_URL), {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${env.OMB_MCP_TOKEN_COMPUTER}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${env.RIPO_MCP_TOKEN_COMPUTER}` },
       body: JSON.stringify({ method, params }),
     });
     return { status: response.status, body: await response.json() as any };
@@ -190,7 +190,7 @@ describe("a cloud computer starts only when the bot uses it", () => {
     await new Promise<void>(resolve => relay.listen(0, "127.0.0.1", resolve));
     const relayBase = `http://127.0.0.1:${(relay.address() as { port: number }).port}`;
 
-    home = mkdtempSync(join(tmpdir(), "omb-cloud-lazy-"));
+    home = mkdtempSync(join(tmpdir(), "ripo-cloud-lazy-"));
     data = join(home, "data");
     dumpFile = join(home, "dump.json");
     finishFile = join(home, "finish");
@@ -218,12 +218,12 @@ describe("a cloud computer starts only when the bot uses it", () => {
       cwd: ROOT,
       env: {
         PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-        HOME: home, USERPROFILE: home, OMB_DATA_DIR: data, TEMP: home, TMP: home, TMPDIR: home,
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
+        HOME: home, USERPROFILE: home, RIPO_DATA_DIR: data, TEMP: home, TMP: home, TMPDIR: home,
+        RIPO_PORT: String(port), RIPO_WEBHOOK_PORT: String(port + 1),
         // An own key would go here; nothing may use it.
-        OMB_BOAT_API: `${relayBase}/own-key-must-not-be-used`,
-        OMB_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`,
-        OMB_CLOUD_BOAT_TOKEN: INCLUDED,
+        RIPO_BOAT_API: `${relayBase}/own-key-must-not-be-used`,
+        RIPO_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`,
+        RIPO_CLOUD_BOAT_TOKEN: INCLUDED,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -355,9 +355,9 @@ describe("a cloud computer starts only when the bot uses it", () => {
     await apiOk("PATCH", `/api/bots/${bot.id}`, { computer: null });
     const sent = await startTurn(bot.id, "Which computers can you use?");
     const agents = sent.mcpConfig.mcpServers.agents;
-    const upstream = agents.env.OMB_GATE_UPSTREAM ? JSON.parse(agents.env.OMB_GATE_UPSTREAM).env : agents.env;
+    const upstream = agents.env.RIPO_GATE_UPSTREAM ? JSON.parse(agents.env.RIPO_GATE_UPSTREAM).env : agents.env;
     const selection = await fetch(`${base}/api/internal/computer/select`, {
-      headers: { authorization: `Bearer ${upstream.OMB_COMMS_TOKEN}` },
+      headers: { authorization: `Bearer ${upstream.RIPO_COMMS_TOKEN}` },
     }).then(response => response.json() as Promise<any>);
     expect(selection.options.find((option: { surface: string }) => option.surface === "cloud")).toMatchObject({
       available: false, reason: "What Scribe can use doesn't include a computer. Change what Scribe can use in its settings.",

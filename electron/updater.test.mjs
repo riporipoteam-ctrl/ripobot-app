@@ -141,7 +141,7 @@ function bridgeFor(origin, { clicked = false, rule = null } = {}) {
   const loading = page(origin);
   if (rule) rule.window.webContents = loading.webContents;
   vm.runInNewContext(readFileSync(new URL("./preload.cjs", import.meta.url), "utf8"), {
-    process: { platform: "darwin", argv: [`--omb-local-origin=${LOCAL}`] },
+    process: { platform: "darwin", argv: [`--ripo-local-origin=${LOCAL}`] },
     location: { origin }, navigator: { userActivation: { isActive: clicked } },
     TextEncoder, localStorage: { getItem: () => null },
     require: () => ({
@@ -218,12 +218,12 @@ it("a downloaded update installs when the app quits, except a system package, wh
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   const resourcesPath = process.resourcesPath;
   const appImage = process.env.APPIMAGE;
-  const resources = mkdtempSync(join(tmpdir(), "omb-updater-package-"));
+  const resources = mkdtempSync(join(tmpdir(), "ripo-updater-package-"));
   try {
     for (const [os, marker, image, installsOnQuit] of [
       ["darwin", null, null, true],
       ["win32", null, null, true],
-      ["linux", null, "/home/a/OpenMausBot.AppImage", true],
+      ["linux", null, "/home/a/RipoBot.AppImage", true],
       ["linux", "deb", null, false],
       ["linux", "rpm", null, false],
     ]) {

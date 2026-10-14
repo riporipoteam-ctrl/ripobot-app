@@ -12,7 +12,7 @@
 // days; they are entries here so that they never share the corner.
 import { hintSeen, hintSeenPatch, type OnboardingStatus } from "@/lib/onboarding";
 
-/** The card after the update that introduces OpenMausBot Cloud's free trial
+/** The card after the update that introduces RipoBot Cloud's free trial
  * (CloudTrialIntro). Showing it again some day is a new id here. */
 export const CLOUD_INTRO = "cloud-trial-intro-v1";
 /** The free trial's notice on the person's own Cloud (CloudTrialNotice). */
@@ -21,10 +21,10 @@ export const CLOUD_TRIAL_NOTICE = "cloud-trial-notice";
 export const CLOUD_NOTICE = "cloud-notice";
 /** "Star us on GitHub", asked once. */
 export const STAR_NOTICE = "github-star-dismissed";
-/** MausBot's Product Hunt launch (October 2026), asked once and only while
+/** RipoBot's Product Hunt launch (October 2026), asked once and only while
  * the launch is news: after PRODUCT_HUNT_UNTIL nobody sees it. */
 export const PRODUCT_HUNT_NOTICE = "product-hunt-launch-2026-10";
-export const PRODUCT_HUNT_URL = "https://www.producthunt.com/products/mausbot";
+export const PRODUCT_HUNT_URL = "https://www.producthunt.com/products/ripobot";
 export const PRODUCT_HUNT_UNTIL = Date.UTC(2026, 10, 1);
 
 export type NoticeId = typeof PRODUCT_HUNT_NOTICE | typeof CLOUD_INTRO | typeof CLOUD_TRIAL_NOTICE | typeof CLOUD_NOTICE | typeof STAR_NOTICE;

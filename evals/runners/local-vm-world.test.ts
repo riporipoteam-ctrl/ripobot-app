@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import { scenarioSchema } from "../types.ts";
 import { runScenario } from "./run-scenario.ts";
 
-// Pins the gatesDir/OMB_DATA_DIR contract end to end. The server hot-loads
-// user skills from <OMB_DATA_DIR>/skills (index.ts), and installSkill writes
+// Pins the gatesDir/RIPO_DATA_DIR contract end to end. The server hot-loads
+// user skills from <RIPO_DATA_DIR>/skills (index.ts), and installSkill writes
 // to <parent-of-eval-gates>/skills, so eval-gates must sit under the data
 // dir. Before the fix this world passed <fixtureHome>/eval-gates while
-// OMB_DATA_DIR was <fixtureHome>/data: the skill installed fine and the run
+// RIPO_DATA_DIR was <fixtureHome>/data: the skill installed fine and the run
 // stayed green, but the block never reached the system prompt.
 describe("localVm world installSkill", () => {
   it("lands user skills where the server hot-loads them", async () => {
     const scenario = scenarioSchema.parse({
       id: "local-vm-skill-install",
       title: "installSkill reaches the localVm server prompt",
-      behavior: "A skill installed before the send rides the system prompt as an openmaus-skill block.",
+      behavior: "A skill installed before the send rides the system prompt as an ripo-skill block.",
       world: "localVm",
       gates: [],
       bots: [{ key: "worker", name: "Skill holder", turns: [{ reply: "Skill instructions followed." }] }],
@@ -35,7 +35,7 @@ describe("localVm world installSkill", () => {
         { kind: "waitForTurns", bot: "worker", count: 1, timeoutMs: 20_000 },
       ],
       assertions: [
-        { kind: "systemPromptIncludes", bot: "worker", turn: 0, includes: '<openmaus-skill id="local-vm-pin"' },
+        { kind: "systemPromptIncludes", bot: "worker", turn: 0, includes: '<ripo-skill id="local-vm-pin"' },
       ],
     });
     const result = await runScenario(scenario);

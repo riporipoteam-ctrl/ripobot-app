@@ -40,7 +40,7 @@ export function browserRuntimeEnv(overrides: Record<string, string | undefined>)
   return { ...env, ...overrides };
 }
 
-/** The page size of a headless browser OMB launches, in CSS pixels.
+/** The page size of a headless browser RIPO launches, in CSS pixels.
  *
  * agent-browser sizes the Chrome *window* (`--window-size=1280,720`). Full
  * Chrome in headless mode (Chrome for Testing, as the Docker image installs)
@@ -59,7 +59,7 @@ export function attachesToChrome(env: NodeJS.ProcessEnv): boolean {
   return Boolean(env.AGENT_BROWSER_CDP || env.AGENT_BROWSER_AUTO_CONNECT);
 }
 
-/** Only a headless browser this server launches is OMB's to size. A browser
+/** Only a headless browser this server launches is RIPO's to size. A browser
  * attached over CDP is someone's own Chrome, and a headed window is the
  * user's to size. */
 export function ownsBrowserViewport(env: NodeJS.ProcessEnv): boolean {
@@ -68,7 +68,7 @@ export function ownsBrowserViewport(env: NodeJS.ProcessEnv): boolean {
 
 export class TransportError extends Error {}
 
-/** One timed browser action, logged with OMB_BROWSER_TIMING=1. Times are in
+/** One timed browser action, logged with RIPO_BROWSER_TIMING=1. Times are in
  * milliseconds. `inFlight` counts this session's browser work already running
  * when the action started: the engine runs one command per session, so the
  * action waited behind it. */
@@ -161,7 +161,7 @@ class BrowserClient {
     this.child.on("close", () => { void this.stop(new TransportError("Browser connection closed.")); });
     this.ready = this.rpc("initialize", {
       protocolVersion: "2024-11-05", capabilities: {},
-      clientInfo: { name: "openmausbot-browser", version: "1" },
+      clientInfo: { name: "ripobot-browser", version: "1" },
     }, Math.max(this.requestTimeoutMs, HANDSHAKE_TIMEOUT_MS)).then((result) => {
       if (!result || typeof result !== "object" || !("protocolVersion" in result)) {
         throw new TransportError("Browser engine returned an invalid handshake.");
@@ -469,7 +469,7 @@ export class BrowserRuntime {
       phases.launchMs = performance.now() - launchStarted;
       try {
         // The model sees slimmed schemas and text-only, bounded results; the
-        // launch/session parameters OMB owns never reach the engine from a call.
+        // launch/session parameters RIPO owns never reach the engine from a call.
         const request = method === "tools/call" ? stripHarnessOwnedArguments(params) : params;
         // Read the page around an action with eval, not a snapshot: a
         // snapshot renumbers every @eN ref the model holds. A failed read only
@@ -764,7 +764,7 @@ export class BrowserRuntime {
     gate.closing = true;
     this.changed(gate);
     try {
-      if (!await closeBrowser()) throw new Error("The browser could not be closed. Ask the person to press Restart in the Browser panel of OpenMausBot on their computer, or to restart OpenMausBot.");
+      if (!await closeBrowser()) throw new Error("The browser could not be closed. Ask the person to press Restart in the Browser panel of RipoBot on their computer, or to restart RipoBot.");
       await this.clients.get(session)?.client.stop();
       await this.clients.get(session)?.client.stop(); // see restart()
       gate.uncertain = false;

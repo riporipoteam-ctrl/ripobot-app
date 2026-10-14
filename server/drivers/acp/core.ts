@@ -9,8 +9,8 @@
 // (initialize, authenticate) and the native session are established once,
 // and later turns prompt the live session directly instead of paying the
 // full handshake per message. The pool mirrors the Claude driver: a session
-// closes after OMB_ACP_SESSION_IDLE_MS of quiet (default 10 minutes, floored
-// by OMB_ACP_SESSION_IDLE_MIN_MS default 10s), when the spawn contract
+// closes after RIPO_ACP_SESSION_IDLE_MS of quiet (default 10 minutes, floored
+// by RIPO_ACP_SESSION_IDLE_MIN_MS default 10s), when the spawn contract
 // changes, when the child crashes, when an interrupt's cancel goes
 // unanswered, and on stopAll/dispose. A resume cursor left by an earlier
 // session resumes through session/load|resume when the process had to
@@ -469,7 +469,7 @@ const ACP_COMPACTION_COLLAPSE_RATIO = 0.6;
 // sits above the longest normal silence.
 export const DEFAULT_ACP_PROMPT_IDLE_MS = 15 * 60_000;
 const promptIdleTimeoutMs = (): number => {
-  const raw = process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS;
+  const raw = process.env.RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS;
   if (raw === undefined) return DEFAULT_ACP_PROMPT_IDLE_MS;
   const ms = Number(raw);
   return Number.isFinite(ms) && ms > 0 ? ms : 0;
@@ -668,7 +668,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
   const SOURCE = support.nativeSource;
   const decodeConfig = decodeAcpConfig(support.defaultCli);
   const DENY_TIMEOUT_NOTE =
-    "OpenMausBot: nobody answered this permission request in time. Skip this action and finish what you can without it.";
+    "RipoBot: nobody answered this permission request in time. Skip this action and finish what you can without it.";
   // shown to the person: no engine slug, and what to do next
   const QUESTION_NO_MATCH_NOTE =
     "That answer isn't one of the choices this engine can take, so the question was closed and the turn stopped. Ask again and pick one of the options.";
@@ -865,7 +865,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
       // an injected stdio proxy — e.g. the peer-agent comms tool — attaches
       // fine here. env is the ACP {name,value}[] shape.
       //
-      // A URL server is always mounted as OpenMausBot's remote proxy, even
+      // A URL server is always mounted as RipoBot's remote proxy, even
       // for an agent that advertises http/sse: the proxy opens the
       // connection with the same minimal handshake as Settings → Test
       // (mcp-http.ts), where an agent's own MCP client adds capability
@@ -886,8 +886,8 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
        *  agent's own log also restart the prompt's idle deadline, so a
        *  turn that is visibly retrying is never stopped as stuck. */
       const startQuietWatch = (threadId: string, session: AcpSession, current: AcpTurn) => {
-        const noticeAfterMs = envOr("OMB_ACP_QUIET_NOTICE_MS", 60_000);
-        const tickMs = envOr("OMB_ACP_QUIET_TICK_MS", 15_000);
+        const noticeAfterMs = envOr("RIPO_ACP_QUIET_NOTICE_MS", 60_000);
+        const tickMs = envOr("RIPO_ACP_QUIET_TICK_MS", 15_000);
         const logPath = support.statusLog && session.sessionId
           ? support.statusLog.path(session.env, session.sessionId)
           : null;
@@ -1814,7 +1814,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
                   "initialize",
                   {
                     protocolVersion: 1,
-                    clientInfo: { name: "openmausbot", version: "0.0.0" },
+                    clientInfo: { name: "ripobot", version: "0.0.0" },
                     clientCapabilities: {
                       fs: {
                         readTextFile: support.clientFileSystem === true,
@@ -2125,7 +2125,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
                 const last = quiet.lastState();
                 return `${DRIVER_KIND} sent nothing for ${formatQuietLimit(promptIdleMs)} with no tool running, so the turn was stopped as stuck` +
                   `${last ? ` (last seen: ${lastSeenPhrase(last)})` : ""}. ` +
-                  "Send the message again to retry. On a self-hosted server, OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS sets this limit (0 turns it off).";
+                  "Send the message again to retry. On a self-hosted server, RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS sets this limit (0 turns it off).";
               },
               );
             if (pendingSplitReceipt) {
@@ -2284,7 +2284,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             if (err) {
               const failure = err as NodeJS.ErrnoException & { killed?: boolean };
               const reason = failure.code === "ENOENT"
-                ? `\`${config.cli}\` isn't installed, or isn't on this app's PATH. Install it for the user running OpenMausBot or use Set CLI, then check again.`
+                ? `\`${config.cli}\` isn't installed, or isn't on this app's PATH. Install it for the user running RipoBot or use Set CLI, then check again.`
                 : failure.code === "EACCES" || failure.code === "EPERM"
                   ? `\`${config.cli}\` isn't executable. Check its file permissions, then check again.`
                   : failure.killed && failure.code == null
@@ -2314,7 +2314,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
         if (support.requireAuthenticationBeforeSpawn && !(await support.isAuthenticated(env, turnConfig, instanceId))) {
           throw new Error(support.loginNote);
         }
-        const cwd = mkdtempSync(join(tmpdir(), "omb-acp-memory-"));
+        const cwd = mkdtempSync(join(tmpdir(), "ripo-acp-memory-"));
         try {
           const turn = { threadId: `memory-text-${newId()}`, text: prompt, approvalMode: "ask", cwd } as SendTurnInput;
           support.applyTurnEnv?.(env, { fullAuto: false, cwd, threadId: turn.threadId, mcpServers: [] });
@@ -2386,7 +2386,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             nativeImageInput: support.images === true,
             effortLevels: support.effortLevels,
             modelVariants: support.modelVariants === true,
-            // OpenMausBot supplies a per-bot approvalMode on every harness
+            // RipoBot supplies a per-bot approvalMode on every harness
             // turn, which safely overrides a legacy instance fullAuto value.
             // Direct adapter calls that omit it still fail closed in sendTurn.
             localComputerMcp: true,

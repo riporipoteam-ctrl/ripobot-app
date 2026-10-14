@@ -82,9 +82,9 @@ describe("the plan line and the credit", () => {
     entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: ENDS + 3 * DAY, version: 1 }, ...extra });
   it("a running trial is a free trial, not an active paid plan; once paid, or ended, it is not", () => {
     for (const state of ["active", "ending", "processing"] as const) {
-      expect(cloudPlanLine(cloudPlanView(connected({ trial: trial(state) })))).toBe("Pro free trial · verified by MausBot Cloud");
+      expect(cloudPlanLine(cloudPlanView(connected({ trial: trial(state) })))).toBe("Pro free trial · verified by RipoBot Cloud");
     }
-    expect(cloudPlanLine(cloudPlanView(connected({})))).toBe("Pro active · verified by MausBot Cloud");
+    expect(cloudPlanLine(cloudPlanView(connected({})))).toBe("Pro active · verified by RipoBot Cloud");
     // An ended trial with no plan is never "Free account", and never an offer to buy.
     expect(cloudPlanView(connected({ entitlement: { plan: "free", status: "inactive", expiresAt: null, version: 2 }, machine: { status: "stopped" }, trial: trial("ended") })).kind).toBe("attention");
   });
@@ -223,14 +223,14 @@ describe("the Add a Cloud dialog, one view per state", () => {
     expect(cloudAddView(paid({ trial: running }), undefined, at)).toEqual({ kind: "starting", trial: running, step: null, slow: false });
     expect(cloudAddView(paid({ machine: { status: "provisioning", setup: { step: "storage", slow: true } } }), undefined, at))
       .toEqual({ kind: "starting", trial: null, step: "storage", slow: true });
-    const ready = { status: "ready" as const, origin: "https://omb-u-1.fly.dev" };
+    const ready = { status: "ready" as const, origin: "https://ripo-u-1.fly.dev" };
     expect(cloudAddView(paid({ machine: ready, checkout: { plan: "pro", startedAt: NOW - 3600_000 } }), undefined, at)).toEqual({ kind: "ready" });
     expect(cloudAddView(paid({ machine: ready }), undefined, at)).toEqual({ kind: "has-cloud" });
   });
 
   it("never offers anything to someone who pays or may pay: a problem, an ended sign-in or an unreachable Cloud is Settings' to say", () => {
     for (const account of [
-      connected({ entitlement: { plan: "pro", tier: "pro", status: "inactive", expiresAt: null, version: 3 }, machine: { status: "payment-problem", origin: "https://omb-u-1.fly.dev" } }),
+      connected({ entitlement: { plan: "pro", tier: "pro", status: "inactive", expiresAt: null, version: 3 }, machine: { status: "payment-problem", origin: "https://ripo-u-1.fly.dev" } }),
       connected({ machine: { status: "stopped" }, trial: trial("ended", { keep: "checkout" }) }),
       paid({ machine: { status: "failed" } }),
       { status: "reauth-required", message: "expired", lastPlan: { tier: "pro", active: true } },
@@ -247,7 +247,7 @@ describe("This computer's My Cloud card", () => {
   const view = (account: CloudAccountState) => cloudNoticeKind(cloudPlanView(account), account);
   it("says My Cloud is ready to someone with a plan (in a trial too), and sign in again where the sign-in ended", () => {
     const base = { status: "connected" as const, account: { id: "a", email: "p@example.test" } };
-    const ready = { status: "ready" as const, origin: "https://omb-u-1.fly.dev" };
+    const ready = { status: "ready" as const, origin: "https://ripo-u-1.fly.dev" };
     expect(view({ ...base, entitlement: { plan: "pro", status: "active", expiresAt: NOW + DAY, version: 1 }, machine: ready })).toBe("my-cloud");
     expect(view({ ...base, entitlement: { plan: "pro", status: "active", expiresAt: NOW + DAY, version: 1 }, machine: ready, trial: trial("active") })).toBe("my-cloud");
     expect(view({ ...base, entitlement: { plan: "pro", status: "active", expiresAt: NOW + DAY, version: 1 }, machine: { status: "provisioning" } })).toBeNull();

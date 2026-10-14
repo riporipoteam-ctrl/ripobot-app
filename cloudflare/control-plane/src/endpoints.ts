@@ -72,7 +72,7 @@ const ENDPOINT_RECONCILE_LIMIT = 20;
 const ENDPOINT_DELETE_LIMIT = 30;
 // A cleanup can make at most ten external Cloudflare API calls when it must
 // rediscover both provider IDs. The per-run row count is configuration
-// (OMB_CLEANUP_SWEEP_LIMIT, see config.ts); rows run at most five at a time so
+// (RIPO_CLEANUP_SWEEP_LIMIT, see config.ts); rows run at most five at a time so
 // they stay inside the Workers limit of six connections awaiting headers.
 const CLEANUP_CONCURRENCY = 5;
 const CLEANUP_BACKOFF_1_MS = 5 * 60 * 1_000;
@@ -186,7 +186,7 @@ async function ensureEndpointRow(
       installationId,
       account.accountId,
       `c-${opaque}.${account.companionHostSuffix}`,
-      `omb-c-${opaque}`,
+      `ripo-c-${opaque}`,
       now,
       now,
     ).run();
@@ -760,7 +760,7 @@ async function relocateClaim(
 
   const opaque = randomHex(16);
   const hostname = `c-${opaque}.${target.companionHostSuffix}`;
-  const tunnelName = `omb-c-${opaque}`;
+  const tunnelName = `ripo-c-${opaque}`;
   const result = await env.DB.prepare(
     `UPDATE installation_endpoints
         SET provider_account = ?, hostname = ?, tunnel_name = ?, updated_at = ?

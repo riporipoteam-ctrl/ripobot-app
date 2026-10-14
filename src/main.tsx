@@ -16,7 +16,7 @@ import "./styles.css";
 // render would show one frame of the default palette first. The brand (window
 // title, accent) is fetched the same way so a white-labelled deployment never
 // flashes the default name; it waits at most a moment and falls back silently.
-// Simple vs Advanced is decided first: applySkin below writes omb-skin, which
+// Simple vs Advanced is decided first: applySkin below writes ripo-skin, which
 // would otherwise make every fresh install look like an existing one.
 settleAdvancedModeDefault();
 applySkin(readSkin());
@@ -28,7 +28,7 @@ applyFont(readFont());
  * check is a single fast request. */
 async function chooseRoot(): Promise<React.ReactNode> {
   if (location.pathname === "/pair") {
-    // The OMB Cloud page's "Use in your browser": whose Cloud it is, then one Continue.
+    // The RIPO Cloud page's "Use in your browser": whose Cloud it is, then one Continue.
     const signIn = takeBrowserSignInFromLocation();
     if (signIn) {
       const preview = await previewBrowserSignIn(signIn);

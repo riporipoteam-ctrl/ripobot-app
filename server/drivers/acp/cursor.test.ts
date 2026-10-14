@@ -206,7 +206,7 @@ describe("CursorAgentDriver", () => {
   it("spawns `agent [--force] [--model …] acp` and keeps Cursor credentials", async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    const scratch = mkdtempSync(join(tmpdir(), "omb-cursor-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-cursor-"));
     scratchDirs.push(scratch);
     const dump = join(scratch, "dump.json");
     process.env.FAKE_ACP_DUMP = dump;
@@ -248,7 +248,7 @@ describe("CursorAgentDriver", () => {
   it("sends cursor_login only when no Cursor key is in the agent's env", async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    const scratch = mkdtempSync(join(tmpdir(), "omb-cursor-auth-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-cursor-auth-"));
     scratchDirs.push(scratch);
     process.env.FAKE_ACP_AUTH_METHOD = "cursor_login";
     const authenticateCalls = async (environment: Record<string, string>) => {
@@ -282,7 +282,7 @@ describe("CursorAgentDriver", () => {
   it("omits --force when fullAuto is off and still completes a turn", async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    const scratch = mkdtempSync(join(tmpdir(), "omb-cursor-safe-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-cursor-safe-"));
     scratchDirs.push(scratch);
     const dump = join(scratch, "dump.json");
     process.env.FAKE_ACP_DUMP = dump;
@@ -484,7 +484,7 @@ describe("cursor ACP model namespace (NS: set_model wiring)", () => {
   it("sends the session's parameterised id, not the argv slug", async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    const scratch = mkdtempSync(join(tmpdir(), "omb-cursor-acpid-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-cursor-acpid-"));
     const dump = join(scratch, "dump.json");
     process.env.FAKE_ACP_DUMP = dump;
     // What cursor-agent 2026.08.11 really advertises: `auto` is `default[]`.
@@ -579,7 +579,7 @@ describe("cursor ACP model namespace (NS: set_model wiring)", () => {
   it("sets the advertised variant for an effort slug and says when it differs", async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    const scratch = mkdtempSync(join(tmpdir(), "omb-cursor-effort-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-cursor-effort-"));
     const dump = join(scratch, "dump.json");
     process.env.FAKE_ACP_DUMP = dump;
     process.env.FAKE_ACP_SESSION_MODELS = "default[]|Auto,grok-4.7[context=256k,reasoning_effort=high,fast=true]|grok-4.7";

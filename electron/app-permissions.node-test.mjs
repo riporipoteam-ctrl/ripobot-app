@@ -105,7 +105,7 @@ test("fails closed on unparsable or opaque origins", () => {
 // buttons): in the main frame of the main window, at the exact origin the
 // verified Cloud sign-in reports. Every other server, and every other
 // capability, stays refused.
-const CLOUD = "https://omb-u-0123456789ab.fly.dev";
+const CLOUD = "https://ripo-u-0123456789ab.fly.dev";
 function cloudFixture({ home = CLOUD } = {}) {
   const main = { getURL: () => `${CLOUD}/chat?botId=bot-1` };
   const state = { home, main, remote: false };
@@ -165,7 +165,7 @@ test("the Cloud's microphone is decided by this computer's media rule, never a c
 test("a server that is not the verified Cloud never hears the microphone", () => {
   const { state, ask, check } = cloudFixture();
   const mic = { isMainFrame: true, mediaTypes: ["audio"] };
-  for (const other of ["https://my-vps.example.com", "http://omb-u-0123456789ab.fly.dev", "https://omb-u-0123456789ab.fly.dev:8443", "https://evil.fly.dev"]) {
+  for (const other of ["https://my-vps.example.com", "http://ripo-u-0123456789ab.fly.dev", "https://ripo-u-0123456789ab.fly.dev:8443", "https://evil.fly.dev"]) {
     assert.equal(ask("media", { ...mic, requestingUrl: `${other}/chat` }), false, other);
     assert.equal(check("media", other, { isMainFrame: true, mediaType: "audio" }), false, other);
   }
@@ -200,7 +200,7 @@ test("the verified Cloud open in this window may write the clipboard, by the rem
   assert.equal(check(write, CLOUD, { isMainFrame: false }), false, "a subframe");
   assert.equal(check(write, CLOUD, {}), false, "no frame information");
   // Never another origin.
-  for (const other of ["https://my-vps.example.com", "http://omb-u-0123456789ab.fly.dev", "https://omb-u-0123456789ab.fly.dev:8443", "https://evil.fly.dev"]) {
+  for (const other of ["https://my-vps.example.com", "http://ripo-u-0123456789ab.fly.dev", "https://ripo-u-0123456789ab.fly.dev:8443", "https://evil.fly.dev"]) {
     assert.equal(ask(write, { requestingUrl: `${other}/chat`, isMainFrame: true }), false, other);
     assert.equal(check(write, other, { isMainFrame: true }), false, other);
   }
@@ -255,7 +255,7 @@ test("the app installs these handlers, with its one rule for My Cloud and a wait
 
 // ── My Cloud: one rule, decided once the saved sign-in has restored ──
 // The app's own wiring (main.mjs), end to end: the real Cloud sign-in client
-// restoring a saved record against a stand-in OpenMausBot Cloud, the Cloud remembered
+// restoring a saved record against a stand-in RipoBot Cloud, the Cloud remembered
 // for its account as main remembers it, and the handlers asking myCloudOrigin,
 // the same rule the Cloud page's Settings → Plan channels use.
 const ADMIN = "http://127.0.0.1:9";
@@ -265,11 +265,11 @@ function myCloudFixture() {
   const identity = () => ({ cloudContractVersion: 1, expiresAt: f.now + 86_400_000, device: { id: "device-1" }, account: ACCOUNT });
   f.saved = { origin: ADMIN, token: `omc_${"T".repeat(43)}`, ...identity() };
   delete f.saved.cloudContractVersion;
-  // `f.cloud`: the machine OpenMausBot Cloud names for this account (null: none).
+  // `f.cloud`: the machine RipoBot Cloud names for this account (null: none).
   f.cloud = { state: "ready", origin: CLOUD };
   const session = () => ({ ...identity(), cloud: f.cloud,
     entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: f.now + 30 * 86_400_000, version: 1 } });
-  // OpenMausBot Cloud answers now ("ready"), later (a promise the test releases),
+  // RipoBot Cloud answers now ("ready"), later (a promise the test releases),
   // not at all ("down"), or that this computer's sign-in no longer counts ("ended").
   const fetch = async (url, { method = "GET" } = {}) => {
     if (!url.endsWith("/api/cloud/desktop/session")) return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
@@ -323,7 +323,7 @@ test("a Live call placed while the saved sign-in is still restoring hears the mi
 
 test("a restore that ends without this Cloud, or outlasts the wait, refuses rather than waiting on", async () => {
   const f = myCloudFixture();
-  // OpenMausBot Cloud does not answer at launch: nothing says this page is My Cloud.
+  // RipoBot Cloud does not answer at launch: nothing says this page is My Cloud.
   f.admin = "down";
   const restored = f.restore();
   const mic = f.ask("media", MIC);
@@ -336,7 +336,7 @@ test("a restore that ends without this Cloud, or outlasts the wait, refuses rath
   assert.equal(await f.ask("media", MIC).done, false);
 });
 
-test("with OpenMausBot Cloud unreachable past the verified window, the same account's Cloud keeps the microphone", async () => {
+test("with RipoBot Cloud unreachable past the verified window, the same account's Cloud keeps the microphone", async () => {
   const f = myCloudFixture();
   await f.restore();
   assert.equal(f.client.homeTarget()?.origin, CLOUD);
@@ -393,7 +393,7 @@ test("a check that finds no Cloud for this account ends it, for the microphone a
   const f = myCloudFixture();
   await f.restore();
   assert.equal(f.ask("media", MIC).value, true);
-  // OpenMausBot Cloud answers for this account and names no machine: the
+  // RipoBot Cloud answers for this account and names no machine: the
   // address it named before is no longer theirs, whatever serves it now.
   f.cloud = null;
   await f.client.refresh();
@@ -408,7 +408,7 @@ test("a check that finds no Cloud for this account ends it, for the microphone a
 });
 
 test("a stopped Cloud named without its address is still this account's Cloud", async () => {
-  // OpenMausBot Cloud still names the machine, so the Server menu's My Cloud
+  // RipoBot Cloud still names the machine, so the Server menu's My Cloud
   // keeps opening through the Cloud's own connection (cloud-home.mjs isCloudHomeEntry).
   const f = myCloudFixture();
   await f.restore();
@@ -488,7 +488,7 @@ test("the page's answer is the request handler's answer for its microphone", asy
   for (const home of [CLOUD, null, "https://evil.fly.dev"]) {
     state.home = home;
     for (const contents of [state.main, local, other]) {
-      for (const url of [`${CLOUD}/chat`, LOCAL_PAGE, "https://my-vps.example.com/", "http://omb-u-0123456789ab.fly.dev/"]) {
+      for (const url of [`${CLOUD}/chat`, LOCAL_PAGE, "https://my-vps.example.com/", "http://ripo-u-0123456789ab.fly.dev/"]) {
         for (const mainFrame of [true, false]) {
           const granted = await new Promise((resolve) => {
             handlers.request(contents, "media", resolve, { requestingUrl: url, isMainFrame: mainFrame, mediaTypes: ["audio"] });

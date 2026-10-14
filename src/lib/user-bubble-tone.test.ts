@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { contrastRatio } from "./color-contrast";
-import { MAUS_COLORS, MAUS_COLOR_NAMES } from "./mascot";
+import { RIPO_COLORS, RIPO_COLOR_NAMES } from "./mascot";
 import { SKIN_IDS } from "./skins";
 import {
   BUBBLE_TEXT_MIN,
@@ -26,17 +26,17 @@ const skin = (id: string) => ({
 });
 
 describe("user bubble tone", () => {
-  it.each(MAUS_COLOR_NAMES)("keeps %s on the same hue and deep enough for white", (color) => {
+  it.each(RIPO_COLOR_NAMES)("keeps %s on the same hue and deep enough for white", (color) => {
     const tone = userBubbleTone(color);
     expect(tone.ink).toBe("#ffffff");
     expect(contrastRatio(tone.ink, tone.background)).toBeGreaterThanOrEqual(BUBBLE_TEXT_MIN);
     // A swatch that already carries white is used as-is. One that does not is deepened, never swapped for black text.
-    if (contrastRatio("#ffffff", MAUS_COLORS[color]) >= BUBBLE_TEXT_MIN) {
-      expect(tone.background).toBe(MAUS_COLORS[color]);
+    if (contrastRatio("#ffffff", RIPO_COLORS[color]) >= BUBBLE_TEXT_MIN) {
+      expect(tone.background).toBe(RIPO_COLORS[color]);
     }
   });
 
-  it.each(SKIN_IDS.flatMap((id) => MAUS_COLOR_NAMES.map((color) => [id, color] as const)))(
+  it.each(SKIN_IDS.flatMap((id) => RIPO_COLOR_NAMES.map((color) => [id, color] as const)))(
     "clears AA for %s × %s, including the pieces inside the bubble",
     (id, color) => {
       const tone = userBubbleTone(color);
@@ -65,8 +65,8 @@ describe("user bubble tone", () => {
       expect(contrastRatio(tone.accent, quote), "quote name").toBeGreaterThanOrEqual(BUBBLE_TEXT_MIN);
       expect(contrastRatio(tone.secondary, quote), "quote snippet").toBeGreaterThanOrEqual(BUBBLE_TEXT_MIN);
       expect(contrastRatio("#ffffff", selectionBackground(tone.background)), "selection").toBeGreaterThanOrEqual(BUBBLE_TEXT_MIN);
-      for (const mention of MAUS_COLOR_NAMES) {
-        const chip = mentionChipBackground(MAUS_COLORS[mention], tone.inset);
+      for (const mention of RIPO_COLOR_NAMES) {
+        const chip = mentionChipBackground(RIPO_COLORS[mention], tone.inset);
         expect(contrastRatio("#ffffff", chip), `mention ${mention}`).toBeGreaterThanOrEqual(BUBBLE_TEXT_MIN);
       }
     },

@@ -57,7 +57,7 @@ export function bindChartRows(spec: Record<string, unknown>, rows: Array<Record<
 
 /** A Vega-Lite chart of a card's reduced rows. vega-embed (~270 KB gzipped)
  * loads on the first chart, not with the app. The theme comes from the
- * skin; the shared config carries OMB's palette and fonts. */
+ * skin; the shared config carries RIPO's palette and fonts. */
 export function DataChart({ botId, cardId, spec, rowCount, theme, revision }: DataChartProps) {
   const host = useRef<HTMLDivElement>(null);
   const displayed = useRef<{ result: Result; naturalHeight?: number } | null>(null);

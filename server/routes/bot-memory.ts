@@ -42,7 +42,7 @@ export interface BotMemoryRouteDeps {
   upkeep: Pick<MemoryUpkeep, "status" | "tidy">;
   aboutMe(): string;
   saveAboutMe(text: string): void;
-  /** On an OMB Cloud home (server/lending-memory.ts), absent elsewhere:
+  /** On an RIPO Cloud home (server/lending-memory.ts), absent elsewhere:
    * - `needed`: when this bot's memory was changed where the owner did not
    *   write, which files changed and a token for exactly what is there now;
    * - `accept`: the owner accepts it exactly as the token describes (false
@@ -224,7 +224,7 @@ export function createBotMemoryRoutes(deps: BotMemoryRouteDeps): RouteHandler {
       // to open by hand instead.
       const workspacePath = memoryOverview(m[1]).workspacePath;
       if (auth.kind !== "loopback") {
-        return json(res, 403, { error: `This only works on the computer running OpenMausBot. The memory folder there is ${workspacePath}`, workspacePath });
+        return json(res, 403, { error: `This only works on the computer running RipoBot. The memory folder there is ${workspacePath}`, workspacePath });
       }
       const opened = await openMemoryLocation(m[1], parsed.data.target);
       if (!opened.ok) return json(res, 500, { error: opened.error, workspacePath: opened.workspacePath });

@@ -1,4 +1,4 @@
-// Shown on an OMB Cloud home in place of a chat until one of the person's own
+// Shown on an RIPO Cloud home in place of a chat until one of the person's own
 // engines is signed in (docs/cloud-pro.md; lib/onboarding cloudSignInDue).
 // Cloud Pro includes no AI: the person brings a Claude, ChatGPT or Grok
 // account, or an API key. A free trial's AI credit runs bots until then; once
@@ -14,7 +14,7 @@
 // says so for a moment and hands the job to the chat as a `/setup` request.
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Check, Info, KeyRound, RefreshCw } from "lucide-react";
-import { MausAvatar } from "@/components/Avatar";
+import { RipoAvatar } from "@/components/Avatar";
 import { startCloudSetup } from "@/components/CloudIntent";
 import { engineReady } from "@/components/EngineLibrary";
 import { EngineSetup } from "@/components/EngineSetup";
@@ -24,7 +24,7 @@ import { brand } from "@/lib/brand";
 import { reopenCloudIntent, setPendingIntent, useCloudIntent } from "@/lib/cloud-intent";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import type { MausMotion, MausState } from "@/lib/mascot";
+import type { RipoMotion, RipoState } from "@/lib/mascot";
 import { withViewTransition } from "@/components/onboarding/view-transition";
 import { useStore, type InstanceInfo } from "@/state/store";
 
@@ -40,7 +40,7 @@ export function CloudEngineSignIn() {
   const { state, dispatch, refreshInstances } = useStore();
   const [open, setOpen] = useState<Choice | null>(null);
   const [checking, setChecking] = useState(false);
-  const [motion, setMotion] = useState<{ kind: MausMotion; key: number }>({ kind: "none", key: 0 });
+  const [motion, setMotion] = useState<{ kind: RipoMotion; key: number }>({ kind: "none", key: 0 });
   // The entrance waits one frame: a motion issued in the commit that mounts
   // the avatar lands before its engine has drawn (WelcomeFlow).
   useEffect(() => {
@@ -82,7 +82,7 @@ export function CloudEngineSignIn() {
   ];
   // The guide looks around while the Cloud answers, listens once a way in is
   // open, and is proud the moment it connects.
-  let face: MausState = "curious";
+  let face: RipoState = "curious";
   if (handing) face = "proud";
   else if (checking) face = "searching";
   else if (open) face = "listening";
@@ -97,7 +97,7 @@ export function CloudEngineSignIn() {
       />
       <div className="stagger relative mx-auto flex w-full max-w-[540px] flex-col px-6 pb-12 pt-[clamp(48px,10vh,112px)]">
         <div className="animate-rise flex flex-col items-center text-center" style={staggerIndex(0)}>
-          <MausAvatar color="green" state={face} motion={motion.kind} motionKey={motion.key} size={64} label={brand().name} />
+          <RipoAvatar color="green" state={face} motion={motion.kind} motionKey={motion.key} size={64} label={brand().name} />
         </div>
         {/* The job this sign-in is for, as it will be sent. It is the same
             element as the box it was typed in, and as the composer after. */}

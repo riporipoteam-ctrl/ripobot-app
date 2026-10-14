@@ -83,10 +83,10 @@ function workspaceSummary(state) {
 
 /** Native identity must not depend on a hosted renderer's version/title. */
 function workspaceWindowTitle(state, companion) {
-  if (companion) return `OpenMausBot — Connected to: ${companion.serverName} (${new URL(companion.endpoint).host})`;
+  if (companion) return `RipoBot — Connected to: ${companion.serverName} (${new URL(companion.endpoint).host})`;
   const active = activeEnvironment(state);
-  if (active && active.kind !== "local") return `OpenMausBot — Hosted: ${active.name} (${new URL(active.origin).host})`;
-  return "OpenMausBot";
+  if (active && active.kind !== "local") return `RipoBot — Hosted: ${active.name} (${new URL(active.origin).host})`;
+  return "RipoBot";
 }
 
 /** Renderer navigation stays in the selected workspace. Switching is a main
@@ -112,7 +112,7 @@ function workspaceSenderAllowed(event, contents, state, localOrigin) {
 
 /** Native menu choices, never renderer-supplied destinations or callbacks. */
 /** The sidebar's server menu. `onAddCloud`: "Add a Cloud…" just under the
- * saved servers, only where main offers OpenMausBot Cloud (cloudOffersAllowed);
+ * saved servers, only where main offers RipoBot Cloud (cloudOffersAllowed);
  * `sublabels`: a saved server's line under its name in place of its host (My
  * Cloud's "Always on"). */
 function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddCloud, sublabels = {} }) {

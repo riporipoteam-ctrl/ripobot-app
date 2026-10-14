@@ -148,7 +148,7 @@ const effortElsewhere = (rendered: { nodes: Node[] }) =>
 const skill = (name: string, enabled: boolean): ManagedSkill => ({ name, description: `${name} helper`, enabled, source: "github:x/y", warnings: [] });
 const openTab = (bot: Bot, tab: string) => click(find(panel(bot), "data-simple-tab", tab));
 const routine = (extra: Partial<Routine> = {}): Routine => ({
-  id: "r1", name: "Morning brief", prompt: "Brief me", target: "bot", botId: "scout", runOn: "maus", enabled: true,
+  id: "r1", name: "Morning brief", prompt: "Brief me", target: "bot", botId: "scout", runOn: "ripo", enabled: true,
   schedule: { type: "daily", time: "09:00", weekdays: [1, 2, 3, 4, 5] }, durationMinutes: 15,
   nextRunAt: Date.UTC(2099, 0, 5, 9), createdAt: 1, updatedAt: 1, ...extra,
 });
@@ -575,7 +575,7 @@ describe("the bot settings panel in Simple mode", () => {
     vi.stubGlobal("localStorage", { getItem: () => null, setItem });
     (vault.props.onOpenBrowser as () => void)();
     // Signing in happens in the bot's browser: the Computer panel opens on it.
-    expect(setItem).toHaveBeenCalledWith("omb-computer-panel-view:scout", "browser");
+    expect(setItem).toHaveBeenCalledWith("ripo-computer-panel-view:scout", "browser");
     expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "toggleComputer", open: true });
     vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
   });

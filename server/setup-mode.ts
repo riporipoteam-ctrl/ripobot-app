@@ -38,7 +38,7 @@ export function setupModeActive(input: { soul?: string; description?: string; te
 }
 
 // skill_manage is only ever mounted alongside the other agent tools when
-// skill authoring is turned on for this turn (OMB_SKILL_AUTHORING_ENABLED);
+// skill authoring is turned on for this turn (RIPO_SKILL_AUTHORING_ENABLED);
 // the block must never name a tool the model cannot actually call.
 const SKILL_MANAGE_ASIDE = "(keep SOUL.md short; put step-by-step procedure into a skill with skill_manage)";
 const NO_SKILL_MANAGE_ASIDE = "(keep SOUL.md short; describe procedures plainly in your standing instructions for now)";
@@ -98,8 +98,8 @@ function connectedAppsClause(apps: SetupConnectedApps): string {
         ? ` You have no connected-app tools, ${NO_APP} ask the user to open your settings → Access → Connected apps, turn it on, connect the app with Connect an app…, and give you its tools.`
         : ` Connected apps are switched off for you, ${NO_APP} ask the user to turn on Connected apps in your settings under Access, then tell you to go on; you can start the connection after that.`;
     case "not-configured":
-      if (apps.host === "cloud") return ` Connected apps come with their MausBot Cloud plan but are not answering right now, ${NO_APP} say so in one sentence and suggest trying again in a few minutes.`;
-      if (apps.host === "desktop") return ` Connected apps are not answering right now, ${NO_APP} say so in one sentence: restarting OpenMausBot usually brings them back, or they can add their own ${KEY_PLACE}.`;
+      if (apps.host === "cloud") return ` Connected apps come with their RipoBot Cloud plan but are not answering right now, ${NO_APP} say so in one sentence and suggest trying again in a few minutes.`;
+      if (apps.host === "desktop") return ` Connected apps are not answering right now, ${NO_APP} say so in one sentence: restarting RipoBot usually brings them back, or they can add their own ${KEY_PLACE}.`;
       return ` Connected apps are not set up here, ${NO_APP} say so in one sentence: they are set up by adding a ${KEY_PLACE}.`;
     case "unsupported":
       return ` Your current model cannot use connected apps, ${NO_APP} say so in one sentence.`;

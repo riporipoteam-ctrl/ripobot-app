@@ -237,7 +237,7 @@ const spec = (): BrowserSpawnSpec => ({ command: process.execPath, args: ["-e", 
 /** A fake engine whose daemon is shared by every MCP process (BUSY_FILE),
  * with a log of the commands that reached it (CALL_LOG). */
 function daemonSpec(): { spec: BrowserSpawnSpec; busy: string; calls: () => string[]; cleanup: () => void } {
-  const dir = mkdtempSync(join(tmpdir(), "omb-daemon-"));
+  const dir = mkdtempSync(join(tmpdir(), "ripo-daemon-"));
   const busy = join(dir, "busy"), log = join(dir, "calls");
   const value = spec();
   value.env.BUSY_FILE = busy;

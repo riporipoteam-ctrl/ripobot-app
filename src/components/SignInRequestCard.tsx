@@ -49,7 +49,7 @@ export function SignInRequestCard({
   const outcome = signInOutcome(card);
   const ref = { botId, threadId, messageId: message.id, place: card.place };
   // This computer is the person's own only in the desktop app hosting the
-  // bot; anywhere else it is the computer OpenMausBot runs on.
+  // bot; anywhere else it is the computer RipoBot runs on.
   const here = signInHostIsHere();
 
   const answer = async (choice: "done" | "cancel") => {

@@ -15,35 +15,35 @@ export const CREDENTIAL_ENV_NAMES = [
   "XAI_API_KEY",
   "MISTRAL_API_KEY",
   "CEREBRAS_API_KEY",
-  "OMB_GROQ_API_KEY",
-  "OMB_META_API_KEY",
-  "OMB_ANTHROPIC_API_KEY",
-  "OMB_ANTHROPIC_API_URL",
-  "OMB_HOSTED_MODEL_TOKEN",
-  "OMB_HOSTED_MODELS",
+  "RIPO_GROQ_API_KEY",
+  "RIPO_META_API_KEY",
+  "RIPO_ANTHROPIC_API_KEY",
+  "RIPO_ANTHROPIC_API_URL",
+  "RIPO_HOSTED_MODEL_TOKEN",
+  "RIPO_HOSTED_MODELS",
   "OPENAI_COMPAT_API_KEY",
   "OPENAI_COMPAT_URL",
-  "OMB_OPENAI_API_KEY",
-  "OMB_OPENROUTER_API_KEY",
+  "RIPO_OPENAI_API_KEY",
+  "RIPO_OPENROUTER_API_KEY",
   "BOX_TOKEN",
   "OPENCODE_API_KEY",
-  "OMB_TTS_KEY",
-  "OMB_FISH_AUDIO_API_KEY",
-  "OMB_JEV_API_KEY",
-  "OMB_OPENAI_IMAGE_KEY",
-  "OMB_CUSTOM_IMAGE_KEY",
-  "OMB_OPENAI_LIVE_KEY",
+  "RIPO_TTS_KEY",
+  "RIPO_FISH_AUDIO_API_KEY",
+  "RIPO_JEV_API_KEY",
+  "RIPO_OPENAI_IMAGE_KEY",
+  "RIPO_CUSTOM_IMAGE_KEY",
+  "RIPO_OPENAI_LIVE_KEY",
   "COMPOSIO_API_KEY",
-  "OMB_COMPOSIO_BROKER_TOKEN",
-  "OMB_CLOUD_BOAT_TOKEN",
-  "OMB_CLOUD_VOICE_TOKEN",
-  "OMB_CLOUD_DECIDER_TOKEN",
-  "OMB_CLOUD_AI_TOKEN",
+  "RIPO_COMPOSIO_BROKER_TOKEN",
+  "RIPO_CLOUD_BOAT_TOKEN",
+  "RIPO_CLOUD_VOICE_TOKEN",
+  "RIPO_CLOUD_DECIDER_TOKEN",
+  "RIPO_CLOUD_AI_TOKEN",
   // Browser capability files and app-owned state paths are private even
   // though they are not traditional API credentials.
-  "OMB_BROWSER_CONNECTION",
-  "OMB_USER_DATA",
-  "OMB_BOAT_API",
+  "RIPO_BROWSER_CONNECTION",
+  "RIPO_USER_DATA",
+  "RIPO_BOAT_API",
 ];
 
 // Credential-shaped tokens (server/redact.ts parity): unmistakable formats
@@ -300,7 +300,7 @@ export function buildDiagnosticsReport({
   now = new Date().toISOString(),
 } = {}) {
   const lines = [];
-  lines.push("OpenMausBot diagnostics");
+  lines.push("RipoBot diagnostics");
   lines.push(`Generated: ${now}`);
   lines.push("");
   lines.push("## App");
@@ -347,7 +347,7 @@ export function buildDiagnosticsReport({
 export function diagnosticsFileName(date = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
   return (
-    `openmausbot-diagnostics-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+    `ripobot-diagnostics-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
     `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}.txt`
   );
 }

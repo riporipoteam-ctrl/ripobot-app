@@ -1,4 +1,4 @@
-// The setup checklist on an OMB Cloud home (docs/cloud-pro.md, "Setup
+// The setup checklist on an RIPO Cloud home (docs/cloud-pro.md, "Setup
 // checklist"): one quiet card from the Cloud's first open until an engine is
 // signed in and a bot has finished a turn there, or until the person hides
 // it. Each step's state is read from the Cloud or this app (lib/cloud-setup),
@@ -12,7 +12,7 @@
 // not done is one click from leading. The guide mascot says when it is over.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowRight, Check, ChevronDown, Cloud, Minus } from "lucide-react";
-import { MausAvatar } from "@/components/Avatar";
+import { RipoAvatar } from "@/components/Avatar";
 import { cloudMoveOffer, CloudMoveSuggestion, moveNextSteps, useCloudMove } from "@/components/CloudMove";
 import { engineReady } from "@/components/EngineLibrary";
 import { staggerIndex } from "@/components/onboarding/beats/shared";
@@ -22,7 +22,7 @@ import { cloudIntentDue, cloudIntentShown, jobRoutine, reopenCloudIntent, useClo
 import { cn } from "@/lib/cn";
 import { CLOUD_INTENT_GIVEN, CLOUD_SETUP_HIDDEN, CLOUD_SETUP_MOVE_SKIPPED, cloudSetupItems, cloudSetupStage, type CloudSetupItem, type CloudSetupStep } from "@/lib/cloud-setup";
 import { t } from "@/lib/i18n";
-import type { MausMotion } from "@/lib/mascot";
+import type { RipoMotion } from "@/lib/mascot";
 import { hintSeenPatch, type WelcomeViewer } from "@/lib/onboarding";
 import type { LocaleKey } from "@/locales";
 import type { Routine } from "@/lib/routines";
@@ -34,7 +34,7 @@ const TITLE: Record<CloudSetupStep, LocaleKey> = {
 };
 
 /** Minimized is this device's convenience; hiding is the Cloud's record. */
-const COLLAPSED_KEY = "omb.cloudSetup.collapsed";
+const COLLAPSED_KEY = "ripo.cloudSetup.collapsed";
 function storedCollapsed(): boolean {
   try { return globalThis.localStorage?.getItem(COLLAPSED_KEY) === "1"; } catch { return false; }
 }
@@ -64,7 +64,7 @@ function nextRunLabel(at: number | null, now = Date.now()): string | null {
  * session that finished it; it leaves by itself after a while. */
 function CloudReady({ routine, onDone }: { routine?: Routine; onDone: () => void }) {
   const { dispatch } = useStore();
-  const [motion, setMotion] = useState<{ kind: MausMotion; key: number }>({ kind: "none", key: 0 });
+  const [motion, setMotion] = useState<{ kind: RipoMotion; key: number }>({ kind: "none", key: 0 });
   const [leaving, setLeaving] = useState(false);
   const [run, setRun] = useState<"idle" | "starting" | "started" | "failed">("idle");
   useEffect(() => {
@@ -94,7 +94,7 @@ function CloudReady({ routine, onDone }: { routine?: Routine; onDone: () => void
   const next = routine ? nextRunLabel(routine.nextRunAt) : null;
   return <aside aria-labelledby="cloud-ready-title" data-cloud-setup-ready className={cn(CARD, "flex flex-col items-center p-5 pt-6 text-center", leaving ? "animate-pop-out" : "animate-spot-in")}>
     <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(60%_100%_at_50%_0%,color-mix(in_oklab,var(--color-success)_16%,transparent),transparent)]" />
-    <MausAvatar color="green" state="celebrate" motion={motion.kind} motionKey={motion.key} size={56} label={brand().name} />
+    <RipoAvatar color="green" state="celebrate" motion={motion.kind} motionKey={motion.key} size={56} label={brand().name} />
     <div role="status" className="relative">
       <h2 id="cloud-ready-title" className="mt-3 text-[15px] font-semibold">{t("cloudSetup.ready.title")}</h2>
       {routine

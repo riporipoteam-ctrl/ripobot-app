@@ -86,7 +86,7 @@ describe("ClaudeDriver keep-warm (fake CLI)", () => {
   beforeEach(async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    scratch = mkdtempSync(join(tmpdir(), "omb-keepwarm-test-"));
+    scratch = mkdtempSync(join(tmpdir(), "ripo-keepwarm-test-"));
     process.env.FAKE_CLAUDE_PING_DUMP = join(scratch, "ping.json");
     instance = await ClaudeDriver.create({
       instanceId: "claude-keepwarm",
@@ -128,7 +128,7 @@ describe("ClaudeDriver keep-warm (fake CLI)", () => {
     // the permission proxy is mounted (same tools) but answers nobody
     expect(dump.mcpConfig.mcpServers.ogb.args.at(-1)).toMatch(/no-broker\.sock$/);
     expect(dump.settings.hooks).toEqual({ PreToolUse: [expect.objectContaining({ matcher: "*" })] });
-    expect(Object.keys(dump.env).filter((key) => key.startsWith("OMB_HOOK_"))).toEqual([]);
+    expect(Object.keys(dump.env).filter((key) => key.startsWith("RIPO_HOOK_"))).toEqual([]);
   });
 
   it("refuses without a live session, and while a turn runs", async () => {

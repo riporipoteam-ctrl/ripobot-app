@@ -6,7 +6,7 @@ import { Card } from "./SettingsPrimitives";
 
 // Copy this computer here (electron/cloud-move.mjs, docs/copy-workspace.md):
 // this computer's workspace to a server the person added, their Cloud
-// included. It runs from Settings → Servers and Settings → OMB Cloud (this
+// included. It runs from Settings → Servers and Settings → RIPO Cloud (this
 // computer's own page names the server). A server's own page offers it (its
 // card while empty, the Cloud's setup checklist, its Settings → Backups), and
 // its Copy brings the person to that panel; only the verified Cloud's starts
@@ -254,7 +254,7 @@ function moveButton(view: MoveView, move: CloudMoveHandle, onStart?: () => void)
     onClick={() => { if (action.kind === "start") onStart?.(); move.run(action.kind); }}>{action.label}</button>;
 }
 
-/** Settings → Servers (a saved server's id) and Settings → OMB Cloud ("cloud"). */
+/** Settings → Servers (a saved server's id) and Settings → RIPO Cloud ("cloud"). */
 export function CloudMoveSettings({ destination, onClose }: { destination: string; onClose?: () => void }) {
   const bridge = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudMove;
   const move = useCloudMove(bridge, destination);

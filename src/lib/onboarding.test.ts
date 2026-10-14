@@ -81,7 +81,7 @@ describe("welcomeViewer", () => {
     expect(welcomeViewer({})).toEqual(LOCAL_VIEWER);
     expect(welcomeViewer(null)).toEqual(LOCAL_VIEWER);
     expect(welcomeViewer({ scopes: ["admin"], hosted: "yes" })).toEqual({ hosted: false, canSave: true });
-    // an OMB Cloud home says so; only a literal true counts
+    // an RIPO Cloud home says so; only a literal true counts
     expect(welcomeViewer({ kind: "session", scopes: ["admin", "client"], cloudHome: true })).toEqual({ hosted: false, canSave: true, cloudHome: true });
     expect(welcomeViewer({ kind: "session", scopes: ["admin", "client"], cloudHome: "yes" })).toEqual({ hosted: false, canSave: true });
   });
@@ -101,7 +101,7 @@ describe("welcomeViewer", () => {
   });
 });
 
-describe("first run on an OMB Cloud home", () => {
+describe("first run on an RIPO Cloud home", () => {
   // What the machine's /api/auth/session answers the desktop app once
   // "Connect to my Cloud" has paired it (server/index.ts, cloud-home.ts).
   const connected = welcomeViewer({ kind: "session", scopes: ["admin", "client"], via: "cookie", cloudHome: true });

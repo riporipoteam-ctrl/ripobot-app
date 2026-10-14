@@ -13,7 +13,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, verificationServerArgs, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb, verificationServerArgs, verificationServerEnvironment } from "../scripts/control-ripo.ts";
 import { ENVELOPE_MARK } from "./runtime/envelope.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
@@ -24,7 +24,7 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 /** Every resume of a requester opens with this. */
 const SETTLED = "Your downstream room requests have settled.";
 /** The report envelope's opening (composeReport). */
-const REPORT_FROM_PEER = "[OpenMausBot report from @Peer";
+const REPORT_FROM_PEER = "[RipoBot report from @Peer";
 /** A routine turn's system prompt, present on the run's own turn and on its resume. */
 const ROUTINE_TURN = "Execute this routine now";
 /** What a requester hears about teammates a restart cut (restartNote). */
@@ -108,8 +108,8 @@ async function scenario(test: (f: any) => Promise<void>) {
         try {
           const dump = JSON.parse(readFileSync(session.fixtureDumpPath, "utf8"));
           const env = dump.mcpConfig?.mcpServers?.agents?.env;
-          if (env?.OMB_THREAD_ID !== threadId) return false;
-          found = env.OMB_COMMS_TOKEN;
+          if (env?.RIPO_THREAD_ID !== threadId) return false;
+          found = env.RIPO_COMMS_TOKEN;
           return Boolean(found);
         } catch { return false; }
       }, { timeout: 20_000 }).toBe(true);

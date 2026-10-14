@@ -62,7 +62,7 @@ describe("OpenAICompatDriver", () => {
     const before = process.env.OPENAI_COMPAT_MODEL;
     process.env.OPENAI_COMPAT_MODEL = "meta-llama/llama-3.3-70b-instruct";
     try {
-      const config = OpenAICompatDriver.decodeConfig({ url: "https://api.openai.com/v1", apiKeyEnv: "OMB_OPENAI_API_KEY", catalog: "openai" });
+      const config = OpenAICompatDriver.decodeConfig({ url: "https://api.openai.com/v1", apiKeyEnv: "RIPO_OPENAI_API_KEY", catalog: "openai" });
       expect(config).toMatchObject({ url: "https://api.openai.com/v1", catalog: "openai" });
       expect(config.model).toBeUndefined();
       const inst = await OpenAICompatDriver.create({
@@ -93,8 +93,8 @@ describe("OpenAICompatDriver", () => {
     ] }), { status: 200 })));
     const inst = await OpenAICompatDriver.create({
       instanceId: "openai", displayName: "OpenAI", enabled: true,
-      config: OpenAICompatDriver.decodeConfig({ url: "https://api.openai.com/v1", apiKeyEnv: "OMB_OPENAI_API_KEY", catalog: "openai" }),
-      environment: { OMB_OPENAI_API_KEY: "sk-fixture" },
+      config: OpenAICompatDriver.decodeConfig({ url: "https://api.openai.com/v1", apiKeyEnv: "RIPO_OPENAI_API_KEY", catalog: "openai" }),
+      environment: { RIPO_OPENAI_API_KEY: "sk-fixture" },
     });
     await vi.waitFor(() => expect(inst.models.options.map((option) => option.id)).toEqual(["gpt-5", "o3", "gpt-4.1"]));
     // A provider's own list is its official catalog, not custom models.
@@ -591,7 +591,7 @@ describe("OpenAICompatDriver", () => {
     ]);
     expect(messages.at(-1)).toEqual({
       role: "user",
-      content: "Context from OpenMausBot updated since this conversation started; it replaces any earlier copy:\n\nMemory: likes quiet hours.\n\nhello",
+      content: "Context from RipoBot updated since this conversation started; it replaces any earlier copy:\n\nMemory: likes quiet hours.\n\nhello",
     });
 
     // A turn without the split keeps the legacy single-block shape.
@@ -609,7 +609,7 @@ describe("OpenAICompatDriver", () => {
   });
 
   describe("replays what each earlier user message actually carried", () => {
-    const NOTE = "Context from OpenMausBot updated since this conversation started; it replaces any earlier copy:\n\n";
+    const NOTE = "Context from RipoBot updated since this conversation started; it replaces any earlier copy:\n\n";
     // index.ts stamps the turn text (clock, recall) but stores only what the
     // person typed, which is what later turns get back as transcript.
     const clock = (minute: string) => `Current time when this message was sent: Friday, 2026-10-09 18:${minute} UTC (UTC+00:00).\n\n`;
@@ -696,7 +696,7 @@ describe("OpenAICompatDriver", () => {
       expect(third.slice(0, second.length)).toEqual(second);
       expect(third.at(-1)).toEqual({
         role: "user",
-        content: "The OpenMausBot context notes from earlier in this conversation have been cleared; the standing instructions still apply.\n\nagain",
+        content: "The RipoBot context notes from earlier in this conversation have been cleared; the standing instructions still apply.\n\nagain",
       });
       await done();
     });

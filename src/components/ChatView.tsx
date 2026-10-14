@@ -1185,7 +1185,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
   const composerDockRef = useRef<HTMLDivElement>(null);
   const composerDock = useComposerDockPad(composerDockRef);
   const advanced = useAdvancedMode();
-  // A guest on an OMB Cloud home writes only in conversations it opened.
+  // A guest on an RIPO Cloud home writes only in conversations it opened.
   const canWrite = useCanWriteIn(bot.threadId);
 
   const computerStarting = computerStartLine(state.computerStarts[bot.id], bot.name);
@@ -1644,7 +1644,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
           )}
           <TurnPresence
             avatar={
-              // BotAvatar, not a bare MausAvatar: an uploaded profile image
+              // BotAvatar, not a bare RipoAvatar: an uploaded profile image
               // (and a chosen mascot body) must match the sidebar row.
               <BotAvatar
                 bot={bot}
@@ -1740,7 +1740,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
   );
 }
 
-/** In place of the composer, for a guest on an OMB Cloud home in a
+/** In place of the composer, for a guest on an RIPO Cloud home in a
  * conversation it did not open: it can only start its own. One click, no
  * dialog. */
 export function NewConversationInstead({ onNew }: { onNew: () => void }) {

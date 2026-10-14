@@ -1,5 +1,5 @@
 // Exercise real provider adapters against the existing scripted ACP peer.
-// These tests prove OMB's flags/settings and handling of residual requests,
+// These tests prove RIPO's flags/settings and handling of residual requests,
 // not a native engine's risk classifier or a model's willingness to use tools.
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,7 +30,7 @@ const OpenCodeDriver = createOpenCodeDriver(async () => ({
 describe("remaining ACP approval mappings", () => {
   // Engines that own an approval ladder spell the turn's level on argv, so the
   // expected command line varies per mode; every other row keeps one fixed argv
-  // and steers the whole ladder through OMB. The instance below always stores
+  // and steers the whole ladder through RIPO. The instance below always stores
   // fullAuto: true, so a mode with no entry here is the proof that the legacy
   // instance flag on its own never adds a bypass flag.
   const cases: {
@@ -48,7 +48,7 @@ describe("remaining ACP approval mappings", () => {
   ];
   it.each(cases)("$driver.driverKind preserves residual requests across Full → Auto → Ask", async ({ driver, argv, native }) => {
     ensureDirs();
-    const scratch = mkdtempSync(join(tmpdir(), "omb-approval-matrix-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-approval-matrix-"));
     const dump = join(scratch, "spawn.json");
     const rpcDump = join(scratch, "rpc.json");
     const instance = await driver.create({
@@ -60,7 +60,7 @@ describe("remaining ACP approval mappings", () => {
         USERPROFILE: scratch,
         HERMES_HOME: join(scratch, ".hermes"),
         KIMI_CODE_HOME: join(scratch, ".kimi"),
-        OPENMAUSBOT_PROBE_LOCAL_INJECT: "0",
+        RIPOBOT_PROBE_LOCAL_INJECT: "0",
         FAKE_ACP_MODE: "permission",
         FAKE_ACP_DUMP: dump,
         FAKE_ACP_RPC_DUMP: rpcDump,
@@ -98,7 +98,7 @@ describe("remaining ACP approval mappings", () => {
           if (driver === OpenCodeDriver) {
             const permission = JSON.parse(JSON.parse(readFileSync(dump, "utf8")).env.OPENCODE_PERMISSION);
             if (approvalMode === "full") expect(permission).toMatchObject({ "*": "allow", external_directory: "allow", read: "allow", bash: "allow", edit: "allow" });
-            // the person's own rule stays in force; only the folders OpenMaus
+            // the person's own rule stays in force; only the folders Ripo
             // owns (attachments here: this turn names no bot) are allowed
             else expect(permission).toEqual({ external_directory: {
               "*": "ask",

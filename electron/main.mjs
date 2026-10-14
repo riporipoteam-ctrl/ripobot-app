@@ -111,7 +111,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // 127.0.0.1 explicitly — vite binds IPv4; a bare "localhost" here can
 // resolve to ::1 and paint a black window
 const DEV_URL = process.env.ELECTRON_START_URL ?? "http://127.0.0.1:5199";
-const DEFAULT_COMPOSIO_BROKER_URL = "https://openmausbot-composio.milindsoni201.workers.dev";
+const DEFAULT_COMPOSIO_BROKER_URL = "https://ripobot-composio.milindsoni201.workers.dev";
 let SERVER_PORT = 8799;
 const APP_ICON = path.join(__dirname, "resources/app-icon.png");
 let desktopViewerWindow = null;
@@ -120,7 +120,7 @@ let desktopViewerContextId = null;
 let desktopWorkspaceManager = null;
 let desktopWorkspaceOwner = null;
 let pendingOrganizationEntry = takeOrganizationDeepLink(process.argv);
-// openmausbot://cloud, delivered with the organisation action once main can navigate.
+// ripobot://cloud, delivered with the organisation action once main can navigate.
 const cloudEntry = createCloudEntry({
   reveal: () => { if (!desktopTray?.show()) activateExistingWindow(BrowserWindow.getAllWindows()); },
   open: async () => {
@@ -220,14 +220,14 @@ function applyUnreadBadge(win = mainWindow) {
 // intercepting input. This app is not graphics-heavy, so reliability wins.
 if (process.platform === "linux") {
   app.disableHardwareAcceleration();
-  app.setDesktopName("com.openmausbot.app.desktop");
+  app.setDesktopName("com.ripobot.app.desktop");
 }
 
 // One instance per user: without this lock a second launch forks a second
 // harness server on a fallback port and splits data dirs in two. The loser
 // exits before any child or window exists; the winner surfaces itself.
 if (!app.requestSingleInstanceLock()) {
-  console.log("[desktop] OpenMausBot is already running — focusing that window");
+  console.log("[desktop] RipoBot is already running — focusing that window");
   process.exit(0);
 }
 
@@ -308,7 +308,7 @@ app.on("open-url", (event, url) => {
 
 app.on("second-instance", (_event, commandLine) => {
   if (takeOrganizationDeepLink(commandLine)) {
-    queueOrganizationEntry("openmausbot://organization");
+    queueOrganizationEntry("ripobot://organization");
     return;
   }
   if (cloudEntry.fromArgs(commandLine)) return;
@@ -351,7 +351,7 @@ let cloudAccountRestoring = false;
 // Until it has finished, which Cloud is the person's is only a hint (updaterPageOffered).
 let cloudSignInRestored = false;
 /** Wait for a saved Cloud sign-in to finish restoring (a local read and one
- * check with OpenMausBot Cloud), at most 5 s: Settings → OpenMausBot Cloud must not take it
+ * check with RipoBot Cloud), at most 5 s: Settings → RipoBot Cloud must not take it
  * for signed out, nor the microphone refuse My Cloud for asking early. */
 function cloudAccountRestored() {
   return Promise.race([cloudAccountStarted, new Promise(resolve => setTimeout(resolve, 5_000).unref?.())]);
@@ -419,7 +419,7 @@ const serverSupervisor = createServerSupervisor({
     slog("server recovery paused after repeated failures; quit and reopen to retry");
     dialog.showErrorBox(
       "The bot server stopped",
-      "Automatic recovery could not restart the background server. Quit and reopen OpenMausBot to try again. Interrupted chat turns were not resent.\n\n" +
+      "Automatic recovery could not restart the background server. Quit and reopen RipoBot to try again. Interrupted chat turns were not resent.\n\n" +
         `Server log: ${path.join(LOG_DIR, "server.log")}`,
     );
   },
@@ -429,9 +429,9 @@ const serverSupervisor = createServerSupervisor({
 function desktopDataDir() {
   // Match the historical desktop fallback for an unset or empty override,
   // then pass this exact resolved path to the utility child. server/config.ts
-  // intentionally treats an empty OMB_DATA_DIR differently, so inheriting it
+  // intentionally treats an empty RIPO_DATA_DIR differently, so inheriting it
   // without normalization would lease one directory and write another.
-  return process.env.OMB_DATA_DIR || path.join(app.getPath("home"), ".openmausbot");
+  return process.env.RIPO_DATA_DIR || path.join(app.getPath("home"), ".ripobot");
 }
 
 async function stopUtilityServer(proc, timeoutMs = UTILITY_SERVER_STOP_TIMEOUT_MS) {
@@ -562,15 +562,15 @@ async function secureWorkspaceConfig() {
 }
 
 function composioBrokerUrl() {
-  const configured = process.env.OMB_COMPOSIO_BROKER_URL?.trim();
+  const configured = process.env.RIPO_COMPOSIO_BROKER_URL?.trim();
   return normalizeManagedComposioBrokerUrl(
     configured || (app.isPackaged ? DEFAULT_COMPOSIO_BROKER_URL : ""),
   );
 }
 
 // The packaged app has no terminal: everything about the server child's life
-// goes to server.log in the OS log dir (~/Library/Logs/OpenMausBot on macOS,
-// Console.app-visible; %APPDATA%\OpenMausBot\logs on Windows), which is also
+// goes to server.log in the OS log dir (~/Library/Logs/RipoBot on macOS,
+// Console.app-visible; %APPDATA%\RipoBot\logs on Windows), which is also
 // why stdio is piped, not inherited — under a Finder/Explorer launch the
 // parent's stdio leads nowhere and a failed boot is otherwise undiagnosable.
 const LOG_DIR = app.getPath("logs");
@@ -1060,7 +1060,7 @@ function syncPhoneSecretKey(proc) {
 
 function ensureCloudAccount() {
   if (cloudAccount) return cloudAccount;
-  if (!app.isPackaged || desktopRemoteAccess) throw new Error("MausBot Cloud sign-in requires the local desktop app.");
+  if (!app.isPackaged || desktopRemoteAccess) throw new Error("RipoBot Cloud sign-in requires the local desktop app.");
   cloudAccount = createCloudAccountClient({
     store: createCloudAccountStore({ file: path.join(app.getPath("userData"), "cloud-account.bin"), encryption: {
       available: async () => (await safeStorage.isAsyncEncryptionAvailable()) &&
@@ -1113,7 +1113,7 @@ async function readCloudOfferBrand() {
   brandedBuild = status.source === "file";
   refreshApplicationMenu();
 }
-/** OpenMausBot Cloud is offered (Add a Cloud…, the card after an update)
+/** RipoBot Cloud is offered (Add a Cloud…, the card after an update)
  * only by the installed app on this computer: never a dev build, companion
  * mode, or a branded build, whose desktop is not ours to advertise on. Until
  * the local server has said which build this is, nothing is offered; a
@@ -1136,7 +1136,7 @@ function cloudMenuSublabels() {
   const line = entry ? cloudMenuSublabel(cloudAccount?.state(), menuDate) : null;
   return entry && line ? { [entry.id]: line } : {};
 }
-/** What both server menus add for OpenMausBot Cloud. `source`: how the
+/** What both server menus add for RipoBot Cloud. `source`: how the
  * Add a Cloud dialog was reached, for the Admin's counts. */
 function cloudMenuOptions(source = "app_menu") {
   return { sublabels: cloudMenuSublabels(), ...(cloudOffersAllowed() ? { onAddCloud: () => void workspaceMenuAction(() => openCloudAdd(source)) } : {}) };
@@ -1156,7 +1156,7 @@ function cloudOwned(state) {
 /** Add a Cloud…: main decides, with nothing from the page. Someone with a
  * Cloud gets a native "coming soon" box, and the window stays where it is.
  * Anyone else gets the dialog on this computer's page (a server's page has
- * no Cloud account bridge), switching to it first, as openmausbot://cloud does. */
+ * no Cloud account bridge), switching to it first, as ripobot://cloud does. */
 async function openCloudAdd(source) {
   if (!cloudOffersAllowed() || !serverReady) return;
   await cloudAccountRestored();
@@ -1186,7 +1186,7 @@ async function anotherCloudBox(state) {
     await ensureCloudAccount().interest("another_cloud");
     await dialog.showMessageBox({ type: "info", message: "Thanks. We’ll email you when you can add another Cloud." });
   } catch {
-    await dialog.showMessageBox({ type: "error", message: "Could not reach MausBot Cloud", detail: "Nothing was saved. Check your connection and try again." });
+    await dialog.showMessageBox({ type: "error", message: "Could not reach RipoBot Cloud", detail: "Nothing was saved. Check your connection and try again." });
   }
 }
 /** Once, when a Cloud this app checked out for is ready and the window is
@@ -1383,11 +1383,11 @@ async function runCompanyBackup(kind, input, scheduled = null) {
     const status = await localBackupStatus(proc);
     if (status.pendingRestore) {
       publishCompanyBackupState({ busy: false, pendingRestore: true });
-      throw new Error("Restart OpenMausBot to finish the pending restore before starting another backup operation.");
+      throw new Error("Restart RipoBot to finish the pending restore before starting another backup operation.");
     }
     if (status.busy) throw companyBackupDeferred();
     const transfers = createCompanyBackups({
-      tempRoot: path.join(app.getPath("temp"), "openmaus-company-backups"),
+      tempRoot: path.join(app.getPath("temp"), "ripo-company-backups"),
       localRequest: (route, init) => localBackupRequest(proc, route, init),
       portalRequest: (route, options) => client.requestBackup(route, { ...options, generation }),
       availableBytes: async temporary => {
@@ -1417,7 +1417,7 @@ async function runCompanyBackup(kind, input, scheduled = null) {
 function syncDesktopMutationToken(proc) {
   try {
     proc.postMessage({
-      type: "openmausbot:desktop-mutation-token",
+      type: "ripobot:desktop-mutation-token",
       token: desktopMutationToken,
       companionToken: companionMutationToken,
     });
@@ -1479,39 +1479,39 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
     // server gets only a private capability that validates that same live
     // owner; fallback-port children must not race to replace the parent lease.
     ...desktopDataDirLease.utilityServerLeaseEnvironment(),
-    OMB_DATA_DIR: dataDir,
+    RIPO_DATA_DIR: dataDir,
     // A packaged utility child must never fall back to a descriptor inherited
     // from the launching shell. It starts fail-closed until this exact main
     // process sends the private in-memory connection after spawn.
-    OMB_DESKTOP_PARENT: "1",
-    OMB_DESKTOP_LAUNCH_ID: desktopLaunchId,
-    OMB_STATIC_DIR: path.join(process.resourcesPath, "ui"),
-    OMB_RESOURCES_PATH: process.resourcesPath,
-    OMB_SKILLS_DIR: path.join(process.resourcesPath, "skills"),
-    OMB_PORT: String(port),
+    RIPO_DESKTOP_PARENT: "1",
+    RIPO_DESKTOP_LAUNCH_ID: desktopLaunchId,
+    RIPO_STATIC_DIR: path.join(process.resourcesPath, "ui"),
+    RIPO_RESOURCES_PATH: process.resourcesPath,
+    RIPO_SKILLS_DIR: path.join(process.resourcesPath, "skills"),
+    RIPO_PORT: String(port),
     // the server advertises this to remote clients so version skew is visible
-    OMB_APP_VERSION: app.getVersion(),
-    OMB_USER_DATA: app.getPath("userData"),
+    RIPO_APP_VERSION: app.getVersion(),
+    RIPO_USER_DATA: app.getPath("userData"),
     ...(secureCredentials.composioApiKey
       ? { COMPOSIO_API_KEY: secureCredentials.composioApiKey }
       : {}),
     // "we could not read your keys" must not reach the UI as "you have none"
-    OMB_CREDENTIAL_STORE: credentialStoreUnavailable ? "unavailable" : "ok",
+    RIPO_CREDENTIAL_STORE: credentialStoreUnavailable ? "unavailable" : "ok",
     // one env var per stored workspace secret (xai/box/voice/OpenCode Go);
     // the server prefers these over config.json, whose plaintext fields
     // the boot migration has deleted
     ...workspaceCredentialEnv(secureCredentials),
-    // OMB_PRO_PLAN, set here and never inherited from the launching shell:
+    // RIPO_PRO_PLAN, set here and never inherited from the launching shell:
     // the server starts with the answer the Cloud sign-in gives now ("0"
     // until it is read), and syncProPlan keeps it current after.
     ...proPlanRelay.environment(),
   });
-  delete childEnv.OMB_BROWSER_CONNECTION;
+  delete childEnv.RIPO_BROWSER_CONNECTION;
   // Set here or not at all, never inherited from the launching shell. The
   // bootstrap removes it before the server runs, so nothing the server
   // spawns sees it.
-  delete childEnv.OMB_SERVER_COMPILE_CACHE;
-  if (compileCacheDir) childEnv.OMB_SERVER_COMPILE_CACHE = compileCacheDir;
+  delete childEnv.RIPO_SERVER_COMPILE_CACHE;
+  if (compileCacheDir) childEnv.RIPO_SERVER_COMPILE_CACHE = compileCacheDir;
   slog(`fork ${entry} port=${port}`);
   const proc = utilityProcess.fork(entry, [], {
     env: childEnv,
@@ -1611,7 +1611,7 @@ async function startServerPackaged() {
 
 /** Update the Pro answer from the Cloud sign-in (its current state, or the
  * one just published) and hand it to the running server over its private
- * port. A server that is not running yet starts with it (OMB_PRO_PLAN). */
+ * port. A server that is not running yet starts with it (RIPO_PRO_PLAN). */
 function syncProPlan(state = cloudAccount?.state()) {
   proPlanRelay.update(state);
   if (!serverProc) return;
@@ -1626,7 +1626,7 @@ function syncManagedComposioCredentials() {
   if (!serverProc) return;
   try {
     serverProc.postMessage({
-      type: "openmausbot:managed-composio",
+      type: "ripobot:managed-composio",
       access: managedComposioAccess(composioBrokerUrl(), secureCredentials),
     });
   } catch (error) {
@@ -1647,8 +1647,8 @@ function buildErrorPage({ allPortsOccupied }) {
   const serverLogPath = path.join(LOG_DIR, "server.log");
   const serverLogHref = pathToFileURL(serverLogPath).href;
   const reason = allPortsOccupied
-    ? "Every OpenMausBot port answered health checks from another process — likely a second copy of the app, or another program on ports 8799–28799. Quit that program, then quit and reopen OpenMausBot."
-    : "The background server didn't come up in time — this is usually slow startup, not a port conflict. Quit and reopen OpenMausBot.";
+    ? "Every RipoBot port answered health checks from another process — likely a second copy of the app, or another program on ports 8799–28799. Quit that program, then quit and reopen RipoBot."
+    : "The background server didn't come up in time — this is usually slow startup, not a port conflict. Quit and reopen RipoBot.";
   return (
     "data:text/html;charset=utf-8," +
     encodeURIComponent(
@@ -1711,7 +1711,7 @@ function desktopViewerErrorPage(message, retryUrl) {
 }
 
 function openDesktopViewer(owner, rawUrl, rawTitle, contextId) {
-  if (!owner || owner.isDestroyed()) throw new Error("The OpenMausBot window is unavailable");
+  if (!owner || owner.isDestroyed()) throw new Error("The RipoBot window is unavailable");
   const url = desktopViewerUrl(rawUrl);
   const titleCandidate = Object.prototype.toString.call(rawTitle) === "[object String]" ? rawTitle.trim() : "";
   const title = titleCandidate ? titleCandidate.slice(0, 80) : "Live desktop";
@@ -1756,7 +1756,7 @@ function openDesktopViewer(owner, rawUrl, rawTitle, contextId) {
       sandbox: true,
       // Keep provider cookies away from the app renderer and discard them on
       // app exit. The secret-bearing URL is sufficient to authenticate.
-      partition: "openmausbot-desktop-viewer",
+      partition: "ripobot-desktop-viewer",
     },
   });
   desktopViewerWindow = viewer;
@@ -1829,7 +1829,7 @@ function openDesktopViewer(owner, rawUrl, rawTitle, contextId) {
 }
 
 function ensureDesktopWorkspace(owner) {
-  if (!owner || owner.isDestroyed()) throw new Error("The OpenMausBot window is unavailable");
+  if (!owner || owner.isDestroyed()) throw new Error("The RipoBot window is unavailable");
   if (desktopWorkspaceManager) {
     if (desktopWorkspaceOwner !== owner) {
       throw new Error("The two-desktop view belongs to another app window");
@@ -1841,7 +1841,7 @@ function ensureDesktopWorkspace(owner) {
   const manager = createDesktopWorkspaceManager({
     owner,
     createView: (options) => new WebContentsView(options),
-    partitionPrefix: `openmausbot-desktop-workspace-${randomUUID()}`,
+    partitionPrefix: `ripobot-desktop-workspace-${randomUUID()}`,
     notify: (state) => {
       if (!owner.isDestroyed() && !owner.webContents.isDestroyed()) {
         owner.webContents.send("desktop-workspace:state", state);
@@ -1978,8 +1978,8 @@ function stopLending() {
   for (const env of environmentsState.environments) if (computerSharing?.cloudState(env).enabled) computerSharing.revoke(env);
 }
 
-/** "Lending settings…" in the menu bar: Settings → OMB Cloud in the local
- * window, with none of the openmausbot://cloud link's automatic actions. */
+/** "Lending settings…" in the menu bar: Settings → RIPO Cloud in the local
+ * window, with none of the ripobot://cloud link's automatic actions. */
 async function openLendingSettings() {
   if (!app.isPackaged || desktopRemoteAccess || !serverReady) return;
   if (activeRemote(environmentsState)) persistEnvironments(withActive(environmentsState, LOCAL_ID));
@@ -2002,7 +2002,7 @@ function lendingIndicator() {
 async function offerComputerSharing(win) {
   const env = activeEnvironment(environmentsState);
   if (!env || sharingPrompts.has(env.id) || win.isDestroyed()) return;
-  // The person's own Cloud is lent to from Settings → OMB Cloud, never here.
+  // The person's own Cloud is lent to from Settings → RIPO Cloud, never here.
   if (env.origin === cloudAccount?.homeTarget()?.origin) return;
   // Never offer a grant this build's server will not honour.
   if (!(await refreshSharedComputersAllowed()) || win.isDestroyed()) return;
@@ -2071,7 +2071,7 @@ function refreshApplicationMenu() {
       onSwitch: (id) => void workspaceMenuAction(() => switchEnvironment(id)),
       onAddFromClipboard: () => void addServerFromClipboard(),
       onConnect: () => void workspaceMenuAction(openWorkspaceSettings),
-      onOrganizationSignIn: () => queueOrganizationEntry("openmausbot://organization"),
+      onOrganizationSignIn: () => queueOrganizationEntry("ripobot://organization"),
       onForget: (id) => void workspaceMenuAction(() => forgetEnvironment(id)),
       onOpenSettings: () => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("app:open-settings");
@@ -2101,7 +2101,7 @@ function navigateMainWindow(url) {
 }
 
 /** The person's Cloud address for their account, kept while a check with
- * OpenMausBot Cloud is pending or failed, or the sign-in has ended
+ * RipoBot Cloud is pending or failed, or the sign-in has ended
  * (cloud-home.mjs rememberedCloudHome). */
 let rememberedHome = null;
 
@@ -2133,7 +2133,7 @@ async function switchLocalEnvironmentTo(targetDir, targetId) {
     // raw probe outcomes): one generic dialog, the specific string in the log.
     dialog.showErrorBox(
       "Could not switch environments",
-      "OpenMausBot could not switch to that environment. The app log has the details.",
+      "RipoBot could not switch to that environment. The app log has the details.",
     );
     return { ok: false, error: "switch-failed" };
   };
@@ -2250,7 +2250,7 @@ async function switchEnvironment(id) {
     try { await connectCloudHome(); return; } catch (error) {
       slog(`cloud home: could not connect from the Server menu (${error?.message ?? error})`);
       // Signed in there already, it opens as any server does. Otherwise
-      // Settings → OMB Cloud says the one next step (sign in again, or wait).
+      // Settings → RIPO Cloud says the one next step (sign in again, or wait).
       if (!(await cloudHomeSignedIn(entry.origin))) { await openLendingSettings(); return; }
     }
   }
@@ -2259,7 +2259,7 @@ async function switchEnvironment(id) {
 }
 
 /** Register a named local environment. An omitted dataDir lands beside the
- * home directory as `.openmausbot-<slug>`; a supplied one must be exactly
+ * home directory as `.ripobot-<slug>`; a supplied one must be exactly
  * its normalized absolute form with no "." or ".." segments — the registry
  * and every later lease/child on it take this exact string. */
 function createLocalEnvironment(name, dataDir) {
@@ -2274,7 +2274,7 @@ function createLocalEnvironment(name, dataDir) {
     // Hindi or Japanese name, say) gets a generated suffix instead — the slug
     // is a directory hint, not a requirement.
     if (typeof name !== "string" || !name.trim()) return { ok: false, error: "name", state };
-    candidateDir = path.join(os.homedir(), `.openmausbot-${slug || randomUUID().slice(0, 8)}`);
+    candidateDir = path.join(os.homedir(), `.ripobot-${slug || randomUUID().slice(0, 8)}`);
   } else {
     candidateDir = typeof dataDir === "string" ? dataDir.trim() : "";
     if (
@@ -2348,13 +2348,13 @@ async function deliverOrganizationEntry() {
   return delivered;
 }
 
-/** openmausbot://cloud carries nothing, so all it does is bring this app to
- * Settings → OMB Cloud. Opened this way, that view signs in or connects to
+/** ripobot://cloud carries nothing, so all it does is bring this app to
+ * Settings → RIPO Cloud. Opened this way, that view signs in or connects to
  * My Cloud by itself (CloudAccountSettings). No prompt: a hosted server left
  * for it stays saved under Servers, and the Cloud replaces it anyway. */
 async function openCloudEntry() {
-  if (!app.isPackaged) throw new Error("MausBot Cloud requires the installed desktop app.");
-  if (desktopRemoteAccess) throw new Error("This app is connected to another computer. Disconnect it to use MausBot Cloud on this computer.");
+  if (!app.isPackaged) throw new Error("RipoBot Cloud requires the installed desktop app.");
+  if (desktopRemoteAccess) throw new Error("This app is connected to another computer. Disconnect it to use RipoBot Cloud on this computer.");
   if (!serverReady) throw new Error("This installation is unavailable. Restart the app and open My Cloud again.");
   // Let a saved sign-in finish restoring first: the view must not take it for
   // signed out and start another.
@@ -2524,7 +2524,7 @@ async function forgetEnvironment(id, purge = false) {
   const wasActive = environmentsState.activeId === id;
   if (purge === true && env.kind === "local") {
     // Delete the environment's data dir only when its name is unmistakably
-    // an OpenMausBot data dir and it is not (or inside) this app's own
+    // an RipoBot data dir and it is not (or inside) this app's own
     // default dir — "This computer" must never be rm -rf'd from here.
     // Until the delete has actually happened the entry stays: a failed
     // purge must not silently orphan the folder behind the registry's back.
@@ -2538,7 +2538,7 @@ async function forgetEnvironment(id, purge = false) {
     const resolvedCanon = canonical(resolved);
     const rootCanon = canonical(root);
     if (runningDataDir && canonical(runningDataDir) === resolvedCanon) return { ok: false, error: "active" };
-    if (path.basename(resolved).startsWith(".openmausbot") && resolvedCanon !== rootCanon && !resolvedCanon.startsWith(rootCanon + path.sep)) {
+    if (path.basename(resolved).startsWith(".ripobot") && resolvedCanon !== rootCanon && !resolvedCanon.startsWith(rootCanon + path.sep)) {
       try {
         await fs.promises.rm(resolved, { recursive: true, force: true });
       } catch (error) {
@@ -2647,7 +2647,7 @@ function createWindow({ deferNavigation = false } = {}) {
       // renderer's remote-only feature gates. Keep the two facts independent:
       // upstream's origin boundary must not erase the client-mode marker.
       additionalArguments: [...desktopCompanionRendererArguments(rendererOrigin(), desktopRemoteAccess),
-        ...(app.isPackaged && !desktopRemoteAccess ? ["--omb-company-desktop=1"] : [])],
+        ...(app.isPackaged && !desktopRemoteAccess ? ["--ripo-company-desktop=1"] : [])],
     },
   });
   mainWindow = win;
@@ -2761,14 +2761,14 @@ function createWindow({ deferNavigation = false } = {}) {
   // Packaged CI smoke hook. It validates the real renderer/preload bridge and
   // same-origin embedded server, then follows the normal window-close path.
   // No debugging port or sandbox override is needed.
-  if (process.env.OMB_SMOKE_TEST === "1") {
+  if (process.env.RIPO_SMOKE_TEST === "1") {
     win.webContents.once("did-finish-load", async () => {
       try {
         const result = await win.webContents.executeJavaScript(`
           (async () => {
             if (!window.ogb?.getCapabilities) throw new Error("desktop preload bridge is unavailable");
             let crashPromise = null;
-            if (${JSON.stringify(process.env.OMB_SMOKE_CUA === "1")}) {
+            if (${JSON.stringify(process.env.RIPO_SMOKE_CUA === "1")}) {
               crashPromise = new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                   unsubscribe?.();
@@ -2824,7 +2824,7 @@ function createWindow({ deferNavigation = false } = {}) {
             `unexpected packaged renderer URL: ${result.location} (expected ${expectedLocation})`,
           );
         }
-        if (process.env.OMB_SMOKE_BUNDLED_CUA === "1") {
+        if (process.env.RIPO_SMOKE_BUNDLED_CUA === "1") {
           const connection = await cuaReady;
           const expectedDriver = path.join(
             process.resourcesPath,
@@ -2862,7 +2862,7 @@ function createWindow({ deferNavigation = false } = {}) {
       } catch (error) {
         console.error(`[smoke] renderer-failed ${error?.stack ?? error}`);
       } finally {
-        if (process.env.OMB_SMOKE_KEEP_OPEN !== "1") win.close();
+        if (process.env.RIPO_SMOKE_KEEP_OPEN !== "1") win.close();
       }
     });
   }
@@ -2965,14 +2965,14 @@ ipcMain.handle("desktop:export-diagnostics", localOnly("desktop:export-diagnosti
   return result.filePath;
 }));
 
-// Bots hand users files as markdown links to paths inside the OpenMausBot
+// Bots hand users files as markdown links to paths inside the RipoBot
 // home (workspaces, attachments). As plain anchors those resolved against the
 // page origin, so the click opened http://127.0.0.1:8799<path> in the default
 // browser and the server's SPA fallback answered with index.html — a second
 // copy of the chat UI instead of the file. Ask where to put it and copy it
 // there instead: a save dialog tells the user the file landed somewhere and
 // where, which a silent copy into ~/Downloads does not. The path is
-// renderer-controlled, so it must resolve inside ~/.openmausbot and be a
+// renderer-controlled, so it must resolve inside ~/.ripobot and be a
 // regular file — never a symlink escape or directory.
 ipcMain.handle("desktop:save-file", localOnly("desktop:save-file", async (event, rawPath) => {
   return withSavableFile(rawPath, { home: os.homedir() }, async ({ defaultName, copyTo }) => {
@@ -3043,7 +3043,7 @@ ipcMain.handle("desktop:open-external", localOnly("desktop:open-external", async
 
 // The Boat VNC viewer must be a top-level page for its token exchange. A
 // sandboxed modal BrowserWindow satisfies that requirement while keeping the
-// live desktop inside OpenMausBot instead of sending the person to a browser.
+// live desktop inside RipoBot instead of sending the person to a browser.
 ipcMain.handle("desktop-viewer:open", localOnly("desktop-viewer:open", (event, rawUrl, title, contextId) => {
   const owner = BrowserWindow.fromWebContents(event.sender);
   return openDesktopViewer(owner, rawUrl, title, contextId);
@@ -3271,7 +3271,7 @@ for (const method of ["state", "begin", "signInAgain", "reopen", "cancel", "refr
 // and one of this app's own sources; main makes the request and opens only
 // Dodo's checkout page (cloud-account.mjs checkoutDestination).
 ipcMain.handle("cloud-account:checkout", localWorkspaceOnly("cloud-account:checkout", async (_event, plan, source) => {
-  if (!(await cloudOffersReady())) throw new Error("MausBot Cloud isn't offered in this app.");
+  if (!(await cloudOffersReady())) throw new Error("RipoBot Cloud isn't offered in this app.");
   const client = ensureCloudAccount();
   if (typeof plan !== "string" || !CHECKOUT_SOURCES.includes(source)) throw new Error("Choose a plan to continue.");
   const offer = await client.offer();
@@ -3345,7 +3345,7 @@ ipcMain.handle("company-backups:restore", localWorkspaceOnly("company-backups:re
 
 // ── Copy this computer here (electron/cloud-move.mjs, docs/copy-workspace.md) ──
 // This computer's workspace to a server the person owns and added here, their
-// OMB Cloud included: started from Settings → Servers or Settings → OMB Cloud
+// RIPO Cloud included: started from Settings → Servers or Settings → RIPO Cloud
 // on this computer's own page. Where it goes comes only from main
 // (moveSenderDestination): this computer's own page names a saved server, a
 // server's own page (its card, its Settings → Backups) gets only itself, and
@@ -3363,7 +3363,7 @@ function ensureCloudMove() {
       return fetch(`http://127.0.0.1:${SERVER_PORT}${route}`, { ...init, redirect: "error", credentials: "omit",
         headers: { ...Object.fromEntries(new Headers(init.headers)), [DESKTOP_MUTATION_HEADER]: desktopMutationToken } });
     },
-    tempRoot: path.join(app.getPath("temp"), "openmaus-cloud-move"),
+    tempRoot: path.join(app.getPath("temp"), "ripo-cloud-move"),
     availableBytes: async directory => { const disk = await fs.promises.statfs(directory); return disk.bavail * disk.bsize; },
     onState: publishCloudMoveState,
   });
@@ -3607,7 +3607,7 @@ ipcMain.handle("sharing:save", localWorkspaceOnly("sharing:save", async (_event,
   return sharingController().save(env, { folders, terminal: input?.terminal === true, computer: input?.computer === true }, info);
 }));
 
-// "Let my Cloud use this Mac" (Settings → OMB Cloud; docs/cloud-pro.md).
+// "Let my Cloud use this Mac" (Settings → RIPO Cloud; docs/cloud-pro.md).
 // Everything is decided here from the verified Cloud sign-in: the renderer
 // names no server, account or origin. No confirmation dialog: the switch and
 // the scopes the person picks are the consent.
@@ -3845,7 +3845,7 @@ app.whenReady().then(async () => {
   });
   // Read the registry before the lease: a named local environment is the one
   // this launch owns its data dir for, so the lease and the child's
-  // OMB_DATA_DIR must both follow it. Dev mode keeps today's behavior.
+  // RIPO_DATA_DIR must both follow it. Dev mode keeps today's behavior.
   environmentsState = readEnvironments();
   // A named environment whose folder is gone (unmounted volume, deleted) is
   // NOT leased or created at boot — that would silently raise an empty setup
@@ -3860,7 +3860,7 @@ app.whenReady().then(async () => {
       persistEnvironments({ ...environmentsState, activeId: LOCAL_ID });
       dialog.showErrorBox(
         "The environment's folder is missing",
-        `${boot.missingDir} is not there anymore, so OpenMausBot came up on this computer's default data folder instead. Restore or remount that folder, then choose the environment again from the Server menu.`,
+        `${boot.missingDir} is not there anymore, so RipoBot came up on this computer's default data folder instead. Restore or remount that folder, then choose the environment again from the Server menu.`,
       );
     }
     bootDataDir = boot.dataDir;
@@ -3876,15 +3876,15 @@ app.whenReady().then(async () => {
       runningDataDir = bootDataDir;
     } catch (error) {
       dialog.showErrorBox(
-        "OpenMausBot could not start safely",
-        error?.message ?? "Another process is using this OpenMausBot data folder.",
+        "RipoBot could not start safely",
+        error?.message ?? "Another process is using this RipoBot data folder.",
       );
       app.quit();
       return;
     }
   }
   if (app.isPackaged) {
-    app.setAsDefaultProtocolClient("openmausbot");
+    app.setAsDefaultProtocolClient("ripobot");
     // Chromium adds this capability below JavaScript, so renderer requests
     // can mutate the local harness while a Full-access shell using curl
     // cannot impersonate the person operating the desktop app.
@@ -4017,8 +4017,8 @@ app.whenReady().then(async () => {
         runningDataDir = desktopDataDir();
       } catch (error) {
         dialog.showErrorBox(
-          "OpenMausBot could not start safely",
-          error?.message ?? "Another process is using this OpenMausBot data folder.",
+          "RipoBot could not start safely",
+          error?.message ?? "Another process is using this RipoBot data folder.",
         );
         app.quit();
         return;
@@ -4027,12 +4027,12 @@ app.whenReady().then(async () => {
       if (retried) {
         dialog.showErrorBox(
           "The environment was unhealthy",
-          `OpenMausBot could not start on ${bootDataDir} and came up on this computer's default data folder instead. Choose that environment again from the Server menu once it is available.`,
+          `RipoBot could not start on ${bootDataDir} and came up on this computer's default data folder instead. Choose that environment again from the Server menu once it is available.`,
         );
       } else {
         dialog.showErrorBox(
-          "OpenMausBot could not start",
-          `OpenMausBot could not start on ${bootDataDir} or on this computer's default data folder. Check that both folders are readable, then start the app again.`,
+          "RipoBot could not start",
+          `RipoBot could not start on ${bootDataDir} or on this computer's default data folder. Check that both folders are readable, then start the app again.`,
         );
         app.quit();
       }

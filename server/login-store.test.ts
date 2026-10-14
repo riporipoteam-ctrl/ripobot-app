@@ -12,7 +12,7 @@ const PASSWORD = "fake-Pa55word&<\"quoted\">";
 const TOTP = parseTotpKey("JBSWY3DPEHPK3PXP")!;
 
 let dir: string;
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "omb-logins-")); });
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "ripo-logins-")); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
 describe("the saved logins store", () => {

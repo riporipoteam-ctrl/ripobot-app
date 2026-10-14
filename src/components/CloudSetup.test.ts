@@ -51,7 +51,7 @@ const ready = { instanceId: "claude", snapshot: { state: "available", authentica
 const signedOut = { instanceId: "claude", snapshot: { state: "available", authenticated: false } };
 const local = { bots: 4, rooms: 1, chats: 37, bytes: 1.5 * 1024 ** 3, files: 900 };
 const emptyCloud = { contents: { bots: 1, rooms: 0, chats: 0 }, empty: true, freeBytes: 9 * 1024 ** 3, previous: null, heldBytes: 0 };
-const CLOUD = { id: "cloud", name: "My Cloud", origin: "https://omb-u-1a2b3c4d5e6f.fly.dev", kind: "cloud" as const };
+const CLOUD = { id: "cloud", name: "My Cloud", origin: "https://ripo-u-1a2b3c4d5e6f.fly.dev", kind: "cloud" as const };
 const overview = (extra: Partial<CloudMoveOverview> = {}): CloudMoveOverview => ({ phase: "idle", local, cloud: emptyCloud, suggest: true, destination: CLOUD, blocked: null, ...extra });
 let bridge: CloudMoveBridge, push: (state: CloudMoveState) => void, lent: unknown[], open: ReturnType<typeof vi.fn>;
 let dispatched: unknown[];
@@ -61,7 +61,7 @@ beforeEach(() => {
   f.dispatch = action => { dispatched.push(action); };
   f.state = {
     connected: true, instances: [signedOut], activeView: "chat", selectedId: "b1",
-    bots: [{ id: "b1", threadId: "t1", name: "Maus" }], routines: [],
+    bots: [{ id: "b1", threadId: "t1", name: "Ripo" }], routines: [],
     config: { cloudHome: true, onboarding: { ...EMPTY_ONBOARDING } },
   };
   bridge = {
@@ -235,13 +235,13 @@ it("minimizes to its progress on this device, and opens again", async () => {
   expect(html).toContain("1 of 4 done");
   expect(html).not.toContain("Give it a first job");
   expect(button("Hide setup")).toBeUndefined();
-  expect(setItem).toHaveBeenLastCalledWith("omb.cloudSetup.collapsed", "1");
+  expect(setItem).toHaveBeenLastCalledWith("ripo.cloudSetup.collapsed", "1");
   // Minimizing is not hiding: the Cloud's record is untouched.
   expect(api).not.toHaveBeenCalledWith("/api/config", expect.anything());
   toggle();
   ({ html } = render());
   expect(html).toContain("Give it a first job");
-  expect(setItem).toHaveBeenLastCalledWith("omb.cloudSetup.collapsed", "0");
+  expect(setItem).toHaveBeenLastCalledWith("ripo.cloudSetup.collapsed", "0");
 });
 
 it("says the Cloud is ready once, in the session that finished it", async () => {
@@ -286,7 +286,7 @@ it("opens the chat the job went to as the bot's row does: with threads hidden at
   f.state.instances = [ready];
   markIntentSent("b1");
   f.state.activeView = "routines";
-  f.state.bots = [{ id: "b1", threadId: "t1", mainThreadId: "main", name: "Maus",
+  f.state.bots = [{ id: "b1", threadId: "t1", mainThreadId: "main", name: "Ripo",
     tasks: [{ threadId: "t1", title: "Routine report", createdAt: 1 }, { threadId: "main", title: "Set up", createdAt: 2 }] }];
   await mount();
   button("Open the chat")!.props.onClick!();

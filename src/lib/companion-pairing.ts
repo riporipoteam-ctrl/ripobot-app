@@ -24,7 +24,7 @@ export interface CompanionPairingRoute {
 
 /** The address to type into a phone, written the way both phone apps read
  * it. A bare `host:port` is plain HTTP on that port to them, so a hosted
- * route shown as `abc.openmausbot.com:443` sent the typed code over HTTP to a
+ * route shown as `abc.ripobot.sitey.my:443` sent the typed code over HTTP to a
  * TLS port and failed on every phone. Hosted routes are written with their
  * scheme (and without the default port); direct routes keep `host:port`. */
 export function companionPairingAddressText(route: CompanionPairingRoute): string {
@@ -69,7 +69,7 @@ const directHTTPOrigin = (host: string, port: number): string => {
  * hosted route that is still provisioning. Explicit local setup leads with the
  * first LAN/Bonjour endpoint, then hosted, then this computer's other local
  * addresses (never a tailnet one). Both phones probe each of them, send the
- * one-time code only to the first in that order that answers as OpenMausBot,
+ * one-time code only to the first in that order that answers as RipoBot,
  * and bind the device token to that one (ios Failover.swift
  * `pinRouteConsent`, android Connection.kt `pinningRouteConsent`). */
 export function companionPairingRoute(

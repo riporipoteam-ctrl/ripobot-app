@@ -1,5 +1,5 @@
 // Cline owns its saved provider/model configuration. Keep that selection
-// intact instead of pretending a static OMB catalog can switch providers.
+// intact instead of pretending a static RIPO catalog can switch providers.
 import { mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -67,7 +67,7 @@ const SUPPORT: AcpSupport = {
     signInCommand: "cline auth",
   },
   // Never inherit Cline's terminal auto-approval default or a saved grant.
-  // The ACP broker answers permissions under this turn's OMB policy, including
+  // The ACP broker answers permissions under this turn's RIPO policy, including
   // Full access; questions and product confirmations retain their own gates.
   spawnArgs: () => ["--acp", "--auto-approve", "false"],
   restartOnMcpChange: true,
@@ -116,7 +116,7 @@ export const ClineAgentDriver = {
     // Cline 3.0.70 records ACP mcpServers without connecting them. Its native
     // settings override connects the same scoped stdio servers instead. Keep
     // these turn credentials private and never rewrite the user's MCP file.
-    const directory = mkdtempSync(join(tmpdir(), "omb-cline-mcp-"));
+    const directory = mkdtempSync(join(tmpdir(), "ripo-cline-mcp-"));
     const cleanup = () => {
       try { rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* OS temp cleanup after a locked child exits */ }
     };

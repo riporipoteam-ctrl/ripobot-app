@@ -1,4 +1,4 @@
-// An OMB Cloud home is personal (docs/cloud-pro.md): only the owner's own
+// An RIPO Cloud home is personal (docs/cloud-pro.md): only the owner's own
 // devices connect, each with an admin session the Admin's signed pairing
 // gave it. No pairing, sign-in or session without admin scope is minted or
 // redeemed there (server/sessions.ts requireAdmin), and at every boot any

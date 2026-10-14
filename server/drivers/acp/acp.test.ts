@@ -91,8 +91,8 @@ const ClassifiedErrorDriver = createAcpDriver({
 });
 
 const CONTROL_PLANE_FIXTURE = {
-  OMB_CLOUD_READY_TOKEN: "ready-should-not-leak", OMB_CLOUD_BOOTSTRAP: "bootstrap-should-not-leak",
-  OMB_LICENSE_KEY: "license-should-not-leak", OMB_INSTALLATION_CREDENTIAL: "fleet-should-not-leak",
+  RIPO_CLOUD_READY_TOKEN: "ready-should-not-leak", RIPO_CLOUD_BOOTSTRAP: "bootstrap-should-not-leak",
+  RIPO_LICENSE_KEY: "license-should-not-leak", RIPO_INSTALLATION_CREDENTIAL: "fleet-should-not-leak",
 };
 
 describe("skipSubscriptionAuthForLocalInject", () => {
@@ -229,7 +229,7 @@ describe("ACP turns (fake CLI)", () => {
     delete process.env.AGY_ACP_DEFAULT_MODEL;
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    scratch = mkdtempSync(join(tmpdir(), "omb-acp-test-"));
+    scratch = mkdtempSync(join(tmpdir(), "ripo-acp-test-"));
   });
 
   afterEach(async () => {
@@ -254,7 +254,7 @@ describe("ACP turns (fake CLI)", () => {
     delete process.env.CURSOR_API_KEY;
     delete process.env.CURSOR_AUTH_TOKEN;
     delete process.env.BOX_TOKEN;
-    delete process.env.OMB_TTS_KEY;
+    delete process.env.RIPO_TTS_KEY;
     if (savedAgyModel !== undefined) process.env.AGY_ACP_DEFAULT_MODEL = savedAgyModel;
     else delete process.env.AGY_ACP_DEFAULT_MODEL;
     for (const name of Object.keys(CONTROL_PLANE_FIXTURE)) delete process.env[name];
@@ -268,15 +268,15 @@ describe("ACP turns (fake CLI)", () => {
     delete process.env.FAKE_ACP_TOOL_MS;
     delete process.env.FAKE_ACP_USAGE_UPDATES_FILE;
     delete process.env.FAKE_ACP_DUMP_PROMPT;
-    delete process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS;
-    delete process.env.OMB_ACP_QUIET_NOTICE_MS;
-    delete process.env.OMB_ACP_QUIET_TICK_MS;
+    delete process.env.RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS;
+    delete process.env.RIPO_ACP_QUIET_NOTICE_MS;
+    delete process.env.RIPO_ACP_QUIET_TICK_MS;
     delete process.env.FAKE_ACP_QUIET_MS;
     delete process.env.FAKE_ACP_QWEN_LOG;
     delete process.env.FAKE_ACP_LOG_EVERY_MS;
     delete process.env.QWEN_HOME;
-    delete process.env.OMB_ACP_SESSION_IDLE_MS;
-    delete process.env.OMB_ACP_SESSION_IDLE_MIN_MS;
+    delete process.env.RIPO_ACP_SESSION_IDLE_MS;
+    delete process.env.RIPO_ACP_SESSION_IDLE_MIN_MS;
     delete process.env.FAKE_ACP_LAUNCH_COUNT_FILE;
     recorder?.stop();
     await instance?.dispose();
@@ -409,7 +409,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(await send("second", "Memory: likes quiet hours.")).toBe("second");
     // A changed volatile half rides the next prompt as a labelled note.
     expect(await send("third", "Memory: moved to Toronto."))
-      .toBe("Context from OpenMausBot updated since this conversation started; it replaces any earlier copy:\n\nMemory: moved to Toronto.\n\nthird");
+      .toBe("Context from RipoBot updated since this conversation started; it replaces any earlier copy:\n\nMemory: moved to Toronto.\n\nthird");
     // A cleared volatile half is announced once, not silently dropped.
     expect(await send("fourth", "")).toContain("have been cleared");
     expect(await send("fifth", "")).toBe("fifth");
@@ -771,7 +771,7 @@ describe("ACP turns (fake CLI)", () => {
     // workspace credentials with no CLI consumer at all — held by the
     // harness (env-injected at boot by the desktop shell), used in-process
     process.env.BOX_TOKEN = "box-should-not-leak";
-    process.env.OMB_TTS_KEY = "tts-should-not-leak";
+    process.env.RIPO_TTS_KEY = "tts-should-not-leak";
     Object.assign(process.env, CONTROL_PLANE_FIXTURE);
 
     await instance.adapter.sendTurn({ threadId: "t-hygiene", text: "go" });
@@ -787,7 +787,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(seen.env.CURSOR_API_KEY).toBeUndefined();
     expect(seen.env.CURSOR_AUTH_TOKEN).toBeUndefined();
     expect(seen.env.BOX_TOKEN).toBeUndefined();
-    expect(seen.env.OMB_TTS_KEY).toBeUndefined();
+    expect(seen.env.RIPO_TTS_KEY).toBeUndefined();
     for (const name of Object.keys(CONTROL_PLANE_FIXTURE)) expect(seen.env[name]).toBeUndefined();
   });
 
@@ -805,7 +805,7 @@ describe("ACP turns (fake CLI)", () => {
         composio: {
           command: process.execPath,
           args: ["/tmp/connector-proxy.js"],
-          env: { OMB_CONNECTOR_UPSTREAM_URL: "http://127.0.0.1:8799/api/internal/connectors/mcp" },
+          env: { RIPO_CONNECTOR_UPSTREAM_URL: "http://127.0.0.1:8799/api/internal/connectors/mcp" },
         },
       },
     });
@@ -814,7 +814,7 @@ describe("ACP turns (fake CLI)", () => {
       name: "composio",
       command: process.execPath,
       args: ["/tmp/connector-proxy.js"],
-      env: [{ name: "OMB_CONNECTOR_UPSTREAM_URL", value: "http://127.0.0.1:8799/api/internal/connectors/mcp" }],
+      env: [{ name: "RIPO_CONNECTOR_UPSTREAM_URL", value: "http://127.0.0.1:8799/api/internal/connectors/mcp" }],
     });
   });
 
@@ -823,7 +823,7 @@ describe("ACP turns (fake CLI)", () => {
     const dump = join(scratch, "data.json");
     process.env.FAKE_ACP_DUMP = dump;
     process.env.FAKE_ACP_DUMP_PROMPT = "1";
-    const data = { command: process.execPath, args: [join(scratch, "data-proxy.mjs")], env: { OMB_DATA_TOKEN: "synthetic-turn-capability" } };
+    const data = { command: process.execPath, args: [join(scratch, "data-proxy.mjs")], env: { RIPO_DATA_TOKEN: "synthetic-turn-capability" } };
     expect(instance.adapter.capabilities.dataMcp).toBe(true);
     await instance.adapter.sendTurn({
       threadId: "t-data", text: "Update the existing result.", system: BUILT_IN_DATA_SYSTEM_PROMPT,
@@ -831,7 +831,7 @@ describe("ACP turns (fake CLI)", () => {
     });
     expect(await recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: true });
     expect(JSON.parse(readFileSync(`${dump}.mcp.json`, "utf8"))).toEqual(excluded ? [] : [{
-      name: "data", ...data, env: [{ name: "OMB_DATA_TOKEN", value: "synthetic-turn-capability" }],
+      name: "data", ...data, env: [{ name: "RIPO_DATA_TOKEN", value: "synthetic-turn-capability" }],
     }]);
     const prompt = JSON.parse(readFileSync(`${dump}.prompt.json`, "utf8")) as Array<{ type: string; text?: string }>;
     expect(prompt.find(block => block.type === "text")?.text).toContain(BUILT_IN_DATA_SYSTEM_PROMPT.trim());
@@ -977,14 +977,14 @@ describe("ACP turns (fake CLI)", () => {
 
   /** The settings a remote-proxy mount carries in its env (mcp-gate-config.ts). */
   const proxied = (server: { command?: string; args?: string[]; env?: Array<{ name: string; value: string }> }) => {
-    const value = server.env?.find((entry) => entry.name === "OMB_REMOTE_MCP_SERVER")?.value;
+    const value = server.env?.find((entry) => entry.name === "RIPO_REMOTE_MCP_SERVER")?.value;
     return value === undefined ? undefined : JSON.parse(value);
   };
 
   it.each([
     ["advertises no remote transport", undefined],
     ["advertises http and sse", "http,sse"],
-  ])("mounts every url server as OpenMausBot's connector for an agent that %s", async (_name, transports) => {
+  ])("mounts every url server as RipoBot's connector for an agent that %s", async (_name, transports) => {
     if (transports) process.env.FAKE_ACP_MCP_TRANSPORTS = transports;
     try {
       await create();
@@ -1001,7 +1001,7 @@ describe("ACP turns (fake CLI)", () => {
       expect(docs.args.join(" ")).not.toContain("tok-docs");
       expect(proxied(docs)).toEqual(remoteServers.docs);
       // the agent searches tools itself: the catalog passes through
-      expect(docs.env.some((entry: { name: string }) => entry.name === "OMB_REMOTE_MCP_DIRECTORY")).toBe(false);
+      expect(docs.env.some((entry: { name: string }) => entry.name === "RIPO_REMOTE_MCP_DIRECTORY")).toBe(false);
       expect(proxied(seen.mcpServers.find((server: { name: string }) => server.name === "legacy"))).toEqual(remoteServers.legacy);
     } finally {
       delete process.env.FAKE_ACP_MCP_TRANSPORTS;
@@ -1012,7 +1012,7 @@ describe("ACP turns (fake CLI)", () => {
   // "Unrecognized field 'schemaValidation'") refuses grok 1.0.25's own
   // handshake (capabilities.extensions). The fake agent connects each
   // mounted server with that handshake, natively if it were handed a URL.
-  it("lists a strict url server's tools through OpenMausBot's connector, even for an agent that speaks http", async () => {
+  it("lists a strict url server's tools through RipoBot's connector, even for an agent that speaks http", async () => {
     const strict = await startFakeHttpMcp({ strictInitialize: "http-400", strictSchema: "2025-11-25",
       tools: [{ name: "report", inputSchema: { type: "object" } }, { name: "campaigns", inputSchema: { type: "object" } }],
       requireHeader: { name: "Authorization", value: "Bearer tok-voluum" } });
@@ -1025,7 +1025,7 @@ describe("ACP turns (fake CLI)", () => {
       expect(await recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: true });
       const text = recorder.events.find((event) => event.type === "item.completed" && (event as { itemType?: string }).itemType === "assistant_text");
       expect((text as { text?: string } | undefined)?.text).toBe("voluum: report,campaigns");
-      expect(strict.initializes).toEqual([{ protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "OpenMausBot tool proxy", version: "1" } }]);
+      expect(strict.initializes).toEqual([{ protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "RipoBot tool proxy", version: "1" } }]);
     } finally {
       delete process.env.FAKE_ACP_MCP_TRANSPORTS;
       await strict.close();
@@ -1509,7 +1509,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("does not expire an agent while a person is answering an approval", async () => {
-    process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
+    process.env.RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
     await create(GrokAgentDriver, "permission");
     await instance.adapter.sendTurn({ threadId: "t-idle-approval", text: "go", approvalMode: "ask" });
     const opened = await recorder.until(e => e.type === "request.opened");
@@ -1524,7 +1524,7 @@ describe("ACP turns (fake CLI)", () => {
   // MOCA-260: a quiet `sleep` or build sends nothing while it runs, and the
   // guard used to stop the turn as if the agent had hung.
   it.each([GrokAgentDriver, QwenAgentDriver])("does not expire $driverKind while a tool it started is still running", async (driver) => {
-    process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
+    process.env.RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
     process.env.FAKE_ACP_TOOL_MS = "600";
     await create(driver, "slow-tool");
     await instance.adapter.sendTurn({ threadId: "t-slow-tool", text: "go" });
@@ -1534,7 +1534,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it.each([GrokAgentDriver, QwenAgentDriver])("still fails $driverKind when it goes silent once its tool has finished", async (driver) => {
-    process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
+    process.env.RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
     await create(driver, "stall-after-tool");
     await instance.adapter.sendTurn({ threadId: "t-stall-tool", text: "go" });
     expect(await recorder.until(e => e.type === "turn.completed")).toMatchObject({ ok: false, stopReason: "rpc_error" });
@@ -1547,8 +1547,8 @@ describe("ACP turns (fake CLI)", () => {
     // Test the driver's notices, not how fast this OS starts ps/PowerShell.
     // The process probe has its own checks in quiet-status.test.ts.
     vi.spyOn(quietStatus, "sampleProcessTree").mockResolvedValue({ cpuMs: 0, connections: 1 });
-    process.env.OMB_ACP_QUIET_NOTICE_MS = "150";
-    process.env.OMB_ACP_QUIET_TICK_MS = "50";
+    process.env.RIPO_ACP_QUIET_NOTICE_MS = "150";
+    process.env.RIPO_ACP_QUIET_TICK_MS = "50";
     process.env.FAKE_ACP_QUIET_MS = "700";
     await create(GrokAgentDriver, "quiet-then-answer");
     await instance.adapter.sendTurn({ threadId: "t-quiet", text: "go" });
@@ -1562,9 +1562,9 @@ describe("ACP turns (fake CLI)", () => {
   it("reads Qwen's debug log: a logged rate-limit retry is reported and keeps the turn alive", async () => {
     vi.spyOn(quietStatus, "sampleProcessTree").mockResolvedValue({ cpuMs: 0, connections: 1 });
     process.env.QWEN_HOME = scratch;
-    process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "400";
-    process.env.OMB_ACP_QUIET_NOTICE_MS = "150";
-    process.env.OMB_ACP_QUIET_TICK_MS = "50";
+    process.env.RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS = "400";
+    process.env.RIPO_ACP_QUIET_NOTICE_MS = "150";
+    process.env.RIPO_ACP_QUIET_TICK_MS = "50";
     process.env.FAKE_ACP_QUIET_MS = "1200";
     process.env.FAKE_ACP_QWEN_LOG = JSON.stringify([
       "[ERROR] [OPENAI_ERROR] OpenAI API Error: 429 rate limited {",
@@ -1587,7 +1587,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   it("an agent that goes silent mid-answer is failed and closed by the prompt idle guard", async () => {
-    process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
+    process.env.RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS = "150";
     await create(GrokAgentDriver, "stall-after-text");
     await instance.adapter.sendTurn({ threadId: "t-stall", text: "go" });
 
@@ -1595,7 +1595,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(done).toMatchObject({ type: "turn.completed", ok: false, stopReason: "rpc_error" });
     const err = recorder.events.find((e) => e.type === "runtime.error");
     expect(err?.message).toMatch(/no tool running/i);
-    expect(err?.message).toContain("OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS");
+    expect(err?.message).toContain("RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS");
     // the streamed chunk reached the UI before the child went silent
     expect(recorder.events.some((e) => e.type === "content.delta")).toBe(true);
     expect(instance.adapter.hasSession("t-stall")).toBe(false);
@@ -1924,7 +1924,7 @@ describe("ACP turns (fake CLI)", () => {
     });
 
     it("acknowledges before a prompt timeout and never offers startup recovery afterward", async () => {
-      process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "100";
+      process.env.RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS = "100";
       await create(GrokAgentDriver, "stall-after-text");
       const ack = await instance.adapter.sendTurn({ threadId: "startup-prompt", text: "go", startupRecovery: true });
       expect(recorder.events.some((event) => event.type === "turn.completed")).toBe(false);
@@ -2127,8 +2127,8 @@ describe("ACP turns (fake CLI)", () => {
     it("closes the idle process and resumes on the next turn", async () => {
       // Ten seconds is the lowest window the floor allows now; exercise the
       // close at the floor itself and give the poll room past it.
-      process.env.OMB_ACP_SESSION_IDLE_MIN_MS = "10000";
-      process.env.OMB_ACP_SESSION_IDLE_MS = "10000";
+      process.env.RIPO_ACP_SESSION_IDLE_MIN_MS = "10000";
+      process.env.RIPO_ACP_SESSION_IDLE_MS = "10000";
       countFile = join(scratch, "launches");
       rpcFile = join(scratch, "rpc.json");
       process.env.FAKE_ACP_LAUNCH_COUNT_FILE = countFile;
@@ -2208,7 +2208,7 @@ describe("ACP turns (fake CLI)", () => {
       const integration = (token: string) => ({
         command: process.execPath,
         args: [FAKE_CLI],
-        env: { OMB_COMMS_TOKEN: token },
+        env: { RIPO_COMMS_TOKEN: token },
       });
       const first = await instance.adapter.sendTurn({
         threadId: "t-pool-token",
@@ -2253,7 +2253,7 @@ describe("ACP turns (fake CLI)", () => {
         config: { cli: FAKE_CLI, fullAuto: false },
       });
       recorder = recordEvents(instance.adapter);
-      const integration = (token: string) => ({ command: process.execPath, args: [FAKE_CLI], env: { OMB_COMMS_TOKEN: token } });
+      const integration = (token: string) => ({ command: process.execPath, args: [FAKE_CLI], env: { RIPO_COMMS_TOKEN: token } });
       const first = await instance.adapter.sendTurn({ threadId: "qwen-stop", text: "one", integrations: { agents: integration("one") } });
       await recorder.until((e) => e.type === "turn.completed" && e.turnId === first.turnId);
 
@@ -2311,7 +2311,7 @@ describe("ACP turns (fake CLI)", () => {
         return kill(child, timeout);
       });
       if (reason === "prompt stall") {
-        process.env.OPENMAUS_ACP_PROMPT_IDLE_TIMEOUT_MS = "100";
+        process.env.RIPO_ACP_PROMPT_IDLE_TIMEOUT_MS = "100";
         process.env.FAKE_ACP_MODE = "stall-after-text";
       }
       instance = await QwenAgentDriver.create({
@@ -2320,7 +2320,7 @@ describe("ACP turns (fake CLI)", () => {
         config: { cli: FAKE_CLI, fullAuto: false },
       });
       recorder = recordEvents(instance.adapter);
-      const integration = (token: string) => ({ agents: { command: process.execPath, args: [FAKE_CLI], env: { OMB_COMMS_TOKEN: token } } });
+      const integration = (token: string) => ({ agents: { command: process.execPath, args: [FAKE_CLI], env: { RIPO_COMMS_TOKEN: token } } });
       try {
         const first = await instance.adapter.sendTurn({ threadId: "qwen-retry", text: "one", integrations: integration("one") });
         expect(await recorder.until((e) => e.type === "turn.completed" && e.turnId === first.turnId))
@@ -2375,7 +2375,7 @@ describe("ACP turns (fake CLI)", () => {
       const integration = (token: string) => ({
         command: process.execPath,
         args: [FAKE_CLI],
-        env: { OMB_COMMS_TOKEN: token },
+        env: { RIPO_COMMS_TOKEN: token },
       });
       const first = await instance.adapter.sendTurn({
         threadId: "t-pool-reject",
@@ -2460,7 +2460,7 @@ describe("ACP snapshot", () => {
   });
 
   it("kimi checks KIMI_CODE_HOME before the child HOME", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-kimi-auth-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-kimi-auth-"));
     const kimiHome = join(scratch, "custom-kimi-home");
     const childHome = join(scratch, "child-home");
     mkdirSync(join(childHome, ".kimi-code", "credentials"), { recursive: true });
@@ -2485,7 +2485,7 @@ describe("ACP snapshot", () => {
   });
 
   it("droid resolves the signed-in CLI before falling back to FACTORY_API_KEY", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-droid-auth-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-droid-auth-"));
     // FACTORY_HOME_OVERRIDE replaces the CLI's HOME, not its data root: droid
     // writes <home>/.factory/auth.v2.file either way (verified against 0.196.0).
     const overrideHome = join(scratch, "custom-home");
@@ -2550,7 +2550,7 @@ describe("ACP snapshot", () => {
   });
 
   it("droid reads custom models, favourites order, and the configured default", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-droid-models-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-droid-models-"));
     mkdirSync(join(scratch, ".factory"), { recursive: true });
     writeFileSync(
       join(scratch, ".factory", "settings.json"),
@@ -2586,7 +2586,7 @@ describe("ACP snapshot", () => {
   });
 
   it("droid falls back to the built-in catalog when settings.json is unreadable", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-droid-nosettings-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-droid-nosettings-"));
     mkdirSync(join(scratch, ".factory"), { recursive: true });
     writeFileSync(join(scratch, ".factory", "settings.json"), "{ not json");
 
@@ -2607,7 +2607,7 @@ describe("ACP snapshot", () => {
   });
 
   it("kimi resolves default credentials from the child HOME", async () => {
-    const scratch = mkdtempSync(join(tmpdir(), "omb-kimi-home-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ripo-kimi-home-"));
     const credentialDir = join(scratch, ".kimi-code", "credentials");
     mkdirSync(credentialDir, { recursive: true });
     writeFileSync(join(credentialDir, "kimi-code.json"), "{}");

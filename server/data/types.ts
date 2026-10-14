@@ -54,7 +54,7 @@ export interface RunResult {
 }
 
 export interface MaterialiseResult {
-  /** Fully qualified: `omb_results.<name>`. */
+  /** Fully qualified: `ripo_results.<name>`. */
   table: string;
   columns: DataColumn[];
   rowCount: number;
@@ -72,7 +72,7 @@ export interface BotDatabase {
   readonly botId: string;
   /** Runs one statement and returns its rows (bounded by `maxRows`). */
   run(sql: string, options: RunOptions): Promise<RunResult>;
-  /** `CREATE OR REPLACE TABLE omb_results.<name> AS <sql>`, with its count. */
+  /** `CREATE OR REPLACE TABLE ripo_results.<name> AS <sql>`, with its count. */
   materialise(sql: string, name: string, options: RunOptions): Promise<MaterialiseResult>;
   /** Drops a result table; a missing one is not an error. Runs on
    * `connection` (default the bot's), so a panel edit never waits behind

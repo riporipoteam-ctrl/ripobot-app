@@ -1,0 +1,17 @@
+# Render blueprint for the RipoBot website + API (all-in-one).
+# The free web service serves the Vite-built UI and the Node harness server
+# from one process. Static UI is public by design; all API access from a
+# remote browser requires a pairing code minted by the operator (see
+# server/index.ts serveStatic + request-auth.ts).
+services:
+  - type: web
+    name: ripobot-app
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start:render
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24

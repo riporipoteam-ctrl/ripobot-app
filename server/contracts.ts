@@ -67,7 +67,7 @@ export function isModelVariant(value: unknown): value is string {
 // "Which model" is a data value carried on the request, never a service
 // binding (upstream ModelSelectionWire). instanceId is the routing key.
 
-/** An image already admitted to OpenMausBot's private attachment store.
+/** An image already admitted to RipoBot's private attachment store.
  * Drivers receive this structured value instead of learning a host path from
  * prompt text. The harness validates the path and size before constructing it. */
 export interface TurnImageInput {
@@ -128,7 +128,7 @@ export interface SendTurnInput {
   approvalMode?: ApprovalMode;
   /** Fresh owner selection, independent of execution approval and resume state. */
   toolScope?: ToolScope;
-  /** A guest drives this turn on an OMB Cloud home: it runs with no shell
+  /** A guest drives this turn on an RIPO Cloud home: it runs with no shell
    * or command execution and reads nothing outside its own folder. Sent
    * only to a driver whose capabilities.guestTurns is "confined"; the harness
    * refuses the turn for any other (docs/cloud-pro.md). */
@@ -336,7 +336,7 @@ export interface ProviderAdapter {
      * engine (integrations.hooks). Only Claude Code today; other engines
      * deliver the same information through their protocols. */
     hooks?: boolean;
-    /** How a guest-driven turn on an OMB Cloud home can run on this engine:
+    /** How a guest-driven turn on an RIPO Cloud home can run on this engine:
      * "confined" = sendTurn honours `guestConfined` (no shell or command
      * execution, no reads outside its folder). Absent: such a turn is
      * refused. */

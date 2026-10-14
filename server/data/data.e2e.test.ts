@@ -10,7 +10,7 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../../scripts/control-ripo.ts";
 import { DATA_ROUTES, DATA_TOOL_NAMES, type DataCard, type DataSheet } from "../../shared/data-surface.ts";
 import { waitForExit } from "../testing/cleanup.ts";
 
@@ -36,7 +36,7 @@ it("loads, queries, shows, pages, renders and exports through the real server", 
     const log = openSync(logPath, "a", 0o600);
     server = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("../index.ts", import.meta.url))], {
       cwd: fileURLToPath(new URL("../..", import.meta.url)),
-      env: { ...verificationServerEnvironment({}, dataDir, Number(new URL(url).port)), OMB_TEST_INTERNAL_CAPABILITY_KEY: CAPABILITY_KEY },
+      env: { ...verificationServerEnvironment({}, dataDir, Number(new URL(url).port)), RIPO_TEST_INTERNAL_CAPABILITY_KEY: CAPABILITY_KEY },
       stdio: ["ignore", log, log],
     });
     closeSync(log);
@@ -55,7 +55,7 @@ it("loads, queries, shows, pages, renders and exports through the real server", 
     writeFileSync(csv, lines.join("\n") + "\n");
     mkdirSync(join(dataDir, "Downloads"), { recursive: true });
 
-    const minted = await api("POST", "/api/testing/internal-capability", { botId: bot.id, threadId, kind: "data" }, 201, { "x-openmausbot-test-capability": CAPABILITY_KEY });
+    const minted = await api("POST", "/api/testing/internal-capability", { botId: bot.id, threadId, kind: "data" }, 201, { "x-ripobot-test-capability": CAPABILITY_KEY });
     const mcp = async (method: string, params?: unknown, token: string = minted.token) =>
       (await api("POST", "/api/internal/data/mcp", { method, params }, 200, { authorization: `Bearer ${token}` })).result;
     const call = async (name: string, args: Record<string, unknown>, token?: string) => {
@@ -83,7 +83,7 @@ it("loads, queries, shows, pages, renders and exports through the real server", 
     expect(totals.isError, totals.text).toBe(false);
     expect(totals.data.rowCount).toBe(3);
     expect(totals.data.rows).toHaveLength(3);
-    expect(totals.data.table).toMatch(/^omb_results\./);
+    expect(totals.data.table).toMatch(/^ripo_results\./);
 
     // Writes other than CREATE … AS are refused; bad SQL carries DuckDB's own words.
     const refused = await call("data_sql", { sql: "DELETE FROM sales" });
@@ -151,7 +151,7 @@ it("loads, queries, shows, pages, renders and exports through the real server", 
     expect(read.sheet.cards.map((card) => [card.kind, card.title, card.status])).toEqual([["table", "Totals", "ready"], ["chart", "By region", "ready"]]);
     expect(read.sheet.sources.map((source) => source.name)).toEqual(["sales"]);
     expect(read.tables.map((table) => table.name)).toContain("sales");
-    expect(read.tables.some((table) => table.name.startsWith("omb_results"))).toBe(false);
+    expect(read.tables.some((table) => table.name.startsWith("ripo_results"))).toBe(false);
     const chart = read.sheet.cards[1] as DataCard;
     expect(chart.vegaLite).toBeTruthy();
     expect(chart.reduction?.inputRows).toBe(300);
@@ -183,14 +183,14 @@ it("loads, queries, shows, pages, renders and exports through the real server", 
     expect(final.cards.map((card) => card.title)).toEqual(["Totals by region", "By region"]);
 
     // Opt-in: downloads the real signed extensions into this fixture's empty cache.
-    if (process.env.OMB_TEST_DUCKDB_EXTENSIONS === "1") {
+    if (process.env.RIPO_TEST_DUCKDB_EXTENSIONS === "1") {
       expect(existsSync(join(dataDir, "duckdb-extensions"))).toBe(false);
       const workbook = await call("data_export", { table: "sales", format: "xlsx" });
       expect(workbook.isError, workbook.text).toBe(false);
       expect(readFileSync(workbook.data.path).subarray(0, 2).toString()).toBe("PK");
       // A second instance proves cached extensions load again, without relying on the exporter's LOAD.
       const { bot: reader } = await runControlOmb(["new-bot", "--name", "Workbook reader", "--url", url]) as { bot: { id: string; activeTaskId: string } };
-      const readerToken = await api("POST", "/api/testing/internal-capability", { botId: reader.id, threadId: reader.activeTaskId, kind: "data" }, 201, { "x-openmausbot-test-capability": CAPABILITY_KEY });
+      const readerToken = await api("POST", "/api/testing/internal-capability", { botId: reader.id, threadId: reader.activeTaskId, kind: "data" }, 201, { "x-ripobot-test-capability": CAPABILITY_KEY });
       const reloaded = await call("data_load", { source: workbook.data.path, name: "workbook_sales" }, readerToken.token);
       expect(reloaded.isError, reloaded.text).toBe(false);
       expect(reloaded.data.tables[0].rowCount).toBe(300);

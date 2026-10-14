@@ -1,8 +1,8 @@
-// The full server as an OpenMausBot Cloud home with the free trial's Claude
+// The full server as an RipoBot Cloud home with the free trial's Claude
 // credit, over its real HTTP boundary, against one stub that plays the
 // Admin's relay: an OpenAI-compatible API (chat completions and models) and
 // nothing Anthropic-shaped. With no AI of the person's own, the first bot
-// runs on the credit: a read-only engine, OpenMausBot's own chat engine,
+// runs on the credit: a read-only engine, RipoBot's own chat engine,
 // whose token reaches only the relay, never config.json, a page, the log,
 // Claude Code or the person's own engine. Used up, it says so in plain words
 // and stops; once the person's own Claude can run, it takes over every bot.
@@ -23,9 +23,9 @@ import { freePortBlock } from "./testing/ports.ts";
 import { TRIAL_CREDIT_OWN_AI, TRIAL_CREDIT_REFUSED } from "./trial-credit.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const HOST = "omb-t-0123456789ab.fly.dev";
+const HOST = "ripo-t-0123456789ab.fly.dev";
 const secret = randomBytes(32).toString("base64url");
-const TOKEN = `omb_ai_${randomBytes(32).toString("base64url")}`;
+const TOKEN = `ripo_ai_${randomBytes(32).toString("base64url")}`;
 /** The Admin's relay, as server/cloud-credit.ts serves it: CREDIT_RELAY_PATH, with the Cloud given `<origin>${RELAY_PATH}/v1`. */
 const RELAY_PATH = "/api/cloud/services/ai";
 const MODELS = { object: "list", data: [
@@ -84,11 +84,11 @@ beforeAll(async () => {
     });
   });
   await new Promise<void>((resolve) => stub.listen(0, "127.0.0.1", resolve));
-  // OMB_CLOUD_AI_URL exactly as the Admin builds it (cloud-credit.ts `env`): the origin, the relay path and `/v1`.
+  // RIPO_CLOUD_AI_URL exactly as the Admin builds it (cloud-credit.ts `env`): the origin, the relay path and `/v1`.
   const relayUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}${RELAY_PATH}/v1`;
 
-  home = mkdtempSync(join(tmpdir(), "omb-cloud-credit-"));
-  data = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "ripo-cloud-credit-"));
+  data = join(home, ".ripobot");
   mkdirSync(data, { recursive: true });
   // The person's own Claude Code, as on the image: signed out until the test
   // signs the person in. Each turn is a fresh process, which records its
@@ -114,7 +114,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     defaultModelSelection: { instanceId: CLOUD_CREDIT_INSTANCE, model: "claude-haiku-4-5" },
   }));
   mkdirSync(join(home, "web"));
-  writeFileSync(join(home, "web", "index.html"), "<!doctype html><title>OpenMausBot</title>");
+  writeFileSync(join(home, "web", "index.html"), "<!doctype html><title>RipoBot</title>");
   const port = await freePortBlock([0, 1]);
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
@@ -123,10 +123,10 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
       PATH: process.env.PATH,
       ...(process.env.PATHEXT ? { PATHEXT: process.env.PATHEXT } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-      HOME: home, USERPROFILE: home, OMB_DATA_DIR: data, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_STATIC_DIR: join(home, "web"),
-      OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-      OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,
-      OMB_CLOUD_AI_URL: relayUrl, OMB_CLOUD_AI_TOKEN: TOKEN,
+      HOME: home, USERPROFILE: home, RIPO_DATA_DIR: data, RIPO_PORT: String(port), RIPO_WEBHOOK_PORT: String(port + 1), RIPO_STATIC_DIR: join(home, "web"),
+      RIPO_CLOUD_ROLE: "home", RIPO_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", RIPO_CLOUD_ADMIN_URL: "https://cloud.example.test",
+      RIPO_CLOUD_BOOTSTRAP_SECRET: secret, RIPO_PUBLIC_URL: `https://${HOST}`,
+      RIPO_CLOUD_AI_URL: relayUrl, RIPO_CLOUD_AI_TOKEN: TOKEN,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -139,11 +139,11 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     if (Date.now() > deadline) throw new Error(`the Cloud home did not start:\n${log}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  const body = JSON.stringify({ label: "OpenMausBot app (Cloud)", ttlSeconds: 300 });
+  const body = JSON.stringify({ label: "RipoBot app (Cloud)", ttlSeconds: 300 });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await api("POST", "/api/cloud/pairing", { remote: true, headers: {
-    "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
-    "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "content-type": "application/json", "x-ripo-cloud-timestamp": timestamp, "x-ripo-cloud-nonce": nonce,
+    "x-ripo-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body: JSON.parse(body) });
   ownerToken = (await api("POST", "/api/auth/pair", { remote: true, body: { code: granted.body.code } })).body.token as string;
 }, 45_000);
@@ -181,7 +181,7 @@ describe("the free trial's Claude credit on a Cloud home", { timeout: 90_000 }, 
     expect(relayed).toContainEqual(expect.objectContaining({ method: "GET", path: `${RELAY_PATH}/v1/models`, bearer: `Bearer ${TOKEN}` }));
   });
 
-  it("runs a turn on OpenMausBot's own chat engine through the relay's chat completions: never Claude Code, never an Anthropic route", async () => {
+  it("runs a turn on RipoBot's own chat engine through the relay's chat completions: never Claude Code, never an Anthropic route", async () => {
     const settled = await turn("hello");
     expect(settled.messages.some((message) => message.role === "bot" && message.kind === "text")).toBe(true);
     expect(relayed).toContainEqual(expect.objectContaining({ method: "POST", path: `${RELAY_PATH}/v1/chat/completions`, bearer: `Bearer ${TOKEN}` }));

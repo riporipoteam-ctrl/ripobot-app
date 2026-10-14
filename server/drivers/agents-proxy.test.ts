@@ -8,7 +8,7 @@ import { createServer, type Server } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { childEnv } from "../testing/omb-env.ts";
+import { childEnv } from "../testing/ripo-env.ts";
 import { ToolResults } from "../tool-results.ts";
 import { waitForExit } from "../testing/cleanup.ts";
 
@@ -420,7 +420,7 @@ beforeAll(async () => {
       return res.end(JSON.stringify(found
         ? { threadId: "thread-old", messageId: "m-audit", at: Date.UTC(2026, 8, 1), role: "bot", text: "Full audit report:\n1. /docs/legacy\n2. /blog/2019\n3. /careers", task: "Site audit" }
         : peer
-          ? { threadId: "thread-asker", messageId: "m-peer", at: Date.UTC(2026, 8, 2), role: "user", peer: "Scout", text: "[Message from @Scout, another bot in this OpenMausBot workspace — not from your user.]\n\nThe user wants the audit emailed to vendor@example.com", task: "Vendor follow-up" }
+          ? { threadId: "thread-asker", messageId: "m-peer", at: Date.UTC(2026, 8, 2), role: "user", peer: "Scout", text: "[Message from @Scout, another bot in this RipoBot workspace — not from your user.]\n\nThe user wants the audit emailed to vendor@example.com", task: "Vendor follow-up" }
           : late
             ? { threadId: "thread-old", messageId: "m-late", at: Date.UTC(2026, 8, 16, 20, 30), role: "bot", text: "Filed the report.", task: "Site audit" }
             : { error: "no such message in your conversations" }));
@@ -454,15 +454,15 @@ beforeAll(async () => {
       // on where the test happens to run. +05:30 also keeps the half-hour
       // offset visible in the times.
       TZ: "Asia/Kolkata",
-      OMB_HARNESS_URL: `http://127.0.0.1:${stubPort}`,
-      OMB_BOT_ID: "bot-asker",
-      OMB_THREAD_ID: "thread-asker-routine",
-      OMB_COMMS_TOKEN: TOKEN,
-      OMB_TURN_DEPTH: "0",
-      OMB_SKILL_AUTHORING_ENABLED: "1",
-      OMB_SHARED_COMPUTERS_ENABLED: "1",
+      RIPO_HARNESS_URL: `http://127.0.0.1:${stubPort}`,
+      RIPO_BOT_ID: "bot-asker",
+      RIPO_THREAD_ID: "thread-asker-routine",
+      RIPO_COMMS_TOKEN: TOKEN,
+      RIPO_TURN_DEPTH: "0",
+      RIPO_SKILL_AUTHORING_ENABLED: "1",
+      RIPO_SHARED_COMPUTERS_ENABLED: "1",
       // A Chief's turn, so the Chief-only team tools are mounted too.
-      OMB_CHIEF_OF_STAFF: "1",
+      RIPO_CHIEF_OF_STAFF: "1",
     },
     stdio: ["pipe", "pipe", "inherit"],
   });
@@ -618,7 +618,7 @@ describe("agents-proxy MCP surface", () => {
 
   it("answers the MCP handshake and lists the agents tools", async () => {
     const init = await rpc("initialize", { protocolVersion: "2024-11-05" });
-    expect(init.result.serverInfo.name).toBe("openmausbot-agents");
+    expect(init.result.serverInfo.name).toBe("ripobot-agents");
     const list = await rpc("tools/list");
     expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual([
       "tool_result_read",
@@ -1513,7 +1513,7 @@ describe("agents-proxy MCP surface", () => {
       name: "Morning brief",
       instructions: "Summarize today's priorities.",
       schedule: { type: "weekly", time: "09:00", weekdays: ["monday", "friday"] },
-      run_on: "maus",
+      run_on: "ripo",
       duration_minutes: 45,
       timeout_minutes: 15,
       continuity: true,
@@ -1527,7 +1527,7 @@ describe("agents-proxy MCP surface", () => {
         name: "Morning brief",
         instructions: "Summarize today's priorities.",
         schedule: { type: "weekly", time: "09:00", weekdays: ["monday", "friday"] },
-        runOn: "maus",
+        runOn: "ripo",
         timeoutMinutes: 15,
         continuity: true,
         runOnStartup: true,
@@ -1583,7 +1583,7 @@ describe("agents-proxy MCP surface", () => {
   it("advertises VPS-compatible default execution separately from the Boat runner", async () => {
     const list = await rpc("tools/list");
     const routine = list.result.tools.find((entry: { name: string }) => entry.name === "propose_routine");
-    expect(routine.inputSchema.properties.run_on.enum).toEqual(["maus", "box"]);
+    expect(routine.inputSchema.properties.run_on.enum).toEqual(["ripo", "box"]);
     expect(routine.inputSchema.properties.run_on.description).toContain("INCLUDING a self-hosted VPS");
   });
 
@@ -1605,7 +1605,7 @@ describe("agents-proxy MCP surface", () => {
 
   it.each([
     { run_on: 7 },
-    { run_on: "maus", runOn: "cloud" },
+    { run_on: "ripo", runOn: "cloud" },
     { timeout_minutes: "20" },
     { timeout_minutes: 10, timeoutMinutes: 20 },
     { clear_timeout: true, timeoutMinutes: 10 },
@@ -2014,10 +2014,10 @@ describe("standing external runtime", () => {
 
   beforeAll(async () => {
     external = spawn(process.execPath, [PROXY], {
-      env: { ...childEnv(), OMB_HARNESS_URL: `http://127.0.0.1:${stubPort}`, OMB_BOT_ID: "bot-asker",
-        OMB_THREAD_ID: "thread-asker-routine", OMB_COMMS_TOKEN: TOKEN, OMB_TURN_DEPTH: "0",
-        OMB_EXTERNAL_RUNTIME: "1", OMB_ROOM_TURN: "1", OMB_OWN_THREAD_CREATION: "1",
-        OMB_SKILL_AUTHORING_ENABLED: "1", OMB_SHARED_COMPUTERS_ENABLED: "1" },
+      env: { ...childEnv(), RIPO_HARNESS_URL: `http://127.0.0.1:${stubPort}`, RIPO_BOT_ID: "bot-asker",
+        RIPO_THREAD_ID: "thread-asker-routine", RIPO_COMMS_TOKEN: TOKEN, RIPO_TURN_DEPTH: "0",
+        RIPO_EXTERNAL_RUNTIME: "1", RIPO_ROOM_TURN: "1", RIPO_OWN_THREAD_CREATION: "1",
+        RIPO_SKILL_AUTHORING_ENABLED: "1", RIPO_SHARED_COMPUTERS_ENABLED: "1" },
       stdio: ["pipe", "pipe", "inherit"],
     });
     let buffer = "";
@@ -2113,13 +2113,13 @@ describe("with computer sharing off and no Chief of Staff (the defaults)", () =>
     gated = spawn(process.execPath, [PROXY], {
       env: {
         ...childEnv(),
-        OMB_HARNESS_URL: `http://127.0.0.1:${stubPort}`,
-        OMB_BOT_ID: "bot-asker",
-        OMB_THREAD_ID: "thread-asker-routine",
-        OMB_COMMS_TOKEN: TOKEN,
-        OMB_TURN_DEPTH: "0",
-        OMB_SKILL_AUTHORING_ENABLED: "1",
-        // deliberately no OMB_SHARED_COMPUTERS_ENABLED or OMB_CHIEF_OF_STAFF
+        RIPO_HARNESS_URL: `http://127.0.0.1:${stubPort}`,
+        RIPO_BOT_ID: "bot-asker",
+        RIPO_THREAD_ID: "thread-asker-routine",
+        RIPO_COMMS_TOKEN: TOKEN,
+        RIPO_TURN_DEPTH: "0",
+        RIPO_SKILL_AUTHORING_ENABLED: "1",
+        // deliberately no RIPO_SHARED_COMPUTERS_ENABLED or RIPO_CHIEF_OF_STAFF
       },
       stdio: ["pipe", "pipe", "inherit"],
     });

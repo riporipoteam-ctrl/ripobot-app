@@ -9,7 +9,7 @@ import { cleanupEndpointRow, sweepManagedEndpointCleanup } from "../src/endpoint
 import { createWorker } from "../src/index";
 import { forgetCachedCapacity } from "../src/tunnel-capacity";
 
-const BASE_URL = "https://auth.openmausbot.test";
+const BASE_URL = "https://auth.ripobot.test";
 const CONNECTOR_TOKEN = "eyJhbGciOiJIUzI1NiJ9.test-only-connector-token.signature";
 /** Rows written straight to D1 use the primary account's suffix: an endpoint
  * whose hostname is not under its account's suffix refuses to act. */
@@ -812,7 +812,7 @@ describe("managed companion endpoints", () => {
     const worker = createWorker(cloudflare.fetch);
     const owner = await signIn(worker, "managed-adopt@example.com");
     const installation = await createInstallation(worker, owner.token, "managed-adopt");
-    const tunnelName = "omb-c-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const tunnelName = "ripo-c-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const hostname = `c-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.${HOST_SUFFIX}`;
     const tunnel: FakeTunnel = {
       id: "20000000-0000-4000-8000-000000000001",
@@ -979,7 +979,7 @@ describe("managed companion endpoints", () => {
     const hostname = `c-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.${HOST_SUFFIX}`;
     const tunnel: FakeTunnel = {
       id: "30000000-0000-4000-8000-000000000001",
-      name: "omb-c-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      name: "ripo-c-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     };
     cloudflare.tunnels.set(tunnel.name, tunnel);
     cloudflare.dns.set(hostname, {
@@ -1205,7 +1205,7 @@ describe("managed companion endpoints", () => {
     cloudflare.dns.set(hostname, {
       ...record,
       content: "203.0.113.50",
-      name: "repurposed.openmausbot.test",
+      name: "repurposed.ripobot.test",
       proxied: false,
       type: "A",
     });
@@ -1219,7 +1219,7 @@ describe("managed companion endpoints", () => {
     expect(cloudflare.calls.some((entry) => entry.method === "DELETE")).toBe(false);
     expect(cloudflare.dns.get(hostname)).toMatchObject({
       content: "203.0.113.50",
-      name: "repurposed.openmausbot.test",
+      name: "repurposed.ripobot.test",
       type: "A",
     });
     const retained = await env.DB.prepare(
@@ -1332,7 +1332,7 @@ describe("managed companion endpoints", () => {
     await env.DB.batch(Array.from({ length: 25 }, (_, index) => {
       const opaque = index.toString(16).padStart(32, "0");
       const hostname = `c-${opaque}.${HOST_SUFFIX}`;
-      const tunnelName = `omb-c-${opaque}`;
+      const tunnelName = `ripo-c-${opaque}`;
       const tunnelId = `10000000-0000-4000-8000-${(index + 1).toString(16).padStart(12, "0")}`;
       cloudflare.tunnels.set(tunnelName, { id: tunnelId, name: tunnelName });
       cloudflare.dns.set(hostname, {
@@ -1359,9 +1359,9 @@ describe("managed companion endpoints", () => {
       "SELECT status, COUNT(*) AS count FROM installation_endpoints GROUP BY status ORDER BY status",
     ).all<{ count: number; status: string }>()).results;
 
-    // Workers Free deployments set OMB_CLEANUP_SWEEP_LIMIT=4: forty cleanup
+    // Workers Free deployments set RIPO_CLEANUP_SWEEP_LIMIT=4: forty cleanup
     // calls plus the two capacity reads stay under 50 subrequests.
-    await runScheduledCleanup(worker, { OMB_CLEANUP_SWEEP_LIMIT: "4" });
+    await runScheduledCleanup(worker, { RIPO_CLEANUP_SWEEP_LIMIT: "4" });
     expect(await counts()).toEqual([
       { count: 4, status: "deleted" },
       { count: 21, status: "deleting" },
@@ -1369,11 +1369,11 @@ describe("managed companion endpoints", () => {
     expect(cleanupCalls(cloudflare)).toHaveLength(40);
     expect(cloudflare.calls.filter(isCapacityRead)).toHaveLength(2);
 
-    // On Workers Paid (OMB_CLEANUP_SWEEP_LIMIT=20, the code default) a run
+    // On Workers Paid (RIPO_CLEANUP_SWEEP_LIMIT=20, the code default) a run
     // processes twenty rows at ten calls each: about 200 of the token's 1,200
     // requests per five minutes. wrangler.jsonc ships 4 until Paid is confirmed.
     cloudflare.calls.length = 0;
-    await runScheduledCleanup(worker, { OMB_CLEANUP_SWEEP_LIMIT: "20" });
+    await runScheduledCleanup(worker, { RIPO_CLEANUP_SWEEP_LIMIT: "20" });
     expect(await counts()).toEqual([
       { count: 24, status: "deleted" },
       { count: 1, status: "deleting" },
@@ -1394,7 +1394,7 @@ describe("managed companion endpoints", () => {
     ).bind(
       "orphan-backoff",
       `c-${"a".repeat(32)}.${HOST_SUFFIX}`,
-      `omb-c-${"a".repeat(32)}`,
+      `ripo-c-${"a".repeat(32)}`,
       now - 14 * 60 * 1_000,
       now - 25 * 60 * 60 * 1_000,
       now - 25 * 60 * 60 * 1_000,
@@ -1611,7 +1611,7 @@ describe("idle tunnel reclaim", () => {
 
     // The deployed policy, pinned here so retuning wrangler.jsonc cannot change
     // which of these endpoints count as idle.
-    await runScheduledCleanup(worker, { OMB_TUNNEL_OFFLINE_RECLAIM_DAYS: "7" });
+    await runScheduledCleanup(worker, { RIPO_TUNNEL_OFFLINE_RECLAIM_DAYS: "7" });
 
     for (const reclaimed of [neverConnected, offline]) {
       expect(await endpointState(reclaimed.id)).toMatchObject({
@@ -1677,7 +1677,7 @@ describe("idle tunnel reclaim", () => {
     cloudflare.calls.length = 0;
     const logged = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
-    await runScheduledCleanup(worker, { OMB_TUNNEL_RECLAIM: "observe" });
+    await runScheduledCleanup(worker, { RIPO_TUNNEL_RECLAIM: "observe" });
 
     expect(await endpointState(idle.id)).toMatchObject({ reclaim_requested_at: null, status: "ready" });
     expect(deleteURLs(cloudflare)).toHaveLength(0);
@@ -1694,10 +1694,10 @@ describe("idle tunnel reclaim", () => {
     const cloudflare = new FakeCloudflare();
     const worker = createWorker(cloudflare.fetch);
     const stale = iso(Date.now() - 90 * DAY_MS);
-    cloudflare.tunnels.set("omb-c-ffffffffffffffffffffffffffffffff", {
+    cloudflare.tunnels.set("ripo-c-ffffffffffffffffffffffffffffffff", {
       created_at: stale,
       id: "40000000-0000-4000-8000-000000000001",
-      name: "omb-c-ffffffffffffffffffffffffffffffff",
+      name: "ripo-c-ffffffffffffffffffffffffffffffff",
       status: "inactive",
     });
     cloudflare.tunnels.set("another-service", {
@@ -1929,7 +1929,7 @@ describe("idle tunnel reclaim", () => {
         `INSERT INTO installation_endpoints
           (installation_id, hostname, tunnel_name, status, delete_requested_at, created_at, updated_at)
          VALUES (?, ?, ?, 'deleting', ?, ?, ?)`,
-      ).bind(`orphan-limited-${index}`, `c-${opaque}.${HOST_SUFFIX}`, `omb-c-${opaque}`, now, now, now);
+      ).bind(`orphan-limited-${index}`, `c-${opaque}.${HOST_SUFFIX}`, `ripo-c-${opaque}`, now, now, now);
     }));
     cloudflare.rateLimited.add("list_tunnels");
     const logged = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -2013,15 +2013,15 @@ describe("managed endpoint provider capacity", () => {
     // Cleanup that frees a resource reopens allocation before the gate expires.
     cloudflare.providerErrors.clear();
     const now = Date.now();
-    cloudflare.tunnels.set(`omb-c-${"e".repeat(32)}`, {
+    cloudflare.tunnels.set(`ripo-c-${"e".repeat(32)}`, {
       id: "60000000-0000-4000-8000-000000000001",
-      name: `omb-c-${"e".repeat(32)}`,
+      name: `ripo-c-${"e".repeat(32)}`,
     });
     await env.DB.prepare(
       `INSERT INTO installation_endpoints
         (installation_id, hostname, tunnel_name, status, delete_requested_at, created_at, updated_at)
        VALUES ('orphan-capacity', ?, ?, 'deleting', ?, ?, ?)`,
-    ).bind(`c-${"e".repeat(32)}.${HOST_SUFFIX}`, `omb-c-${"e".repeat(32)}`, now, now, now).run();
+    ).bind(`c-${"e".repeat(32)}.${HOST_SUFFIX}`, `ripo-c-${"e".repeat(32)}`, now, now, now).run();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     await runScheduledCleanup(worker);
     expect(await capacityRejectedAt()).toBeNull();
@@ -2053,7 +2053,7 @@ describe("managed endpoint provider capacity", () => {
     // The sweep alone (no scan) frees a resource and clears the rejection.
     cloudflare.providerErrors.clear();
     const now = Date.now();
-    const tunnelName = `omb-c-${"f".repeat(32)}`;
+    const tunnelName = `ripo-c-${"f".repeat(32)}`;
     cloudflare.tunnels.set(tunnelName, { id: "60000000-0000-4000-8000-000000000002", name: tunnelName });
     await env.DB.prepare(
       `INSERT INTO installation_endpoints
@@ -2171,7 +2171,7 @@ describe("managed endpoint provider capacity", () => {
     const text = await response.text();
     expect(JSON.parse(text)).toMatchObject({
       ok: true,
-      service: "openmausbot-control-plane",
+      service: "ripobot-control-plane",
       capacity: {
         checkedAt: expect.any(Number),
         dnsRecords: { limit: 1000, used: 400 },
@@ -2187,7 +2187,7 @@ describe("managed endpoint provider capacity", () => {
 
     // A raised limit silences the alert; reaching it reports full.
     errors.mockClear();
-    await runScheduledCleanup(worker, { OMB_TUNNEL_LIMIT: "2000" });
+    await runScheduledCleanup(worker, { RIPO_TUNNEL_LIMIT: "2000" });
     expect(loggedJSON(errors, "managed endpoint capacity high")).toEqual([]);
     cloudflare.tunnelTotalCount = 1000;
     cloudflare.dnsTotalCount = 990;
@@ -2207,9 +2207,9 @@ describe("managed endpoint provider capacity", () => {
 const ENDPOINT_PATH = "/v1/installations/self/endpoint";
 const SECOND_ACCOUNT_ID = "2b".repeat(16);
 const SECOND_ZONE_ID = "3c".repeat(16);
-const SECOND_SUFFIX = "mausbot.si";
-const SECOND_TOKEN_SECRET = "CLOUDFLARE_API_TOKEN_MAUSBOT_SI";
-const SECOND_TOKEN = "test-only-mausbot-si-api-token-with-no-real-access";
+const SECOND_SUFFIX = "ripobot.si";
+const SECOND_TOKEN_SECRET = "CLOUDFLARE_API_TOKEN_RIPOBOT_SI";
+const SECOND_TOKEN = "test-only-ripobot-si-api-token-with-no-real-access";
 
 interface AccountsFixture {
   env: Env;
@@ -2221,7 +2221,7 @@ interface AccountsFixture {
   worker: TestWorker;
 }
 
-/** The primary account plus mausbot.si in a second account, each with its
+/** The primary account plus ripobot.si in a second account, each with its
  * own fake API behind a router that checks every request's token. */
 function twoAccounts(entry: Record<string, unknown> = {}): AccountsFixture {
   const first = new FakeCloudflare();
@@ -2348,7 +2348,7 @@ async function orphanIn(
   deleteRequestedAt = Date.now(),
 ) {
   const installationId = `orphan-${opaque}`;
-  const tunnelName = `omb-c-${opaque}`;
+  const tunnelName = `ripo-c-${opaque}`;
   const hostname = `c-${opaque}.${suffix}`;
   const tunnelId = `${opaque.slice(0, 8)}-0000-4000-8000-${opaque.slice(-12)}`;
   fake.tunnels.set(tunnelName, { id: tunnelId, name: tunnelName });
@@ -2368,7 +2368,7 @@ async function orphanIn(
   return { hostname, installationId, tunnelName };
 }
 
-const ON_SECOND_ACCOUNT = /^c-[0-9a-f]{32}\.mausbot\.si$/;
+const ON_SECOND_ACCOUNT = /^c-[0-9a-f]{32}\.ripobot\.si$/;
 
 describe("managed endpoints in several Cloudflare accounts", () => {
   afterEach(() => {
@@ -2649,10 +2649,10 @@ describe("managed endpoints in several Cloudflare accounts", () => {
         `INSERT INTO installation_endpoints
           (installation_id, hostname, tunnel_name, status, last_error_code, created_at, updated_at)
          VALUES (?, ?, ?, 'error', 'cf_rate_limited', ?, ?)`,
-      ).bind(installation.installation.id, `c-${opaque}.${HOST_SUFFIX}`, `omb-c-${opaque}`, now, now).run();
+      ).bind(installation.installation.id, `c-${opaque}.${HOST_SUFFIX}`, `ripo-c-${opaque}`, now, now).run();
     }
     // An earlier create for the second row committed before its response was lost.
-    const leftBehind: FakeTunnel = { id: "60000000-0000-4000-8000-000000000066", name: `omb-c-${"6".repeat(32)}` };
+    const leftBehind: FakeTunnel = { id: "60000000-0000-4000-8000-000000000066", name: `ripo-c-${"6".repeat(32)}` };
     fixture.first.tunnels.set(leftBehind.name, leftBehind);
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -2688,7 +2688,7 @@ describe("managed endpoints in several Cloudflare accounts", () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    // Registered by a release that cannot pair a desktop with mausbot.si: it
+    // Registered by a release that cannot pair a desktop with ripobot.si: it
     // stays with the full account.
     const old = await provisionIn(fixture, owner.token, "accounts-version", { appVersion: "0.1.102" });
     expect(old.response.status).toBe(503);
@@ -2941,7 +2941,7 @@ describe("managed endpoints in several Cloudflare accounts", () => {
         (installation_id, provider_account, hostname, tunnel_name, tunnel_id, dns_record_id,
          status, last_reconciled_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 'dns-retired', 'ready', ?, ?, ?)`,
-    ).bind(installation.installation.id, retired, `c-${opaque}.retired.example`, `omb-c-${opaque}`, tunnelId, now, now, now).run();
+    ).bind(installation.installation.id, retired, `c-${opaque}.retired.example`, `ripo-c-${opaque}`, tunnelId, now, now, now).run();
     const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const provisioned = await call(worker, ENDPOINT_PATH, { method: "POST", token: installation.credential });
@@ -2971,7 +2971,7 @@ describe("managed endpoints in several Cloudflare accounts", () => {
     const orphan = await orphanIn(cloudflare, PRIMARY_ACCOUNT, HOST_SUFFIX, "8".repeat(32), now + 1);
     errors.mockClear();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
-    await runScheduledCleanup(worker, { OMB_CLEANUP_SWEEP_LIMIT: "1" });
+    await runScheduledCleanup(worker, { RIPO_CLEANUP_SWEEP_LIMIT: "1" });
     expect(await endpointState(orphan.installationId)).toMatchObject({ status: "deleted" });
     expect(await endpointState(installation.installation.id)).toMatchObject({
       last_error_code: "endpoint_account_unavailable",
@@ -3027,7 +3027,7 @@ describe("managed endpoints in several Cloudflare accounts", () => {
     const text = await response.text();
     expect(JSON.parse(text)).toEqual({
       ok: true,
-      service: "openmausbot-control-plane",
+      service: "ripobot-control-plane",
       capacity: {
         status: "ok",
         checkedAt: now - 120_000,
@@ -3087,7 +3087,7 @@ describe("managed endpoints in several Cloudflare accounts", () => {
     const kept = await createInstallation(fixture.worker, owner.token, "accounts-closed-kept");
     const opaque = "c".repeat(32);
     const hostname = `c-${opaque}.${SECOND_SUFFIX}`;
-    const tunnel: FakeTunnel = { id: "b0000000-0000-4000-8000-0000000000cc", name: `omb-c-${opaque}` };
+    const tunnel: FakeTunnel = { id: "b0000000-0000-4000-8000-0000000000cc", name: `ripo-c-${opaque}` };
     fixture.second.tunnels.set(tunnel.name, tunnel);
     fixture.second.dns.set(hostname, {
       content: `${tunnel.id}.cfargotunnel.com`,
@@ -3282,7 +3282,7 @@ describe("managed endpoints in several Cloudflare accounts", () => {
     ];
     const longAgo = Date.now() - 30 * DAY_MS;
     for (const row of rows) {
-      const tunnel: FakeTunnel = { id: row.tunnelId, name: `omb-c-${row.opaque}` };
+      const tunnel: FakeTunnel = { id: row.tunnelId, name: `ripo-c-${row.opaque}` };
       neverRan(tunnel, 30);
       cloudflare.tunnels.set(tunnel.name, tunnel);
       await env.DB.prepare(

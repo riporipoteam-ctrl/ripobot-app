@@ -13,10 +13,10 @@ const free = { plan: "free", status: "inactive", expiresAt: null, version: 1 };
 const connected = extra => ({ status: "connected", account: { id: "a", email: "person@example.test" }, deviceId: "d", expiresAt: 1_900_000_000_000, ...extra });
 const restoring = { status: "signed-out", message: "restoring" };
 
-// Every plan state Settings → OpenMausBot Cloud can show (src/lib/cloud-plan.ts
+// Every plan state Settings → RipoBot Cloud can show (src/lib/cloud-plan.ts
 // cloudPlanView), with and without a last known Pro answer, and a Cloud home.
 const TABLE = [
-  // Verified by OpenMausBot Cloud: the answer is the plan's own.
+  // Verified by RipoBot Cloud: the answer is the plan's own.
   { name: "paid: Personal", account: connected({ entitlement: active("personal") }), allowed: true },
   { name: "paid: Pro", account: connected({ entitlement: active("pro") }), allowed: true },
   { name: "paid: Max", account: connected({ entitlement: active("max") }), allowed: true },
@@ -100,25 +100,25 @@ test("what Electron hands its server is the answer only, never the account", () 
 });
 
 test("the server reads back exactly what Electron sends, at spawn and after", () => {
-  assert.equal(PRO_PLAN_ENV, "OMB_PRO_PLAN");
-  assert.equal(PRO_PLAN_MESSAGE, "openmausbot:pro-plan");
+  assert.equal(PRO_PLAN_ENV, "RIPO_PRO_PLAN");
+  assert.equal(PRO_PLAN_MESSAGE, "ripobot:pro-plan");
   for (const pro of [true, false]) {
     assert.equal(proPlanFromEnvironment({ PATH: "/bin", ...proPlanEnvironment(pro) }), pro);
     assert.equal(proPlanFromMessage(proPlanMessage(pro)), pro);
   }
-  // A server the desktop app did not start says Pro with OMB_PRO_PLAN=1, and only so.
-  assert.equal(proPlanFromEnvironment({ OMB_PRO_PLAN: "1" }), true);
-  assert.equal(proPlanFromEnvironment({ OMB_PRO_PLAN: " 1 " }), true);
-  for (const value of [undefined, "", "0", "true", "yes", "pro", "2"]) assert.equal(proPlanFromEnvironment({ OMB_PRO_PLAN: value }), false, String(value));
+  // A server the desktop app did not start says Pro with RIPO_PRO_PLAN=1, and only so.
+  assert.equal(proPlanFromEnvironment({ RIPO_PRO_PLAN: "1" }), true);
+  assert.equal(proPlanFromEnvironment({ RIPO_PRO_PLAN: " 1 " }), true);
+  for (const value of [undefined, "", "0", "true", "yes", "pro", "2"]) assert.equal(proPlanFromEnvironment({ RIPO_PRO_PLAN: value }), false, String(value));
   // Another private message is not this one; a malformed one is refused, never read as an answer.
-  for (const other of [undefined, null, "openmausbot:pro-plan", [], { type: "openmausbot:managed-composio", access: null }]) assert.equal(proPlanFromMessage(other), null);
+  for (const other of [undefined, null, "ripobot:pro-plan", [], { type: "ripobot:managed-composio", access: null }]) assert.equal(proPlanFromMessage(other), null);
   for (const malformed of [{ type: PRO_PLAN_MESSAGE }, { type: PRO_PLAN_MESSAGE, pro: "yes" }, { type: PRO_PLAN_MESSAGE, pro: 1 }]) {
     assert.throws(() => proPlanFromMessage(malformed), /Pro plan/);
   }
 });
 
 // main.mjs's own hand-off, run against fakes as updater.test.mjs runs its
-// updater rule: the server starts with the answer (OMB_PRO_PLAN, set after the
+// updater rule: the server starts with the answer (RIPO_PRO_PLAN, set after the
 // launching shell's environment), gets it again when it is ready, and gets
 // every change the Cloud sign-in publishes.
 test("main starts its server with the answer and hands it every change", () => {
@@ -131,7 +131,7 @@ test("main starts its server with the answer and hands it every change", () => {
     return source.slice(start, end);
   };
   const spawn = slice("async function startServerOn(port,", "utilityProcess.fork(entry");
-  assert.ok(spawn.includes("...proPlanRelay.environment(),"), "the spawn environment carries OMB_PRO_PLAN");
+  assert.ok(spawn.includes("...proPlanRelay.environment(),"), "the spawn environment carries RIPO_PRO_PLAN");
   assert.ok(spawn.indexOf("...proPlanRelay.environment(),") > spawn.indexOf("...process.env,"), "never inherited from the launching shell");
   assert.match(slice("const serverSupervisor = createServerSupervisor({", "onUnavailable()"), /onReady\(proc\) \{\n\s+serverProc = proc;[\s\S]*\n\s+syncProPlan\(\);\n/);
 

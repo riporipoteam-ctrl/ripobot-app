@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb } from "../scripts/control-ripo.ts";
 import type { WireBot, WireGroup } from "../shared/wire.ts";
 
 // The scripted fake engine reports this latest-prompt size on every turn, so

@@ -35,7 +35,7 @@ const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
  * legacy profile named work from accidentally restoring work-client. */
 export function browserRestoreKey(session: string): string {
   if (!/^[A-Za-z0-9_.-]{1,96}$/.test(session)) throw new Error("Invalid browser session.");
-  return `omb-${createHash("sha256").update(session).digest("hex")}`;
+  return `ripo-${createHash("sha256").update(session).digest("hex")}`;
 }
 
 /** Where agent-browser keeps saved session state (`--restore`) for this
@@ -49,7 +49,7 @@ export function browserSessionsDirectory(env: NodeJS.ProcessEnv): string {
 }
 
 function managedBrowserConfigPath(env: NodeJS.ProcessEnv): string {
-  return join(browserSessionsDirectory(env), "..", "omb-managed-config.json");
+  return join(browserSessionsDirectory(env), "..", "ripo-managed-config.json");
 }
 
 function ensureManagedBrowserConfig(env: NodeJS.ProcessEnv): string {
@@ -64,7 +64,7 @@ function ensureManagedBrowserConfig(env: NodeJS.ProcessEnv): string {
 }
 
 /** The daemon-control environment: the session's own identity, never its
- * launch flags, and OMB's empty config instead of a user's or project's. The
+ * launch flags, and RIPO's empty config instead of a user's or project's. The
  * native CLI prepends a launch even to `close` when launch flags are set, so
  * this keeps a command from launching (and restoring) a missing profile. */
 function daemonControlEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv | null {
@@ -392,7 +392,7 @@ interface BrowserLookupOptions {
   platform?: NodeJS.Platform;
   arch?: string;
   exists?: (p: string) => boolean;
-  /** Count only the runtimes OpenMausBot itself configured (the explicit
+  /** Count only the runtimes RipoBot itself configured (the explicit
    * override, the desktop bundle) or downloaded (the pinned asset). The
    * ambient PATH is skipped: whatever it turns up — a repo's
    * node_modules/.bin, a dev machine's global wrapper — is not the engine
@@ -406,7 +406,7 @@ interface BrowserLookupOptions {
 }
 
 function packagedBrowser(options: BrowserLookupOptions) {
-  const resources = (options.env ?? process.env).OMB_RESOURCES_PATH;
+  const resources = (options.env ?? process.env).RIPO_RESOURCES_PATH;
   if (!resources) return null;
   try {
     return browserBundlePaths(join(resolve(resources), "browser-engine"), `${options.platform ?? process.platform}-${options.arch ?? process.arch}`);
@@ -419,13 +419,13 @@ function completePackage(bundle: NonNullable<ReturnType<typeof packagedBrowser>>
   return [bundle.manifest, bundle.engine, bundle.chrome, bundle.licenses].every(exists);
 }
 
-/** OMB_AGENT_BROWSER_PATH, then the complete desktop bundle, pinned download, then
+/** RIPO_AGENT_BROWSER_PATH, then the complete desktop bundle, pinned download, then
  * PATH (a package or image that installed it globally). */
 export function resolveAgentBrowserBinary(options: BrowserLookupOptions = {}): string | null {
   const env = options.env ?? process.env;
   const platform = options.platform ?? process.platform;
   const exists = options.exists ?? existsSync;
-  const override = env.OMB_AGENT_BROWSER_PATH?.trim();
+  const override = env.RIPO_AGENT_BROWSER_PATH?.trim();
   if (override) return resolve(override) && exists(resolve(override)) ? resolve(override) : null;
   const bundle = packagedBrowser(options);
   if (bundle && exists(bundle.directory)) return completePackage(bundle, exists) ? bundle.engine : null;
@@ -589,7 +589,7 @@ export function browserEngineStatus(options: BrowserLookupOptions = {}): Browser
     return { kind: "ready", binaryPath, version, ...(warning ? { warning } : {}) };
   }
   if (bundle && (options.exists ?? existsSync)(bundle.directory)) {
-    return { kind: "unavailable", reason: "The desktop browser bundle is incomplete. Reinstall or update OpenMausBot to repair it.", installable: false };
+    return { kind: "unavailable", reason: "The desktop browser bundle is incomplete. Reinstall or update RipoBot to repair it.", installable: false };
   }
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
@@ -628,14 +628,14 @@ export function agentBrowserIntegration(input: {
     // those commands too, and avoids changing browser launch settings later.
     AGENT_BROWSER_NO_WEBMCP: "1",
     AGENT_BROWSER_ENCRYPTION_KEY: input.encryptionKey,
-    // OMB owns launch settings. A user's unrelated native CLI config must not
+    // RIPO owns launch settings. A user's unrelated native CLI config must not
     // inject a shared Chrome profile or a different saved-state path.
     AGENT_BROWSER_CONFIG: managedBrowserConfigPath(browserRuntimeEnv({
       ...(sourceEnv.HOME ? { HOME: sourceEnv.HOME } : {}),
       ...(sourceEnv.USERPROFILE ? { USERPROFILE: sourceEnv.USERPROFILE } : {}),
     })),
   };
-  // A Linux host with no display cannot run headed Chrome, and OMB's managed
+  // A Linux host with no display cannot run headed Chrome, and RIPO's managed
   // browser is headless automation (docs/browser-packaging.md). Pin headless
   // there even for a headed-capable caller. The engine's own flag is
   // AGENT_BROWSER_HEADED; an explicit "0" pins the default so a daemon that
@@ -645,7 +645,7 @@ export function agentBrowserIntegration(input: {
   if (input.attach) {
     // The person's Chrome keeps its own sign-ins. Restoring would copy this
     // session's saved cookies into it, and saving would copy every cookie of
-    // their real profile into OMB's store, so neither happens.
+    // their real profile into RIPO's store, so neither happens.
     if (input.attach.cdpUrl) env.AGENT_BROWSER_CDP = input.attach.cdpUrl;
     else env.AGENT_BROWSER_AUTO_CONNECT = "1";
     env.AGENT_BROWSER_RESTORE_SAVE = "never";
@@ -721,7 +721,7 @@ export function agentBrowserFrame(input: {
   env: Record<string, string>;
   timeoutMs?: number;
 }): Promise<{ png: string; format: string }> {
-  const file = join(tmpdir(), `openmausbot-browser-${randomUUID()}.jpg`);
+  const file = join(tmpdir(), `ripobot-browser-${randomUUID()}.jpg`);
   return new Promise((settle, fail) => {
     // Per-command flags, so the bot's own screenshot tool keeps its format.
     const child = spawn(input.binaryPath, ["screenshot", file, "--screenshot-format", "jpeg", "--screenshot-quality", String(FRAME_JPEG_QUALITY)], {

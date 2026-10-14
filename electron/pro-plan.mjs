@@ -1,26 +1,26 @@
-// Who may start a Live call, in one place: an active OMB Cloud plan of any
+// Who may start a Live call, in one place: an active RIPO Cloud plan of any
 // tier (Personal, Pro or Max), the owner's rule. Pure and dependency-free, so
 // Electron main, the server and the renderer can all import it.
 //
 // Electron's Cloud sign-in (cloud-account.mjs) is the only part of the app
 // that knows the plan. Main applies the rule to it and hands its server the
-// answer alone, never the account: OMB_PRO_PLAN when it starts the server,
+// answer alone, never the account: RIPO_PRO_PLAN when it starts the server,
 // then each change over the utility process's private port (server/pro-plan.ts).
 // A server the desktop app did not start (dev, tests, headless or Docker)
-// says Pro with OMB_PRO_PLAN=1. The server asks only when a call starts: a
+// says Pro with RIPO_PRO_PLAN=1. The server asks only when a call starts: a
 // call already running is never cut off by a plan change.
 
-export const PRO_PLAN_ENV = "OMB_PRO_PLAN";
-export const PRO_PLAN_MESSAGE = "openmausbot:pro-plan";
+export const PRO_PLAN_ENV = "RIPO_PRO_PLAN";
+export const PRO_PLAN_MESSAGE = "ripobot:pro-plan";
 
 /**
  * Whether a Live call may start, from what this side knows of the plan.
  *
- * Verified by OMB Cloud, the plan answers: an active paid plan (also while a
+ * Verified by RIPO Cloud, the plan answers: an active paid plan (also while a
  * failed re-check keeps the last verified one, `checking`) or a payment
  * received and still being linked is yes; signed out, free, or a plan that is
  * not active is no. While the plan cannot be checked right now (not read yet,
- * signing in, OMB Cloud unreachable, or this computer's sign-in ended), the
+ * signing in, RIPO Cloud unreachable, or this computer's sign-in ended), the
  * plan last verified decides: the account's own `lastPlan` where it carries
  * one, otherwise `lastKnown`, the answer this side last had. A Cloud home is
  * the plan's own machine and always may.

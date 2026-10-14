@@ -7,7 +7,7 @@
 // status SUCCESS. Deterministic, no network.
 //
 //   FAKE_AGY_MODE=ask-peer
-//     reads OpenMausBot's temporary `openmausbot-agents` entry from agy's
+//     reads RipoBot's temporary `ripobot-agents` entry from agy's
 //     global MCP config, calls list_bots then coordinate_bots(consult: true),
 //     and returns the tool's receipt (the peer's answer resumes the bot in a
 //     later turn). This pins the Antigravity/Gemini comms path end to end.
@@ -31,7 +31,7 @@ function agentsMcpEntry(): McpEntry | null {
     const config = JSON.parse(
       readFileSync(join(home, ".gemini", "config", "mcp_config.json"), "utf8"),
     );
-    const entry = config.mcpServers?.["openmausbot-agents"];
+    const entry = config.mcpServers?.["ripobot-agents"];
     if (!entry?.command) return null;
     return {
       command: String(entry.command),
@@ -122,7 +122,7 @@ function driveMcp(
       params: {
         protocolVersion: "2024-11-05",
         capabilities: {},
-        clientInfo: { name: "openmausbot-fake-antigravity", version: "1.0.0" },
+        clientInfo: { name: "ripobot-fake-antigravity", version: "1.0.0" },
       },
     });
   });

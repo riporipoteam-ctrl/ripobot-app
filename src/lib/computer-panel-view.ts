@@ -2,7 +2,7 @@
 // "data" is the Data tab (shared/data-surface.ts DATA_PANEL_VIEW), in both modes.
 export type ComputerPanelView = "computer" | "android" | "browser" | "routines" | "files" | "data";
 
-const STORAGE_PREFIX = "omb-computer-panel-view";
+const STORAGE_PREFIX = "ripo-computer-panel-view";
 
 function storageKey(botId: string): string {
   return `${STORAGE_PREFIX}:${botId}`;

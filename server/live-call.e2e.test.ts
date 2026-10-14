@@ -97,15 +97,15 @@ posixOnly("Live call e2e", () => {
     chmodSync(FAKE_ACP, 0o755);
     chmodSync(FAKE_CODEX, 0o755);
     live = await startFakeOpenAiLive();
-    home = mkdtempSync(join(tmpdir(), "omb-live-call-"));
-    mkdirSync(join(home, ".openmausbot"), { recursive: true });
+    home = mkdtempSync(join(tmpdir(), "ripo-live-call-"));
+    mkdirSync(join(home, ".ripobot"), { recursive: true });
     steerGate = join(home, "steer.gate");
     // the one-shot answers a call-title prompt that holds the spoken request
     titleRoutes = join(home, "title-routes.json");
     writeFileSync(titleRoutes, JSON.stringify({ "Requests:\nwhat is six times seven": "Times table question" }));
     queueSteerGate = join(home, "queue-steer.gate");
     writeFileSync(
-      join(home, ".openmausbot", "config.json"),
+      join(home, ".ripobot", "config.json"),
       JSON.stringify({
         instances: {
           claude: {
@@ -144,12 +144,12 @@ posixOnly("Live call e2e", () => {
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         HOME: home,
         USERPROFILE: home,
-        OMB_PORT: String(port),
-        OMB_WEBHOOK_PORT: String(port + 1),
-        OMB_OPENAI_LIVE_URL: live.url,
-        OMB_OPENAI_LIVE_KEY: LIVE_KEY,
+        RIPO_PORT: String(port),
+        RIPO_WEBHOOK_PORT: String(port + 1),
+        RIPO_OPENAI_LIVE_URL: live.url,
+        RIPO_OPENAI_LIVE_KEY: LIVE_KEY,
         // Live calls need Pro: how a server the desktop app did not start says so
-        OMB_PRO_PLAN: "1",
+        RIPO_PRO_PLAN: "1",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -186,7 +186,7 @@ posixOnly("Live call e2e", () => {
       // the client's data channel may only hang up
       expect(session.body).toMatchObject({ session: { client: { data_channel: { allowed_client_events: ["session.close"] } } } });
       // a harness that is not a Cloud home runs on the person's own computer
-      expect((session.body.session as { instructions: string }).instructions).toContain("runs in OpenMausBot on the user's own computer.");
+      expect((session.body.session as { instructions: string }).instructions).toContain("runs in RipoBot on the user's own computer.");
       await live.waitForAttach(session.id);
       await sse.until((frame) => frame.kind === "live.call" && frame.call?.callId === call.callId && frame.call?.status === "live");
 
@@ -394,7 +394,7 @@ posixOnly("Live call e2e", () => {
   // own requests: only the companion can say the phone was unpaired.
   it("ends a phone's call, and refuses it another, once the companion says it was unpaired", async () => {
     const bot = await createBot();
-    const phone = { "x-openmausbot-companion": "1", "x-openmausbot-companion-device": "phone-e2e" };
+    const phone = { "x-ripobot-companion": "1", "x-ripobot-companion-device": "phone-e2e" };
     const sse = await openSse(`${base}/api/events`);
     try {
       const before = live.sessions.length;
@@ -406,7 +406,7 @@ posixOnly("Live call e2e", () => {
       await sse.until((frame) => frame.kind === "live.call" && frame.call?.callId === call.callId && frame.call?.status === "live");
 
       // another phone's unpairing is not this call's business
-      expect(await post("/api/live/device-revoked", {}, { ...phone, "x-openmausbot-companion-device": "phone-other" }))
+      expect(await post("/api/live/device-revoked", {}, { ...phone, "x-ripobot-companion-device": "phone-other" }))
         .toEqual({ status: 200, body: { call: null } });
       expect(await post("/api/live/device-revoked", {}, phone)).toMatchObject({ status: 200, body: { call: { callId: call.callId } } });
       await live.waitForCommand(session.id, (c) => c.type === "session.close", 5_000);
@@ -695,10 +695,10 @@ posixOnly("Live call e2e", () => {
 // The same call on the person's own Cloud, which no plan gives an OpenAI key:
 // the owner pastes theirs once, the page saves it on the Cloud
 // (`PUT /api/config`; a server's page has no credential bridge), and the next
-// call starts with it. Booted as a Cloud home (OMB_CLOUD_ROLE=home) behind
+// call starts with it. Booted as a Cloud home (RIPO_CLOUD_ROLE=home) behind
 // its edge, with only loopback reachable: the fake GPT-Live, never the Admin.
 posixOnly("Live call on the person's Cloud", () => {
-  const HOST = "omb-t-0123456789ab.fly.dev";
+  const HOST = "ripo-t-0123456789ab.fly.dev";
   const secret = randomBytes(32).toString("base64url");
   const OWNER_KEY = "sk-fake-cloud-owner";
   let child: ChildProcess;
@@ -728,8 +728,8 @@ posixOnly("Live call on the person's Cloud", () => {
   beforeAll(async () => {
     chmodSync(FAKE_CLAUDE, 0o755);
     live = await startFakeOpenAiLive();
-    home = mkdtempSync(join(tmpdir(), "omb-live-cloud-"));
-    const dataDir = join(home, ".openmausbot");
+    home = mkdtempSync(join(tmpdir(), "ripo-live-cloud-"));
+    const dataDir = join(home, ".ripobot");
     mkdirSync(dataDir, { recursive: true });
     writeFileSync(join(dataDir, "config.json"), JSON.stringify({
       instances: {
@@ -739,7 +739,7 @@ posixOnly("Live call on the person's Cloud", () => {
       },
     }));
     mkdirSync(join(home, "web"));
-    writeFileSync(join(home, "web", "index.html"), "<!doctype html><title>OpenMausBot</title>");
+    writeFileSync(join(home, "web", "index.html"), "<!doctype html><title>RipoBot</title>");
     const port = await freePortBlock([0, 1]);
     base = `http://127.0.0.1:${port}`;
     // Only loopback answers: the fake GPT-Live. The Admin and OpenAI are offline.
@@ -750,13 +750,13 @@ posixOnly("Live call on the person's Cloud", () => {
       cwd: join(SERVER_DIR, ".."),
       env: {
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
-        HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_STATIC_DIR: join(home, "web"),
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
-        OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-        OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,
-        // no OMB_OPENAI_LIVE_KEY: no plan includes one
-        OMB_OPENAI_LIVE_URL: live.url,
-        // and no OMB_PRO_PLAN: a Cloud home is the plan's own machine, so Live
+        HOME: home, USERPROFILE: home, RIPO_DATA_DIR: dataDir, RIPO_STATIC_DIR: join(home, "web"),
+        RIPO_PORT: String(port), RIPO_WEBHOOK_PORT: String(port + 1),
+        RIPO_CLOUD_ROLE: "home", RIPO_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", RIPO_CLOUD_ADMIN_URL: "https://cloud.example.test",
+        RIPO_CLOUD_BOOTSTRAP_SECRET: secret, RIPO_PUBLIC_URL: `https://${HOST}`,
+        // no RIPO_OPENAI_LIVE_KEY: no plan includes one
+        RIPO_OPENAI_LIVE_URL: live.url,
+        // and no RIPO_PRO_PLAN: a Cloud home is the plan's own machine, so Live
         // calls need only the key below
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -777,11 +777,11 @@ posixOnly("Live call on the person's Cloud", () => {
       await new Promise((r) => setTimeout(r, 150));
     }
     // One of the owner's devices, paired the way the Admin pairs the app.
-    const pairing = JSON.stringify({ label: "OpenMausBot app (Cloud)", ttlSeconds: 300 });
+    const pairing = JSON.stringify({ label: "RipoBot app (Cloud)", ttlSeconds: 300 });
     const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
     const granted = await request("POST", "/api/cloud/pairing", JSON.parse(pairing), {
-      "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
-      "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, pairing)}`,
+      "x-ripo-cloud-timestamp": timestamp, "x-ripo-cloud-nonce": nonce,
+      "x-ripo-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, pairing)}`,
     });
     expect(granted.status, JSON.stringify(granted.body)).toBe(200);
     const paired = await request("POST", "/api/auth/pair", { code: granted.body.code });
@@ -836,7 +836,7 @@ posixOnly("Live call on the person's Cloud", () => {
 
 // Live calls need Pro, and only the desktop app knows the plan: it applies
 // electron/pro-plan.mjs's rule to its Cloud sign-in and hands its server the
-// answer alone, OMB_PRO_PLAN at spawn ("0" at first boot, when the sign-in is
+// answer alone, RIPO_PRO_PLAN at spawn ("0" at first boot, when the sign-in is
 // read after the server starts), then each change over Electron's private
 // parent port. A prelude stands in for that port, fed over Node's IPC channel;
 // it acknowledges a message once the server's own listeners have run it.
@@ -865,8 +865,8 @@ posixOnly("Live calls need Pro: the desktop app's answer reaches its server", ()
   beforeAll(async () => {
     chmodSync(FAKE_CLAUDE, 0o755);
     live = await startFakeOpenAiLive();
-    home = mkdtempSync(join(tmpdir(), "omb-live-pro-"));
-    const dataDir = join(home, ".openmausbot");
+    home = mkdtempSync(join(tmpdir(), "ripo-live-pro-"));
+    const dataDir = join(home, ".ripobot");
     mkdirSync(dataDir, { recursive: true });
     writeFileSync(join(dataDir, "config.json"), JSON.stringify({
       instances: {
@@ -893,12 +893,12 @@ posixOnly("Live calls need Pro: the desktop app's answer reaches its server", ()
       cwd: join(SERVER_DIR, ".."),
       env: {
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
-        HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir,
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
-        OMB_OPENAI_LIVE_URL: live.url,
-        OMB_OPENAI_LIVE_KEY: LIVE_KEY,
+        HOME: home, USERPROFILE: home, RIPO_DATA_DIR: dataDir,
+        RIPO_PORT: String(port), RIPO_WEBHOOK_PORT: String(port + 1),
+        RIPO_OPENAI_LIVE_URL: live.url,
+        RIPO_OPENAI_LIVE_KEY: LIVE_KEY,
         // as the desktop app starts its server, before its Cloud sign-in is read
-        OMB_PRO_PLAN: "0",
+        RIPO_PRO_PLAN: "0",
       },
       stdio: ["ignore", "pipe", "pipe", "ipc"],
     });
@@ -935,8 +935,8 @@ posixOnly("Live calls need Pro: the desktop app's answer reaches its server", ()
     expect(live.sessions).toHaveLength(0);
 
     // The Cloud sign-in is read: Pro. A malformed message after it is refused and changes nothing.
-    await tellServer({ type: "openmausbot:pro-plan", pro: true });
-    await tellServer({ type: "openmausbot:pro-plan", pro: "yes" });
+    await tellServer({ type: "ripobot:pro-plan", pro: true });
+    await tellServer({ type: "ripobot:pro-plan", pro: "yes" });
     const started = await start("ios");
     expect(started.status, JSON.stringify(started.body)).toBe(201);
     const callId = started.body.call.callId as string;
@@ -948,7 +948,7 @@ posixOnly("Live calls need Pro: the desktop app's answer reaches its server", ()
     }
 
     // The plan lapses mid-call: the call goes on until it is hung up...
-    await tellServer({ type: "openmausbot:pro-plan", pro: false });
+    await tellServer({ type: "ripobot:pro-plan", pro: false });
     expect((await request("GET", "/api/live/call")).body).toMatchObject({ call: { callId, status: "live" } });
     expect(await request("POST", "/api/live/call/end", { callId })).toMatchObject({ status: 200, body: { call: { status: "ended", endReason: "hung-up" } } });
     // ...and the phone's next one is refused.

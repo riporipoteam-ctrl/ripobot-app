@@ -10,10 +10,10 @@ import { createHostedSlackRoutes, type HostedSlackRouteDeps } from "./hosted-sla
 import { dispatchRoutes } from "./table.ts";
 
 const HOSTED = {
-  OMB_ADMIN_URL: "https://admin.example.test",
-  OMB_PUBLIC_URL: "https://acme.example.test",
-  OMB_ADMIN_WORKSPACE: "acme",
-  OMB_ADMIN_MEMBERSHIP: "portal",
+  RIPO_ADMIN_URL: "https://admin.example.test",
+  RIPO_PUBLIC_URL: "https://acme.example.test",
+  RIPO_ADMIN_WORKSPACE: "acme",
+  RIPO_ADMIN_MEMBERSHIP: "portal",
 };
 const BOTS: Record<string, { id: string; hidden?: boolean }> = {
   bot_123: { id: "bot_123" },
@@ -61,7 +61,7 @@ describe("GET /api/bots/:id/slack-management through the route table", () => {
     const notReady = await serve({ hostedReady: () => false });
     expect(await (await fetch(`${notReady}/api/bots/bot_123/slack-management`)).json()).toEqual({ available: false });
     // Nor is a live hook enough without portal membership.
-    const localMembership = await serve({ env: { ...HOSTED, OMB_ADMIN_MEMBERSHIP: "local" } });
+    const localMembership = await serve({ env: { ...HOSTED, RIPO_ADMIN_MEMBERSHIP: "local" } });
     expect(await (await fetch(`${localMembership}/api/bots/bot_123/slack-management`)).json()).toEqual({ available: false });
   });
 

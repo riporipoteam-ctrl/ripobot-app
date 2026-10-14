@@ -17,8 +17,8 @@ import { cloudPageSenderAllowed, createCloudMove, mintOwnerCode, moveBlocked, mo
 import { cloudPlanSnapshot } from "./cloud-account.mjs";
 import { cloudPlanDisk, isCloudHomeEntry, myCloudOrigin } from "./cloud-home.mjs";
 
-const ORIGIN = "https://omb-u-1a2b3c4d5e6f.fly.dev";
-const MAGIC = Buffer.from("OMB-WORKSPACE-1\n");
+const ORIGIN = "https://ripo-u-1a2b3c4d5e6f.fly.dev";
+const MAGIC = Buffer.from("RIPO-WORKSPACE-1\n");
 const UUID = () => "3f9c2a4e-8b1d-4c6e-9a7f-" + randomBytes(6).toString("hex");
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -56,7 +56,7 @@ function cloudFake({ freeBytes = 1024 ** 4, volumeBytes, empty = true, failPut =
     log.push([init.method ?? "GET", pathname]);
     if (pathname === "/api/auth/pair") {
       assert.equal(JSON.parse(init.body).code, "ABCD-EFGH-JKLM");
-      const token = `omb_sess_${randomBytes(8).toString("hex")}`; tokens.add(token);
+      const token = `ripo_sess_${randomBytes(8).toString("hex")}`; tokens.add(token);
       return json(200, { token });
     }
     if (!tokens.has(auth?.slice("Bearer ".length))) return json(401, { error: "unauthorized" });
@@ -119,7 +119,7 @@ function cloudDestination(options = {}) {
     disk: options.cloudDisk ?? (() => null), grow: options.growCloud ?? (async () => ({ supported: false })) };
 }
 function harness(options = {}) {
-  const temp = mkdtempSync(join(tmpdir(), "omb-cloud-move-test-"));
+  const temp = mkdtempSync(join(tmpdir(), "ripo-cloud-move-test-"));
   const local = desktop(options.desktop), cloud = cloudFake(options.cloud), states = [];
   const dest = options.dest ?? cloudDestination(options);
   const engine = createCloudMove({
@@ -632,7 +632,7 @@ const LOCAL = "http://127.0.0.1:48993";
 function preload({ remote = false, activation = false } = {}) {
   let bridge; const invoked = [], listeners = new Map();
   vm.runInNewContext(readFileSync(new URL("./preload.cjs", import.meta.url), "utf8"), {
-    process: { platform: "darwin", argv: [`--omb-local-origin=${LOCAL}`, "--omb-company-desktop=1"] },
+    process: { platform: "darwin", argv: [`--ripo-local-origin=${LOCAL}`, "--ripo-company-desktop=1"] },
     location: { origin: remote ? ORIGIN : LOCAL }, navigator: { userActivation: { isActive: activation } },
     TextEncoder, localStorage: { getItem: () => null },
     require: () => ({ webUtils: {}, contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } },
@@ -726,7 +726,7 @@ test("production IPC: this computer's page names a saved server or the Cloud, an
 test("production IPC: the Cloud is the Cloud even before its address is known, and nothing is local until this computer's origin is", async () => {
   const { context, handlers, calls } = mainIpc();
   const local = { sender: localContents, senderFrame: localFrame };
-  // Signed out of OMB Cloud, or not ready: still the Admin's way in, which then says why it cannot.
+  // Signed out of RIPO Cloud, or not ready: still the Admin's way in, which then says why it cannot.
   context.cloudAccount = { homeTarget: () => null };
   context.environmentsState = { environments: [SAVED[0]], activeId: "local" };
   await handlers.get("cloud-move:start")(local, "cloud");
@@ -748,7 +748,7 @@ test("production IPC: a server's own page gets only itself, never starts a copy 
   assert.deepEqual(JSON.parse(JSON.stringify(await handlers.get("cloud-move:start")(page))), { phase: "idle" });
   await handlers.get("cloud-move:dismiss")(page);
   assert.deepEqual(calls, [["overview", VPS_DEST, true], ["openSettings", "vps", "copy"], ["dismiss", VPS_DEST.origin], ["overview", VPS_DEST, true]]);
-  // A server at the Cloud's address that this app has not verified (signed out of OMB Cloud): the same.
+  // A server at the Cloud's address that this app has not verified (signed out of RIPO Cloud): the same.
   calls.length = 0;
   context.mainWindow.webContents = cloudContents;
   context.environmentsState = { environments: SAVED, activeId: "cloud-entry" };
@@ -845,7 +845,7 @@ test("the Cloud's setup checklist can open the lending switch here, and nothing 
   const page = preload({ remote: true });
   assert.ok(page.bridge.cloudLending);
   assert.deepEqual(Object.keys(page.bridge.cloudLending), ["open"]);
-  // Main opens Settings → OMB Cloud for this window's local page or the
+  // Main opens Settings → RIPO Cloud for this window's local page or the
   // person's verified Cloud in it, and refuses any other page.
   const source = readFileSync(new URL("./main.mjs", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const start = source.indexOf(IPC_START), end = source.indexOf(IPC_END, start);

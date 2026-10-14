@@ -1,6 +1,6 @@
 // What a client learns about this server before it authenticates: a stable
 // identity, a label, the version, and what it can do. Served without auth at
-// /.well-known/openmausbot/environment so a saved connection can check it is
+// /.well-known/ripobot/environment so a saved connection can check it is
 // still talking to the same server, and so version skew is visible.
 import { randomUUID } from "node:crypto";
 import {
@@ -30,7 +30,7 @@ export interface EnvironmentDescriptor {
      * maintainer flag `features.sharedComputers` is on: a server with it off
      * advertises nothing, exactly like a build that predates the feature. */
     sharedComputers?: true;
-    /** A person's own OMB Cloud home (docs/cloud-pro.md). Absent elsewhere. */
+    /** A person's own RIPO Cloud home (docs/cloud-pro.md). Absent elsewhere. */
     cloudHome?: true;
     /** Who can update the server: the desktop app that runs it, or the operator. */
     selfUpdate: "desktop-managed" | "operator";
@@ -107,9 +107,9 @@ export function loadEnvironmentId(dataDir: string): string {
 }
 
 /** The desktop app passes its own version; a checkout reads package.json;
- * an image sets OMB_APP_VERSION at build time. */
+ * an image sets RIPO_APP_VERSION at build time. */
 export function serverVersion(): string {
-  const fromEnv = process.env.OMB_APP_VERSION?.trim();
+  const fromEnv = process.env.RIPO_APP_VERSION?.trim();
   if (fromEnv) return fromEnv;
   try {
     const pkg: unknown = JSON.parse(readFileSync(join(SERVER_ROOT, "..", "package.json"), "utf8"));
@@ -124,7 +124,7 @@ export function serverVersion(): string {
 export function environmentDescriptor(input: { environmentId: string; desktopManaged: boolean; emailSignIn?: boolean; sharedComputers?: boolean; cloudHome?: boolean }): EnvironmentDescriptor {
   return {
     environmentId: input.environmentId,
-    label: process.env.OMB_ENVIRONMENT_LABEL?.trim() || hostname(),
+    label: process.env.RIPO_ENVIRONMENT_LABEL?.trim() || hostname(),
     platform: process.platform,
     version: serverVersion(),
     capabilities: {
@@ -132,7 +132,7 @@ export function environmentDescriptor(input: { environmentId: string; desktopMan
       // Never advertise a protocol this server would refuse: the routes are
       // gone unless features.sharedComputers is on, so the capability is too.
       ...(input.sharedComputers === true ? { sharedComputers: true as const } : {}),
-      // An OMB Cloud home: its pairing page says "Opening your Cloud…" and
+      // An RIPO Cloud home: its pairing page says "Opening your Cloud…" and
       // where to connect from, not "the code shown on the server".
       ...(input.cloudHome === true ? { cloudHome: true as const } : {}),
       selfUpdate: input.desktopManaged ? "desktop-managed" : "operator",

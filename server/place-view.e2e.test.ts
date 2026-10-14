@@ -1,6 +1,6 @@
 // A cloud computer that can't start, end to end: what a failed turn's row
 // says and stores (shared/place-view.ts). Each refusal is the one the Admin's
-// relay sends today (server/cloud-services.ts in openmaus-cloud), read into
+// relay sends today (server/cloud-services.ts in ripo-cloud), read into
 // one plain line and one next action, with where the place came from deciding
 // the way on. The words are what phones read; `place` is what the app words
 // again. Real server, fake Claude CLI, and a loopback Boat whose answers each
@@ -17,7 +17,7 @@ import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
-/** The Admin relay's refusal envelope (boatError in openmaus-cloud). */
+/** The Admin relay's refusal envelope (boatError in ripo-cloud). */
 const refusal = (status: number, code: string, message: string) =>
   ({ status, body: { ok: false, type: "sandbox.error", status, code, message, error: { code, message, status } } });
 const HOURS = refusal(429, "limit_reached", "Your Pro plan's 50 cloud computer hours for October are used up. They reset on 1 November.");
@@ -87,12 +87,12 @@ describe("a cloud computer that can't start, against the real server", () => {
     const proc = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
       cwd: ROOT, env: {
         PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-        HOME: home, USERPROFILE: home, OMB_DATA_DIR: data,
+        HOME: home, USERPROFILE: home, RIPO_DATA_DIR: data,
         APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
-        TEMP: home, TMP: home, TMPDIR: home, OMB_TEST_SEALED_PATH: "1",
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_STATIC_DIR: ui,
-        OMB_BOAT_API: boatApi, OMB_USER_DATA: join(home, "user-data"),
-        ...(included ? { OMB_CLOUD_BOAT_URL: boatApi, OMB_CLOUD_BOAT_TOKEN: "relay_place_view_fixture" } : {}),
+        TEMP: home, TMP: home, TMPDIR: home, RIPO_TEST_SEALED_PATH: "1",
+        RIPO_PORT: String(port), RIPO_WEBHOOK_PORT: String(port + 1), RIPO_STATIC_DIR: ui,
+        RIPO_BOAT_API: boatApi, RIPO_USER_DATA: join(home, "user-data"),
+        ...(included ? { RIPO_CLOUD_BOAT_URL: boatApi, RIPO_CLOUD_BOAT_TOKEN: "relay_place_view_fixture" } : {}),
       }, stdio: ["ignore", "pipe", "pipe"],
     });
     child = proc;
@@ -111,7 +111,7 @@ describe("a cloud computer that can't start, against the real server", () => {
   }
 
   beforeAll(async () => {
-    home = mkdtempSync(join(tmpdir(), "omb-place-view-"));
+    home = mkdtempSync(join(tmpdir(), "ripo-place-view-"));
     data = join(home, "data");
     ui = join(home, "static");
     mkdirSync(data);
@@ -219,7 +219,7 @@ describe("a cloud computer that can't start, against the real server", () => {
     createAnswer = refusal(402, "subscription_inactive", "Cloud computers are included with an active Cloud subscription.");
     await send(bot.id, bot.threadId, "Open the desktop.");
     const row = await failedRow(bot.threadId);
-    expect(row.tool.name).toBe("error: Your MausBot Cloud plan has ended, so cloud computers are off. See your plan on the Plan page.");
+    expect(row.tool.name).toBe("error: Your RipoBot Cloud plan has ended, so cloud computers are off. See your plan on the Plan page.");
     expect(row.tool.place).toEqual({ state: "cc-ended", params: { bot: "Ended Bot" }, source: "works-on" });
   }, 90_000);
 

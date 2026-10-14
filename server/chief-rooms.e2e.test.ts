@@ -4,7 +4,7 @@ import { createInterface } from "node:readline";
 import { expect, it } from "vitest";
 import { z } from "zod";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb } from "../scripts/control-ripo.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 
 type Bot = { id: string; threadId: string; name: string };
@@ -49,8 +49,8 @@ it("creates and manages an own-section room through the mounted Chief MCP proxy"
         agents: z.object({ command: z.string(), args: z.array(z.string()), env: z.record(z.string(), z.string()) }),
       }) }) }).parse(JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")));
       const mounted = mcpConfig.mcpServers.agents;
-      expect(mounted.env.OMB_BOT_ID).toBe(bot.id);
-      expect(mounted.env.OMB_HARNESS_URL).toBe(fixture.info.url);
+      expect(mounted.env.RIPO_BOT_ID).toBe(bot.id);
+      expect(mounted.env.RIPO_HARNESS_URL).toBe(fixture.info.url);
       return mounted;
     };
     const connect = (mounted: Mounted) => {
@@ -78,7 +78,7 @@ it("creates and manages an own-section room through the mounted Chief MCP proxy"
 
     // An ordinary teammate's turn is not shown the tools only a Chief may use.
     const peerMount = await mount(peer, "Say hello.");
-    expect(peerMount.env.OMB_CHIEF_OF_STAFF).toBe("0");
+    expect(peerMount.env.RIPO_CHIEF_OF_STAFF).toBe("0");
     const peerTools = await toolNames(connect(peerMount));
     expect(peerTools).toContain("list_rooms");
     expect(CHIEF_ONLY_TOOLS.filter((name) => peerTools.includes(name))).toEqual([]);
@@ -86,7 +86,7 @@ it("creates and manages an own-section room through the mounted Chief MCP proxy"
     await control(["interrupt", "--bot", peer.id]);
 
     const mounted = await mount(chief, "Set up a small room for the team.");
-    expect(mounted.env.OMB_CHIEF_OF_STAFF).toBe("1");
+    expect(mounted.env.RIPO_CHIEF_OF_STAFF).toBe("1");
     const rpc = connect(mounted);
     expect(await toolNames(rpc)).toEqual(expect.arrayContaining(CHIEF_ONLY_TOOLS));
     const tool = async (name: string, args: Record<string, unknown>, denied = false) => {

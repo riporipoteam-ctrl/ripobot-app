@@ -2,7 +2,7 @@
 // built-in browser, the cloud computer and the Data tools. argv[2] names
 // which one. Only a turn-scoped capability crosses into the agent process;
 // engine commands, session names, and provider credentials (the Boat token)
-// stay in OMB.
+// stay in RIPO.
 import { pathToFileURL } from "node:url";
 
 import { DATA_INSTRUCTIONS } from "./data/instructions.ts";
@@ -65,7 +65,7 @@ export async function harnessMcpRequest(
   if (message.method === "initialize") return {
     jsonrpc: "2.0", id,
     result: {
-      protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: `openmausbot-${connection.kind}`, version: "1" },
+      protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: `ripobot-${connection.kind}`, version: "1" },
       ...(INSTRUCTIONS[connection.kind] ? { instructions: INSTRUCTIONS[connection.kind] } : {}),
     },
   };
@@ -74,7 +74,7 @@ export async function harnessMcpRequest(
   try {
     const url = new URL(connection.url);
     if (!connection.token || url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
-      throw new Error(`${name} connection is not configured. Start a new bot turn from OpenMausBot.`);
+      throw new Error(`${name} connection is not configured. Start a new bot turn from RipoBot.`);
     }
     const body = JSON.stringify({ method: message.method, params: message.params ?? {} });
     if (Buffer.byteLength(body) > MAX_INPUT_BYTES) throw new Error(`${name} request exceeded the size limit.`);
@@ -96,7 +96,7 @@ export async function harnessMcpRequest(
 }
 
 function run(kind: HarnessMcpKind): void {
-  const connection = { url: process.env.OMB_HARNESS_URL ?? "", token: process.env[harnessMcpTokenEnv(kind)] ?? "", kind };
+  const connection = { url: process.env.RIPO_HARNESS_URL ?? "", token: process.env[harnessMcpTokenEnv(kind)] ?? "", kind };
   let input = Buffer.alloc(0);
   let pending = 0;
   const output = (message: unknown) => {

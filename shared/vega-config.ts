@@ -1,4 +1,4 @@
-// The one Vega config every chart in OMB is drawn with: the Data panel
+// The one Vega config every chart in RIPO is drawn with: the Data panel
 // (vega-embed), the server's SVG/PNG for phones, Slack and email, and the
 // headless render check all pass this same object, so a chart looks the same
 // wherever it lands (PLAN D6, risk 6: theme drift). Vega-Lite accepts it as

@@ -1,4 +1,4 @@
-// The setup checklist on an OMB Cloud home (components/CloudSetup.tsx,
+// The setup checklist on an RIPO Cloud home (components/CloudSetup.tsx,
 // docs/cloud-pro.md): which steps it lists and whether each is done. Every
 // answer comes from real state: the engines the Cloud reports, Move to
 // Cloud's snapshot from this desktop app, the server's record of the first

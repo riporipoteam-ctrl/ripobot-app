@@ -5,13 +5,13 @@ export type SidebarDensity = "comfortable" | "compact" | "icons";
 
 export const SIDEBAR_DENSITIES: readonly SidebarDensity[] = ["comfortable", "compact", "icons"];
 
-export const SIDEBAR_DENSITY_KEY = "openmausbot.sidebarDensity";
-export const SIDEBAR_WIDTH_KEY = "openmausbot.sidebarWidth";
-export const SIDEBAR_ATTENTION_PINNED_KEY = "openmausbot.sidebarAttentionPinned.v1";
-export const SIDEBAR_COLLAPSED_SECTIONS_KEY = "openmausbot.sidebarCollapsedSections.v1";
-export const SIDEBAR_SECTION_ORDER_KEY = "openmausbot.sidebarSectionOrder.v1";
-export const PINNED_CIRCLES_KEY = "openmausbot.pinnedCircles";
-export const UNIVERSAL_PINS_KEY = "openmausbot.universalPins";
+export const SIDEBAR_DENSITY_KEY = "ripobot.sidebarDensity";
+export const SIDEBAR_WIDTH_KEY = "ripobot.sidebarWidth";
+export const SIDEBAR_ATTENTION_PINNED_KEY = "ripobot.sidebarAttentionPinned.v1";
+export const SIDEBAR_COLLAPSED_SECTIONS_KEY = "ripobot.sidebarCollapsedSections.v1";
+export const SIDEBAR_SECTION_ORDER_KEY = "ripobot.sidebarSectionOrder.v1";
+export const PINNED_CIRCLES_KEY = "ripobot.pinnedCircles";
+export const UNIVERSAL_PINS_KEY = "ripobot.universalPins";
 
 export function parseSidebarDensity(value: string | null): SidebarDensity {
   switch (value) {

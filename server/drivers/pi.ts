@@ -743,7 +743,7 @@ export const PiDriver: ProviderDriver<PiConfig> = {
       let mcpTempDir: string | null = null;
       let scopeReadyPath: string | undefined;
       if (mcpServers || toolScope !== undefined) {
-        mcpTempDir = mkdtempSync(join(tmpdir(), "omb-pi-mcp-"));
+        mcpTempDir = mkdtempSync(join(tmpdir(), "ripo-pi-mcp-"));
         if (toolScope !== undefined) scopeReadyPath = join(mcpTempDir, "scope-ready.json");
         try {
           writeFileSync(join(mcpTempDir, "mcp.json"), JSON.stringify({ mcpServers: mcpServers ?? {}, toolScope, scopeReadyPath, approvalMode: turn.approvalMode }), { mode: 0o600 });
@@ -771,7 +771,7 @@ export const PiDriver: ProviderDriver<PiConfig> = {
             env: piEnvironment({
               ...process.env,
               ...input.environment,
-              ...(mcpTempDir ? { OMB_MCP_CONFIG: join(mcpTempDir, "mcp.json") } : {}),
+              ...(mcpTempDir ? { RIPO_MCP_CONFIG: join(mcpTempDir, "mcp.json") } : {}),
             }),
           });
         } catch (err) {
@@ -1224,7 +1224,7 @@ export const PiDriver: ProviderDriver<PiConfig> = {
           ready = receipt.ok === true && JSON.stringify(receipt.toolScope) === JSON.stringify(toolScope);
         } catch { /* Missing or malformed readiness is never a grant. */ }
         if (!ready) {
-          const message = "Pi tool selection enforcement is unavailable. Update Pi and check the OpenMausBot extension before retrying.";
+          const message = "Pi tool selection enforcement is unavailable. Update Pi and check the RipoBot extension before retrying.";
           emit({ ...base(threadId, turnId), type: "runtime.error", message });
           settle(false);
           throw new Error(message);

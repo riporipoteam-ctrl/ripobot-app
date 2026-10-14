@@ -41,7 +41,7 @@ export const TUNNEL_SCAN_PAGE_SIZE = 100;
  * queue cannot outgrow the cleanup sweep by more than one run's worth. */
 export const RECLAIM_MARK_LIMIT = 20;
 const MAX_SCAN_PAGE = 1_000;
-const MANAGED_TUNNEL_NAME = /^omb-c-[0-9a-f]{32}$/;
+const MANAGED_TUNNEL_NAME = /^ripo-c-[0-9a-f]{32}$/;
 /** /healthz is the busiest public path, and its capacity detail is only a
  * report: allocation gating reads D1 directly. Each data center reuses one
  * read of the snapshot rows for this long instead of a D1 round trip per probe. */

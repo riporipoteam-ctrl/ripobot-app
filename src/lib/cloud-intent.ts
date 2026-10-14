@@ -1,4 +1,4 @@
-// The first question an OMB Cloud home asks: what should it do while you're
+// The first question an RIPO Cloud home asks: what should it do while you're
 // away (components/CloudIntent.tsx, docs/cloud-pro.md). The answer is a
 // `/setup` request (server/setup-mode.ts): the bot asks a few questions, then
 // sets itself up for the job. Given before any AI is signed in, the job waits
@@ -11,8 +11,8 @@ import { useSyncExternalStore } from "react";
 import { CLOUD_INTENT_ASKED } from "@/lib/cloud-setup";
 import { hintSeen, type OnboardingStatus, type WelcomeViewer } from "@/lib/onboarding";
 
-const KEY = "omb.cloudIntent.pending";
-const SENT_KEY = "omb.cloudIntent.sent";
+const KEY = "ripo.cloudIntent.pending";
+const SENT_KEY = "ripo.cloudIntent.sent";
 
 /** Which bot a first job went to, and when (this device's clock). */
 export interface SentIntent { botId: string; at: number }

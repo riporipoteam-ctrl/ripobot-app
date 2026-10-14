@@ -40,7 +40,7 @@ export function pairingBlockedReason(state: SessionState | null): "chat-only" | 
   return state?.kind === "session" && !state.scopes.includes("admin") ? "chat-only" : null;
 }
 
-/** The devices the card lists: on an OMB Cloud home only the owner's own,
+/** The devices the card lists: on an RIPO Cloud home only the owner's own,
  * each with full access (the server lists no other). */
 export function shownDevices(devices: PairedDevice[], cloudHome: boolean): PairedDevice[] {
   return cloudHome ? devices.filter((device) => device.scopes.includes("admin")) : devices;
@@ -62,13 +62,13 @@ const button = "ui-button ui-button-primary";
 const quiet = "ui-button";
 
 /** Settings → Remote access: mint a one-time pairing code with a QR for
- * the phone app (or for a non-phone client — MCP, `openmausbot pair`, a
+ * the phone app (or for a non-phone client — MCP, `ripobot pair`, a
  * second desktop app), and see or sign out the devices that hold a
  * session. Shown for every client of a server: a hosted server reached
  * from a browser, the desktop app's own local server (#950), and the
  * desktop app connected to a hosted workspace, whose requests reach that
  * server with the paired session — the only place its phones can be
- * paired from (MOCA-84). `canPairDevices` decides who may act. On an OMB
+ * paired from (MOCA-84). `canPairDevices` decides who may act. On an RIPO
  * Cloud home (`cloudHome`), which is personal, every device paired is one of
  * the owner's own, with full access: no chat-only choice, only the owner's
  * devices listed, and one line saying why. `focusRequest` counts up when

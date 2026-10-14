@@ -72,7 +72,7 @@ async function screenCalls(server: AgentsIntegration, count: number): Promise<Ar
   const calls: Array<{ ms: number; state: unknown }> = [];
   for (let call = 0; call < count; call += 1) {
     const at = Date.now();
-    const response = await fetch(server.env.OMB_CONTROL_URL!, { headers: { authorization: `Bearer ${server.env.OMB_CONTROL_TOKEN}` } });
+    const response = await fetch(server.env.RIPO_CONTROL_URL!, { headers: { authorization: `Bearer ${server.env.RIPO_CONTROL_TOKEN}` } });
     calls.push({ ms: Date.now() - at, state: response.ok ? await response.json() : { status: response.status } });
   }
   return calls;
@@ -90,9 +90,9 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
   progress?: (text: string) => void): Promise<string> {
   const arg = (flag: string) => argv[argv.indexOf(flag) + 1];
   // The agents server, by the token only it carries: a connected-apps bridge
-  // mounted beside it names the same bot (OMB_BOT_ID) and relays to Composio.
+  // mounted beside it names the same bot (RIPO_BOT_ID) and relays to Composio.
   const mounted = launch ? [] : Object.values(JSON.parse(readAtLaunch(arg("--mcp-config"))).mcpServers as Record<string, AgentsIntegration>);
-  const integration = launch?.integration ?? mounted.find(s => s.env?.OMB_COMMS_TOKEN) ?? mounted.find(s => s.env?.OMB_BOT_ID);
+  const integration = launch?.integration ?? mounted.find(s => s.env?.RIPO_COMMS_TOKEN) ?? mounted.find(s => s.env?.RIPO_BOT_ID);
   // A depth-capped delegated turn mounts no agents server: answer from the prompt alone.
   if (!integration) {
     // Nothing in such a launch's argv says which bot it is — only the task
@@ -115,7 +115,7 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
     }
     return `Handled without teammate tools: ${taskText}`;
   }
-  const botId = integration.env.OMB_BOT_ID;
+  const botId = integration.env.RIPO_BOT_ID;
   const system = launch?.system ?? readAtLaunch(arg("--append-system-prompt-file"));
   // Claude snapshots the launch-time system prompt for a session. A retained
   // process or --resume launch receives changed turn-scoped instructions in
@@ -141,7 +141,7 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
   const matches = (entry: ScriptEntry) => entry.match.every(text => own.includes(text));
   const entry = script && (script.find(e => !e.repeat && !used.has(e.key) && matches(e)) ?? script.find(e => e.repeat && matches(e)));
   if (script && !entry) {
-    appendFileSync(`${planPath}.evidence.jsonl`, JSON.stringify({ botId, turnIndex, threadId: integration.env.OMB_THREAD_ID, unplanned: true, resumed, system, prompt }) + "\n");
+    appendFileSync(`${planPath}.evidence.jsonl`, JSON.stringify({ botId, turnIndex, threadId: integration.env.RIPO_THREAD_ID, unplanned: true, resumed, system, prompt }) + "\n");
     throw new Error(`Unplanned fixture turn for ${botId}: ${own.slice(0, 300)}`);
   }
   const plan: any = entry ?? (basePlan.turns ? basePlan.turns[turnIndex] : basePlan);
@@ -208,7 +208,7 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
         approval = await askPermission(mounted.ogb, plan.approve);
       }
       if (plan.screenCalls) {
-        if (!mounted.computer?.env?.OMB_CONTROL_URL) throw new Error("Scripted screen calls need a mounted computer");
+        if (!mounted.computer?.env?.RIPO_CONTROL_URL) throw new Error("Scripted screen calls need a mounted computer");
         screen = await screenCalls(mounted.computer, plan.screenCalls);
       }
       if (typeof plan.progress === "string") progress?.(plan.progress);
@@ -234,7 +234,7 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
     await waitForExit(child, { signal: "SIGTERM", graceMs: 500 });
     // pid: which provider process ran the turn, so a fixture can tell a
     // retained session from a fresh one.
-    appendFileSync(`${planPath}.evidence.jsonl`, JSON.stringify({ botId, turnIndex, threadId: integration.env.OMB_THREAD_ID, pid: process.pid,
+    appendFileSync(`${planPath}.evidence.jsonl`, JSON.stringify({ botId, turnIndex, threadId: integration.env.RIPO_THREAD_ID, pid: process.pid,
       model: argv.includes("--model") ? arg("--model") : undefined,
       permissionMode: argv.includes("--permission-mode") ? arg("--permission-mode") : undefined,
       snapshotMode: argv.includes("--system-prompt-snapshot") ? arg("--system-prompt-snapshot") : undefined,

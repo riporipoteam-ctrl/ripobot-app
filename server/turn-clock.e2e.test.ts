@@ -7,7 +7,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb } from "../scripts/control-ripo.ts";
 import type { WireBot } from "../shared/wire.ts";
 import { turnClockLine } from "./turn-clock.ts";
 
@@ -21,7 +21,7 @@ const CLOCK = new RegExp(`^Current time when this message was sent: \\w+day, (\\
 const minute = (at: number) => /\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.exec(turnClockLine(at, REPORTED))![0];
 
 it("stamps every direct and room turn with the time it was sent", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-turn-clock-"));
+  const scratch = mkdtempSync(join(tmpdir(), "ripo-turn-clock-"));
   const prompts = join(scratch, "prompts.jsonl");
   const fixture = await launchVerificationServer({ ...process.env, TZ: ZONE, FAKE_CLAUDE_PROMPTS: prompts });
   const control = (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]);

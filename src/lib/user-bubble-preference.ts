@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-export const USER_BUBBLE_COLOR_KEY = "omb-color-user-bubbles";
+export const USER_BUBBLE_COLOR_KEY = "ripo-color-user-bubbles";
 
 // Renderer preference only. Off until the person turns it on, so an update
 // does not repaint every existing chat. Simple mode (#2173) kept existing

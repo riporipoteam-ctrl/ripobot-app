@@ -1,4 +1,4 @@
-// A bot's memory on an OMB Cloud home, as far as a lent Mac is concerned
+// A bot's memory on an RIPO Cloud home, as far as a lent Mac is concerned
 // (docs/cloud-pro.md, "Let my Cloud use this Mac").
 //
 // MEMORY.md is loaded into every turn of a bot, its topic files and daily

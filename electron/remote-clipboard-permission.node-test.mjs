@@ -117,7 +117,7 @@ test("switching or forgetting the server withdraws the old origin at once", () =
 });
 
 test("the Cloud keeps its microphone and writes the clipboard by the same rule, and the server gets no microphone", () => {
-  const CLOUD = "https://omb-u-0123456789ab.fly.dev";
+  const CLOUD = "https://ripo-u-0123456789ab.fly.dev";
   const audio = { isMainFrame: true, mediaTypes: ["audio"] };
   // The Cloud is the page in the main window; no remote server is active.
   const h = harness(viewing("local"), { cloud: CLOUD });

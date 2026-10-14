@@ -1,4 +1,4 @@
-// The OMB Cloud home's secrets, and how the server gets them
+// The RIPO Cloud home's secrets, and how the server gets them
 // (docs/cloud-pro.md). This module imports nothing but node:fs, so the
 // server can read them before anything else it loads can start a process
 // (cloud-secrets-boot.ts, the server's first import).
@@ -12,8 +12,8 @@ import { closeSync, readFileSync } from "node:fs";
  * /proc/<pid>/environ keeps a process's starting environment for anything
  * running as the same user to read. It hands them to the server over an
  * inherited pipe instead (CLOUD_SECRETS_FD_ENV names its descriptor). */
-export const CLOUD_HOME_SECRET_KEYS = ["OMB_CLOUD_BOOTSTRAP_SECRET", "OMB_CLOUD_BOAT_TOKEN", "OMB_CLOUD_VOICE_TOKEN", "OMB_CLOUD_DECIDER_TOKEN", "OMB_CLOUD_AI_TOKEN"] as const;
-export const CLOUD_SECRETS_FD_ENV = "OMB_CLOUD_SECRETS_FD";
+export const CLOUD_HOME_SECRET_KEYS = ["RIPO_CLOUD_BOOTSTRAP_SECRET", "RIPO_CLOUD_BOAT_TOKEN", "RIPO_CLOUD_VOICE_TOKEN", "RIPO_CLOUD_DECIDER_TOKEN", "RIPO_CLOUD_AI_TOKEN"] as const;
+export const CLOUD_SECRETS_FD_ENV = "RIPO_CLOUD_SECRETS_FD";
 
 /** The secrets present in an environment (the launcher's). */
 export function cloudHomeSecrets(env: NodeJS.ProcessEnv): Record<string, string> {

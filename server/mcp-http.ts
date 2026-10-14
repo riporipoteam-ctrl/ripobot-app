@@ -1,4 +1,4 @@
-// A small MCP client for servers OpenMausBot does not start itself: the
+// A small MCP client for servers RipoBot does not start itself: the
 // current streamable HTTP transport and the older SSE one. It runs the
 // Test button (prove the handshake, list the tools) and the stdio proxy
 // (mcp-remote-proxy.ts) every engine except Claude Code reaches these
@@ -59,7 +59,7 @@ export const REMOTE_MCP_STARTUP_MS = 30_000;
 /** The private environment record one remote-proxy mount reads its settings
  * from, when several mounts share one environment (Codex): only this name
  * reaches argv, never the address or a header value. */
-export const REMOTE_MCP_CONFIG_ENV = /^OMB_REMOTE_MCP_CONFIG_[a-f0-9]{64}$/;
+export const REMOTE_MCP_CONFIG_ENV = /^RIPO_REMOTE_MCP_CONFIG_[a-f0-9]{64}$/;
 
 interface JsonRpcMessage {
   jsonrpc?: unknown;

@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-ripo.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 
 type Bot = { id: string; activeTaskId: string };
@@ -27,7 +27,7 @@ describe("guarded external messages through an isolated runtime", () => {
   };
   const control = async (args: string[]) => {
     const result = await runControlOmb([...args, "--url", fixture.info.url]);
-    evidence.push({ command: ["control:omb", ...args, "--url", fixture.info.url], result });
+    evidence.push({ command: ["control:ripo", ...args, "--url", fixture.info.url], result });
     return result as any;
   };
   const newBot = async (): Promise<Bot> => {
@@ -253,7 +253,7 @@ it("refuses a parked conversation after its own provider settles while its teamm
   };
   const control = async (args: string[]) => {
     const result = await runControlOmb([...args, "--url", fixture.info.url]) as any;
-    evidence.push({ command: ["control:omb", ...args, "--url", fixture.info.url], result }); return result;
+    evidence.push({ command: ["control:ripo", ...args, "--url", fixture.info.url], result }); return result;
   };
   try {
     const chief = (await control(["new-bot", "--name", "Guarded coordinator", "--section", "Leadership"])).bot;

@@ -49,10 +49,10 @@ export type RoutineScheduleInput =
   | Exclude<RoutineSchedule, RoutineIntervalSchedule>
   | RoutineIntervalScheduleInput;
 
-/** `cloud` runs the agent itself inside the bot's Boat VM. `maus` keeps
- * using the provider selected on the MAUS and only borrows its configured
+/** `cloud` runs the agent itself inside the bot's Boat VM. `ripo` keeps
+ * using the provider selected on the RIPO and only borrows its configured
  * computer tools, if any. */
-export type RoutineRunOn = "maus" | "cloud";
+export type RoutineRunOn = "ripo" | "cloud";
 export type RoutineTarget = "bot" | "room-goal";
 export type RoutineGoalStatus = Exclude<GroupGoalRunStatus, "working">;
 
@@ -100,7 +100,7 @@ export interface Routine {
   /** Default skips overlapping scheduled occurrences. Queue retains at most
    * one pending scheduled run; manual/webhook requests stay independent. */
   overlap?: "skip" | "queue";
-  /** Also run once each time OpenMausBot starts, for a computer that is often
+  /** Also run once each time RipoBot starts, for a computer that is often
    * off at the scheduled time. Absent means off, so older files load as-is. */
   runOnStartup?: boolean;
   skippedRuns?: number;
@@ -358,7 +358,7 @@ const WAKE_HORIZON_MS = 60 * 60_000;
  * hears about it once. Surfacing only; dispatch semantics stay unchanged. */
 export const ROUTINE_DEFERRAL_NOTICE_MS = 30 * 60_000;
 /** Why a run still going when the server stopped failed at the next start. */
-export const ROUTINE_RESTARTED = "OpenMausBot restarted while this routine was running";
+export const ROUTINE_RESTARTED = "RipoBot restarted while this routine was running";
 const MAX_DATE_MS = 8_640_000_000_000_000;
 const LOCAL_DAY_MS = 24 * 60 * 60_000;
 const INTERVAL_RESTRICTION_SEARCH_MS = 9 * LOCAL_DAY_MS;
@@ -768,8 +768,8 @@ function sanitizeInput(input: RoutineInput, after: number): Omit<Routine, "id" |
   if (target !== "bot" && target !== "room-goal") throw new Error("Choose a valid routine target");
   const groupId = typeof input.groupId === "string" ? input.groupId.trim() : "";
   if (target === "room-goal" && !groupId) throw new Error("Choose a room for this goal");
-  const runOn = input.runOn ?? "maus";
-  if (runOn !== "maus" && runOn !== "cloud") throw new Error("Choose where this routine runs");
+  const runOn = input.runOn ?? "ripo";
+  if (runOn !== "ripo" && runOn !== "cloud") throw new Error("Choose where this routine runs");
   const attachments = cleanAttachments(input.attachments);
   const timeoutMinutes = cleanTimeoutMinutes(input.timeoutMinutes);
   if (target === "room-goal" && runOn === "cloud") {
@@ -860,7 +860,7 @@ export class RoutineManager {
               schedule,
               target,
               groupId: loadGroupId(routine.groupId, target),
-              runOn: routine.runOn ?? "maus",
+              runOn: routine.runOn ?? "ripo",
               timeoutMinutes: loadTimeoutMinutes(routine.timeoutMinutes),
               attachments: loadAttachments(routine.attachments),
               sourceThreadId: persistedSourceThreadId.parse(routine.sourceThreadId),
@@ -886,7 +886,7 @@ export class RoutineManager {
               target,
               goalStatus: loadGoalStatus(run.goalStatus, target),
               groupId: loadGroupId(run.groupId, target),
-              runOn: run.runOn ?? "maus",
+              runOn: run.runOn ?? "ripo",
               timeoutMinutes: loadTimeoutMinutes(run.timeoutMinutes),
               attachments: loadAttachments(run.attachments),
               sourceThreadId: persistedSourceThreadId.parse(run.sourceThreadId),
@@ -1380,7 +1380,7 @@ export class RoutineManager {
     const existing = this.webhookRunReceipt(input.webhookId, input.deliveryId);
     if (existing) return existing;
     if (this.options.botState(input.botId) === "missing") {
-      throw Object.assign(new Error("The assigned MAUS no longer exists"), { status: 410 });
+      throw Object.assign(new Error("The assigned RIPO no longer exists"), { status: 410 });
     }
     const run: RoutineRun = {
       id: randomUUID(),
@@ -1761,7 +1761,7 @@ export class RoutineManager {
               run.botId,
               task.threadId,
               composeExecutionPrompt(prompt, run.attachments, this.continuityCarry(run)),
-              run.runOn ?? "maus",
+              run.runOn ?? "ripo",
               triggerSource,
               (message) => this.failThread(task.threadId, message),
             );
@@ -1972,7 +1972,7 @@ export class RoutineManager {
       target: routine.target,
       groupId: routine.groupId,
       botId: routine.botId,
-      runOn: routine.runOn ?? "maus",
+      runOn: routine.runOn ?? "ripo",
       scheduledFor,
       status: "queued",
       manual,

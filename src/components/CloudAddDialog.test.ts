@@ -53,7 +53,7 @@ afterEach(() => { vi.unstubAllGlobals(); setLocale("en"); });
 describe("each view of the buying journey says one thing and offers one next step", () => {
   it("the offer with a trial: three plans with Pro preselected and most popular, the timeline, the credit, money-back, Start free trial", () => {
     const { html, tree, handlers } = panel({ status: "signed-out" }, TRIAL);
-    const words = ["Try MausBot Cloud free for 7 days", "A computer in the cloud that runs your bots 24/7, even when this one is off.",
+    const words = ["Try RipoBot Cloud free for 7 days", "A computer in the cloud that runs your bots 24/7, even when this one is off.",
       "Personal", "$29/month + tax", "1 cloud computer at once · 10 GB storage", "Pro", "Most popular", "$49/month + tax", "Up to 4 cloud computers at once · 40 GB storage",
       "Max", "$99/month + tax", "Today", "Your trial starts. Nothing is charged today. $5 of Claude credit included.", "Oct 13", "We email you a reminder.",
       "Oct 15", "Pro starts at $49/month + tax. Cancel before then and pay nothing.", "Start free trial",
@@ -89,9 +89,9 @@ describe("each view of the buying journey says one thing and offers one next ste
   });
 
   it("checking, Cloud out of reach, and a checkout that did not open each say so, with Try again", () => {
-    expect(text(panel(null, undefined).html)).toContain("Checking with MausBot Cloud…");
+    expect(text(panel(null, undefined).html)).toContain("Checking with RipoBot Cloud…");
     const unreachable = panel({ status: "signed-out" }, null);
-    expect(text(unreachable.html)).toContain("Can't reach MausBot Cloud right now. Check your connection and try again.");
+    expect(text(unreachable.html)).toContain("Can't reach RipoBot Cloud right now. Check your connection and try again.");
     button(unreachable.tree, "Try again")!.props.onClick(); expect(unreachable.handlers.retry).toHaveBeenCalledOnce();
     expect(text(panel(free, TRIAL, { error: "failed" }).html)).toContain("Checkout couldn't open. Nothing was charged. Try again.");
     expect(text(panel(free, TRIAL, { error: "rate-limited" }).html)).toContain("You've opened several checkouts in the last hour. Use the one in your browser, or try again later.");
@@ -132,11 +132,11 @@ describe("each view of the buying journey says one thing and offers one next ste
       "Free until Oct 15. Then Pro is $49/month + tax. We email you 2 days before. Cancel any time on your Plan page.", "Next: give My Cloud its first job."]) expect(starting).toContain(word);
     expect(text(panel(paid(), undefined).html)).toContain("Payment received My Cloud is starting.");
     expect(text(panel(paid({ trial: trial() }), undefined, { offerShown: null }).html)).toContain("Then Pro is $49/month + tax. Cancel any time on your Plan page.");
-    const ready = panel(paid({ machine: { status: "ready", origin: "https://omb-u-1.fly.dev" }, checkout: { plan: "pro", startedAt: NOW - 3600_000 } }), undefined);
+    const ready = panel(paid({ machine: { status: "ready", origin: "https://ripo-u-1.fly.dev" }, checkout: { plan: "pro", startedAt: NOW - 3600_000 } }), undefined);
     expect(text(ready.html)).toContain("My Cloud is ready It keeps your bots running 24/7, even when this computer is off. Open it and give it a first job.");
     button(ready.tree, "Open My Cloud")!.props.onClick(); expect(ready.handlers.openCloud).toHaveBeenCalledOnce();
-    expect(text(panel(paid({ machine: { status: "ready", origin: "https://omb-u-1.fly.dev" } }), undefined).html)).toContain("You have My Cloud It's ready on this computer too.");
-    expect(panel(paid({ machine: { status: "ready", origin: "https://omb-u-1.fly.dev" } }), undefined).html).not.toContain("Email me");
+    expect(text(panel(paid({ machine: { status: "ready", origin: "https://ripo-u-1.fly.dev" } }), undefined).html)).toContain("You have My Cloud It's ready on this computer too.");
+    expect(panel(paid({ machine: { status: "ready", origin: "https://ripo-u-1.fly.dev" } }), undefined).html).not.toContain("Email me");
   });
 });
 
@@ -160,7 +160,7 @@ describe("the dialog", () => {
   });
 
   it("asks main for a checkout of the chosen plan from where it was opened, then waits on it", async () => {
-    expect(await settle()).toContain("Try MausBot Cloud free for 7 days");
+    expect(await settle()).toContain("Try RipoBot Cloud free for 7 days");
     expect(track).toHaveBeenCalledWith("cloud_dialog_shown", { source: "app_menu", view: "offer" });
     tree().find(node => node.props["data-plan"] === "max")!.props.onClick();
     button(tree(), "Start free trial")!.props.onClick(); await flush();

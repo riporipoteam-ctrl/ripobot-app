@@ -326,7 +326,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
               // deterministic rename. The replacement credential already
               // proved the exact deletion target, so its in-flight resource
               // is governed by that stronger target-bound receipt rather
-              // than an OpenMausBot name check.
+              // than an RipoBot name check.
               if (replacementProvedByDeletion && deletingBoatIds.has(recovery.boxId)) continue;
               const inspected = await boat.inspectBoatIdentity({ box: { token: currentBoatToken } }, recovery.boxId);
               if (!inspected.available) {
@@ -472,6 +472,10 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       }
       if (newTts?.fishKey?.trim()) {
         const check = await tts.verifyKey("fish", newTts.fishKey.trim());
+        if (!check.ok) return json(res, 400, { error: check.message });
+      }
+      if (newTts?.pollinationsKey?.trim()) {
+        const check = await tts.verifyKey("pollinations", newTts.pollinationsKey.trim());
         if (!check.ok) return json(res, 400, { error: check.message });
       }
       // A pasted decision-model key is tried once (one tiny yes/no call).

@@ -11,7 +11,7 @@ import { collisionFreeDownloadPath, defaultSaveName, resolveSavablePath, revealD
 // Creating a symlink on Windows needs elevation or developer mode, so the
 // symlink cases only run where the runner can actually make one.
 const canSymlink = (() => {
-  const probe = fs.mkdtempSync(path.join(os.tmpdir(), "omb-symlink-probe-"));
+  const probe = fs.mkdtempSync(path.join(os.tmpdir(), "ripo-symlink-probe-"));
   try {
     fs.symlinkSync(probe, path.join(probe, "link"));
     return true;
@@ -26,8 +26,8 @@ let home;
 let botHome;
 
 before(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "omb-save-file-"));
-  botHome = path.join(home, ".openmausbot");
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "ripo-save-file-"));
+  botHome = path.join(home, ".ripobot");
   fs.mkdirSync(path.join(botHome, "workspaces", "bot"), { recursive: true });
   fs.writeFileSync(path.join(botHome, "workspaces", "bot", "report.docx"), "docx");
   fs.writeFileSync(path.join(home, "secret.txt"), "private");
@@ -49,14 +49,14 @@ describe("save-file path validation", () => {
   });
 
   it("accepts a file under a symlinked bot home", { skip: !canSymlink }, async () => {
-    const realHome = fs.mkdtempSync(path.join(os.tmpdir(), "omb-real-home-"));
-    const linkedHome = fs.mkdtempSync(path.join(os.tmpdir(), "omb-linked-home-"));
+    const realHome = fs.mkdtempSync(path.join(os.tmpdir(), "ripo-real-home-"));
+    const linkedHome = fs.mkdtempSync(path.join(os.tmpdir(), "ripo-linked-home-"));
     const realBotHome = path.join(realHome, "bot-data");
     fs.mkdirSync(realBotHome, { recursive: true });
     fs.writeFileSync(path.join(realBotHome, "report.docx"), "docx");
-    fs.symlinkSync(realBotHome, path.join(linkedHome, ".openmausbot"));
+    fs.symlinkSync(realBotHome, path.join(linkedHome, ".ripobot"));
 
-    const viaLink = path.join(linkedHome, ".openmausbot", "report.docx");
+    const viaLink = path.join(linkedHome, ".ripobot", "report.docx");
     assert.equal(await resolveSavablePath(viaLink, { home: linkedHome }), await fs.promises.realpath(viaLink));
 
     fs.rmSync(realHome, { recursive: true, force: true });
@@ -88,7 +88,7 @@ describe("save-file path validation", () => {
 
 describe("save-file dialog default name", () => {
   it("suggests a name that does not overwrite an existing file", async () => {
-    const downloads = fs.mkdtempSync(path.join(os.tmpdir(), "omb-downloads-"));
+    const downloads = fs.mkdtempSync(path.join(os.tmpdir(), "ripo-downloads-"));
     const source = path.join(botHome, "workspaces", "bot", "report.docx");
 
     assert.equal(await defaultSaveName(downloads, source), path.join(downloads, "report.docx"));
@@ -101,7 +101,7 @@ describe("save-file dialog default name", () => {
   });
 
   it("keeps the extension on the suggestion", async () => {
-    const downloads = fs.mkdtempSync(path.join(os.tmpdir(), "omb-downloads-ext-"));
+    const downloads = fs.mkdtempSync(path.join(os.tmpdir(), "ripo-downloads-ext-"));
     const source = path.join(botHome, "workspaces", "bot", "report.docx");
     fs.writeFileSync(path.join(downloads, "report.docx"), "");
 
@@ -113,7 +113,7 @@ describe("save-file dialog default name", () => {
 
 describe("attachment download destination", () => {
   it("uses Chromium-style suffixes without replacing an existing download", () => {
-    const downloads = fs.mkdtempSync(path.join(os.tmpdir(), "omb-attachment-downloads-"));
+    const downloads = fs.mkdtempSync(path.join(os.tmpdir(), "ripo-attachment-downloads-"));
     try {
       assert.equal(
         collisionFreeDownloadPath(downloads, "report.tar.gz"),
@@ -135,7 +135,7 @@ describe("attachment download destination", () => {
   });
 
   it("keeps renderer-supplied directories outside the destination", () => {
-    const downloads = fs.mkdtempSync(path.join(os.tmpdir(), "omb-attachment-basename-"));
+    const downloads = fs.mkdtempSync(path.join(os.tmpdir(), "ripo-attachment-basename-"));
     try {
       assert.equal(
         collisionFreeDownloadPath(downloads, "../../outside.txt"),
@@ -267,8 +267,8 @@ describe("Show in folder for a file outside the workspace", () => {
   it("accepts a Windows drive path like the one in the report", async () => {
     const { shown, reveal } = shell();
     const fsp = { stat: async () => ({ isFile: () => true, isDirectory: () => false }) };
-    const rawPath = "C:\\Users\\Maus\\_draft\\..\\_draft\\ollama-gen.js";
+    const rawPath = "C:\\Users\\Ripo\\_draft\\..\\_draft\\ollama-gen.js";
     assert.equal(await revealInFolder(rawPath, { reveal, fsp, pathApi: path.win32 }), "shown");
-    assert.deepEqual(shown, ["C:\\Users\\Maus\\_draft\\ollama-gen.js"]);
+    assert.deepEqual(shown, ["C:\\Users\\Ripo\\_draft\\ollama-gen.js"]);
   });
 });

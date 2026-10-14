@@ -1,4 +1,4 @@
-// The first thing an OMB Cloud home asks: what should it do while you're away
+// The first thing an RIPO Cloud home asks: what should it do while you're away
 // (lib/cloud-intent, docs/cloud-pro.md). The answer is sent as a `/setup`
 // request, so the bot interviews the person and sets itself up for the job in
 // the chat; that conversation is the rest of the onboarding.
@@ -9,7 +9,7 @@
 // shown above the engine sign-in, and starts the moment one can run.
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowUp, CalendarCheck, Eye, Newspaper, Search, type LucideIcon } from "lucide-react";
-import { MausAvatar } from "@/components/Avatar";
+import { RipoAvatar } from "@/components/Avatar";
 import { engineReady } from "@/components/EngineLibrary";
 import { staggerIndex } from "@/components/onboarding/beats/shared";
 import { withViewTransition } from "@/components/onboarding/view-transition";
@@ -21,7 +21,7 @@ import { cn } from "@/lib/cn";
 import { restoreComposerDraft } from "@/lib/drafts";
 import { t } from "@/lib/i18n";
 import { sendKeyLabel, sendsMessage, useSendKey } from "@/lib/send-key";
-import type { MausMotion, MausState } from "@/lib/mascot";
+import type { RipoMotion, RipoState } from "@/lib/mascot";
 import type { OnboardingStatus } from "@/lib/onboarding";
 import type { LocaleKey } from "@/locales";
 import { api, useStore, type Action, type AppState } from "@/state/store";
@@ -78,7 +78,7 @@ export function CloudIntent() {
   const [idea, setIdea] = useState<string | null>(null);
   // An idea under the pointer or keyboard shows its full text in the empty box.
   const [peek, setPeek] = useState<string | null>(null);
-  const [motion, setMotion] = useState<{ kind: MausMotion; key: number }>({ kind: "none", key: 0 });
+  const [motion, setMotion] = useState<{ kind: RipoMotion; key: number }>({ kind: "none", key: 0 });
   const box = useRef<HTMLTextAreaElement>(null);
   const token = useRef<HTMLSpanElement>(null);
   const [indent, setIndent] = useState(0);
@@ -158,7 +158,7 @@ export function CloudIntent() {
   };
   const filled = job.trim().length > 0;
   // The guide listens while a job is typed, and is curious about a previewed idea.
-  let face: MausState = "happy";
+  let face: RipoState = "happy";
   if (filled) face = "listening";
   else if (peek) face = "curious";
 
@@ -170,7 +170,7 @@ export function CloudIntent() {
       />
       <div className="stagger relative mx-auto flex w-full max-w-[620px] flex-col px-6 pb-12 pt-[clamp(48px,12vh,128px)]">
         <div className="animate-rise flex justify-center" style={staggerIndex(0)}>
-          <MausAvatar color="green" state={face} motion={motion.kind} motionKey={motion.key} size={64} label={brand().name} />
+          <RipoAvatar color="green" state={face} motion={motion.kind} motionKey={motion.key} size={64} label={brand().name} />
         </div>
         <h1 className="animate-rise mt-5 text-center text-[24px] font-semibold tracking-[-0.015em] text-ink [text-wrap:balance]" style={staggerIndex(1)}>
           {t("cloudIntent.title")}

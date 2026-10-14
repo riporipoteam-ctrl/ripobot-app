@@ -18,7 +18,7 @@ export interface LendingActivityEntry {
   ok: boolean;
   error?: string;
 }
-/** What this Mac lends to the person's own Cloud (Settings → OMB Cloud). */
+/** What this Mac lends to the person's own Cloud (Settings → RIPO Cloud). */
 export interface CloudLendingState {
   enabled: boolean;
   folders: SharedFolder[];
@@ -32,7 +32,7 @@ export interface CloudLendingState {
   error?: string;
 }
 export interface CloudLendingSnapshot {
-  /** Signed in to OMB Cloud with a known machine saved under Servers. */
+  /** Signed in to RIPO Cloud with a known machine saved under Servers. */
   available: boolean;
   /** This app's local computer control (and OS permissions) is ready. */
   screenAvailable: boolean;

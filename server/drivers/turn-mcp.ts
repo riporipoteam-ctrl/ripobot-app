@@ -14,7 +14,7 @@ export interface TurnStdioMcpServer {
   env: Record<string, string>;
 }
 
-/** A URL server is always mounted as OpenMausBot's remote proxy, even for an
+/** A URL server is always mounted as RipoBot's remote proxy, even for an
  * agent that speaks HTTP itself: the proxy opens the connection with the same
  * minimal handshake as Settings → Test (mcp-http.ts), where an agent's own MCP
  * client adds capability fields a strict server refuses. */

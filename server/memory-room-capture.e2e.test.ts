@@ -7,19 +7,19 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb } from "../scripts/control-ripo.ts";
 import type { WireBot } from "../shared/wire.ts";
 import { CAPTURE_MARKER } from "./memory-capture.ts";
 
 it("captures a member bot's room turn into its memory, sourced to the room, once Learn from group chats is on", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-room-capture-"));
+  const scratch = mkdtempSync(join(tmpdir(), "ripo-room-capture-"));
   const routes = join(scratch, "routes.json");
   const textLog = join(scratch, "text-prompts.jsonl");
   writeFileSync(routes, JSON.stringify({
     [CAPTURE_MARKER]: JSON.stringify([{ text: "The garden launch moved to Friday", kind: "decision", confidence: 0.9 }]),
   }));
   const fixture = await launchVerificationServer({ ...process.env, FAKE_CLAUDE_TEXT_ROUTES: routes, FAKE_CLAUDE_TEXT_LOG: textLog });
-  const env = { OPENMAUSBOT_URL: fixture.info.url };
+  const env = { RIPOBOT_URL: fixture.info.url };
   const api = async <T = any>(path: string, method = "GET", body?: unknown): Promise<T> => {
     const response = await fetch(fixture.info.url + path, {
       method,
@@ -68,11 +68,11 @@ it("captures a member bot's room turn into its memory, sourced to the room, once
   }
 }, 120_000);
 
-// Codex (OMB's default engine) has no generateText: its background call is
+// Codex (RIPO's default engine) has no generateText: its background call is
 // generateMemoryText, a tool-free `codex exec` (drivers/codex-background-text.ts).
 // The same room turn, on a Codex member bot, must reach MEMORY.md through it.
 it("captures a Codex member bot's room turn through Codex's own background call", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-room-capture-codex-"));
+  const scratch = mkdtempSync(join(tmpdir(), "ripo-room-capture-codex-"));
   const routes = join(scratch, "routes.json");
   const textLog = join(scratch, "codex-exec.jsonl");
   writeFileSync(routes, JSON.stringify({
@@ -80,7 +80,7 @@ it("captures a Codex member bot's room turn through Codex's own background call"
   }));
   const fixture = await launchVerificationServer({ ...process.env, FAKE_CODEX_TEXT_ROUTES: routes, FAKE_CODEX_TEXT_LOG: textLog },
     undefined, undefined, undefined, undefined, undefined, ["codex"]);
-  const env = { OPENMAUSBOT_URL: fixture.info.url };
+  const env = { RIPOBOT_URL: fixture.info.url };
   const api = async <T = any>(path: string, method = "GET", body?: unknown): Promise<T> => {
     const response = await fetch(fixture.info.url + path, {
       method,

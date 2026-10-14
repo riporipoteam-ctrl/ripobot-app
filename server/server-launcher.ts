@@ -2,7 +2,7 @@
 // It runs the server (index.js beside it) and starts it again when the server
 // asks to (RESTART_EXIT_CODE, after a copied workspace commits;
 // docs/copy-workspace.md), so the container never exits for that. A Caddy
-// sharing its network (compose `network_mode: service:omb`) is cut off when
+// sharing its network (compose `network_mode: service:ripo`) is cut off when
 // the container restarts, until `docker compose up -d`; this keeps it served.
 // SIGTERM and SIGINT are passed on, and the launcher exits with the server's
 // own code.
@@ -25,7 +25,7 @@ export function superviseServer(start: () => ChildProcess, options: { signals?: 
       child.once("error", () => finish(1));
       child.once("exit", (code, signal) => {
         if (policy.again(code, stopping)) {
-          console.log("OpenMausBot is starting again to finish installing a copy from the desktop app…");
+          console.log("RipoBot is starting again to finish installing a copy from the desktop app…");
           run();
           return;
         }

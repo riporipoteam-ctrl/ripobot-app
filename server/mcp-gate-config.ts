@@ -12,10 +12,10 @@ import { REMOTE_MCP_CONFIG_ENV, remoteMcpSpec } from "./mcp-http.ts";
 import { SPAWNED_PROXIES } from "./proxy-paths.ts";
 
 /** Characters of a single tool result allowed into context, or 0 to mount
- * bot servers directly as before. `OMB_MCP_RESULT_BUDGET=0` is the escape
+ * bot servers directly as before. `RIPO_MCP_RESULT_BUDGET=0` is the escape
  * hatch for a bot that genuinely needs whole payloads in the conversation. */
 export function resultBudget(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.OMB_MCP_RESULT_BUDGET;
+  const raw = env.RIPO_MCP_RESULT_BUDGET;
   if (raw === undefined || raw === "") return DEFAULT_RESULT_BUDGET;
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : DEFAULT_RESULT_BUDGET;
@@ -90,7 +90,7 @@ export interface StdioServerOptions {
    * A command server is mounted as it is. */
   directory?: { name: string; toolScope?: ToolScope };
   /** Engines that share one child environment (Codex): the proxy's settings
-   * go in this private record, named OMB_REMOTE_MCP_CONFIG_<64 hex>, and
+   * go in this private record, named RIPO_REMOTE_MCP_CONFIG_<64 hex>, and
    * only the name reaches argv. */
   configEnvName?: string;
 }
@@ -114,8 +114,8 @@ export function mcpStdioServer(server: unknown, options: StdioServerOptions = {}
     directory = JSON.stringify({ name: options.directory.name, ...(scope.scope ? { toolScope: scope.scope } : {}) });
   }
   const settings = {
-    OMB_REMOTE_MCP_SERVER: JSON.stringify(remote),
-    ...(directory ? { OMB_REMOTE_MCP_DIRECTORY: directory } : {}),
+    RIPO_REMOTE_MCP_SERVER: JSON.stringify(remote),
+    ...(directory ? { RIPO_REMOTE_MCP_DIRECTORY: directory } : {}),
   };
   return {
     command: options.execPath ?? process.execPath,
@@ -175,14 +175,14 @@ export function gateServer(input: {
     return null;
   }
   const env = {
-    OMB_GATE_NAME: name,
-    OMB_GATE_UPSTREAM: JSON.stringify({ command: spec.command, args: spec.args ?? [], env: spec.env ?? {} }),
-    OMB_GATE_SPILL_DIR: spillDir(input.threadId),
-    OMB_GATE_BUDGET: String(budget),
-    ...(scoped ? { OMB_GATE_TOOL_SCOPE: JSON.stringify(parsed.scope) } : {}),
-    ...(directory ? { OMB_GATE_DIRECTORY: "1" } : {}),
+    RIPO_GATE_NAME: name,
+    RIPO_GATE_UPSTREAM: JSON.stringify({ command: spec.command, args: spec.args ?? [], env: spec.env ?? {} }),
+    RIPO_GATE_SPILL_DIR: spillDir(input.threadId),
+    RIPO_GATE_BUDGET: String(budget),
+    ...(scoped ? { RIPO_GATE_TOOL_SCOPE: JSON.stringify(parsed.scope) } : {}),
+    ...(directory ? { RIPO_GATE_DIRECTORY: "1" } : {}),
   };
-  if (input.configEnvName && (!scoped || !/^OMB_GATE_CONFIG_[a-f0-9]{64}$/.test(input.configEnvName))) {
+  if (input.configEnvName && (!scoped || !/^RIPO_GATE_CONFIG_[a-f0-9]{64}$/.test(input.configEnvName))) {
     throw new Error("Invalid private MCP gate configuration.");
   }
   return {

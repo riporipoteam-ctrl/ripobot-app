@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // scripts/mcp-server.ts snapshots process.env at import time — scrub ambient
-// OMB_* / OPENMAUSBOT_* values before it is evaluated (#1676).
-import "./testing/scrub-ambient-omb-env.ts";
+// RIPO_* / RIPOBOT_* values before it is evaluated (#1676).
+import "./testing/scrub-ambient-ripo-env.ts";
 
 import {
   handleToolCall,
@@ -30,7 +30,7 @@ function jsonResponse(body: unknown, options: { ok?: boolean; status?: number; s
 afterEach(() => {
   vi.restoreAllMocks();
   globalThis.fetch = ORIGINAL_FETCH;
-  delete process.env.OPENMAUSBOT_TOKEN;
+  delete process.env.RIPOBOT_TOKEN;
   delete process.env.ALLOW_INSECURE_HTTP;
 });
 
@@ -44,7 +44,7 @@ describe("MCP JSON-RPC protocol", () => {
     })))!);
     expect(supported.result).toMatchObject({
       protocolVersion: "2024-11-05",
-      serverInfo: { name: "openmausbot-mcp", version: "1.1.0" },
+      serverInfo: { name: "ripobot-mcp", version: "1.1.0" },
       capabilities: { tools: {} },
     });
 
@@ -315,16 +315,16 @@ describe("MCP tool execution", () => {
 
     await expect(handleToolCall("update_bot_profile", {
       bot_id: "bot-1", name: "Mira",
-    }, fetcher)).rejects.toThrow("OpenMausBot did not return the updated bot");
+    }, fetcher)).rejects.toThrow("RipoBot did not return the updated bot");
     await expect(handleToolCall("update_channel", {
       channel_id: "channel-1", name: "Launch",
-    }, fetcher)).rejects.toThrow("OpenMausBot did not return the updated channel");
+    }, fetcher)).rejects.toThrow("RipoBot did not return the updated channel");
     await expect(handleToolCall("create_task", {
       target_type: "bot", target_id: "bot-1", title: "Fresh",
-    }, fetcher)).rejects.toThrow("OpenMausBot did not return the created task");
+    }, fetcher)).rejects.toThrow("RipoBot did not return the created task");
     await expect(handleToolCall("rename_task", {
       target_type: "bot", target_id: "bot-1", task_id: "task-1", title: "Renamed",
-    }, fetcher)).rejects.toThrow("OpenMausBot did not return the renamed task");
+    }, fetcher)).rejects.toThrow("RipoBot did not return the renamed task");
   });
 
   it("searches with encoded, bounded parameters", async () => {
@@ -790,29 +790,29 @@ describe("connection security and discovery", () => {
   it("accepts loopback HTTP and HTTPS origins, but rejects unsafe URL shapes", () => {
     expect(validateBaseUrl("http://127.0.0.1:8799/")).toBe("http://127.0.0.1:8799");
     expect(validateBaseUrl("http://[::1]:8799")).toBe("http://[::1]:8799");
-    expect(validateBaseUrl("https://maus.example.com")).toBe("https://maus.example.com");
-    expect(() => validateBaseUrl("ftp://maus.example.com")).toThrow("http:// or https://");
-    expect(() => validateBaseUrl("https://maus.example.com/api")).toThrow("origin without a path");
-    expect(() => validateBaseUrl("https://user:pass@maus.example.com")).toThrow("must not contain credentials");
+    expect(validateBaseUrl("https://ripo.example.com")).toBe("https://ripo.example.com");
+    expect(() => validateBaseUrl("ftp://ripo.example.com")).toThrow("http:// or https://");
+    expect(() => validateBaseUrl("https://ripo.example.com/api")).toThrow("origin without a path");
+    expect(() => validateBaseUrl("https://user:pass@ripo.example.com")).toThrow("must not contain credentials");
     expect(() => validateBaseUrl("http://0.0.0.0:8799")).toThrow("Insecure cleartext HTTP");
   });
 
   it("skips a foreign process and discovers the real fallback port", async () => {
     globalThis.fetch = vi.fn(async (url: any) => {
-      if (String(url).includes(":8799")) return jsonResponse({ app: "not-openmausbot" });
-      if (String(url).includes(":18799")) return jsonResponse({ app: "openmausbot" });
+      if (String(url).includes(":8799")) return jsonResponse({ app: "not-ripobot" });
+      if (String(url).includes(":18799")) return jsonResponse({ app: "ripobot" });
       throw new Error("unexpected port");
     }) as any;
     await expect(probeBaseUrls(["http://127.0.0.1:8799", "http://127.0.0.1:18799"])).resolves.toBe("http://127.0.0.1:18799");
   });
 
   it("rejects successful non-JSON responses and sends an optional bearer token", async () => {
-    process.env.OPENMAUSBOT_TOKEN = "proxy-token";
+    process.env.RIPOBOT_TOKEN = "proxy-token";
     globalThis.fetch = vi.fn(async (_url: any, options: any) => {
       expect(new Headers(options.headers).get("Authorization")).toBe("Bearer proxy-token");
       return { ...jsonResponse({}), json: vi.fn(async () => { throw new Error("not json"); }) };
     }) as any;
-    await expect(request("/api/health", {}, "https://maus.example.com")).rejects.toThrow("non-JSON response");
+    await expect(request("/api/health", {}, "https://ripo.example.com")).rejects.toThrow("non-JSON response");
   });
 
   it("explains how to authorize packaged write refusals", async () => {
@@ -827,8 +827,8 @@ describe("connection security and discovery", () => {
   });
 
   it("requires an explicit destination before sending a bearer token", async () => {
-    process.env.OPENMAUSBOT_TOKEN = "proxy-token";
-    await expect(resolveBaseUrl()).rejects.toThrow("OPENMAUSBOT_URL or OMB_PORT");
+    process.env.RIPOBOT_TOKEN = "proxy-token";
+    await expect(resolveBaseUrl()).rejects.toThrow("RIPOBOT_URL or RIPO_PORT");
   });
 
   it("validates direct tool arguments", () => {

@@ -19,8 +19,13 @@ export interface DefaultSelectionContext {
   refusal?: (instance: SelectableInstance) => string | undefined;
 }
 
-const claudeFirst = (instances: readonly SelectableInstance[]) =>
-  instances.find((instance) => instance.driverKind === "claudeAgent") ?? instances[0];
+/** The bundled keyless Pollinations engine ("RipoBot Brain") wins the
+ * default: it runs on first launch with nothing installed and no key
+ * pasted. Claude stays the runner-up, then whatever is listed first. */
+const ripobotFirst = (instances: readonly SelectableInstance[]) =>
+  instances.find((instance) => instance.instanceId === "pollinations") ??
+  instances.find((instance) => instance.driverKind === "claudeAgent") ??
+  instances[0];
 
 /** Installed and waiting on a sign-in. A custom endpoint brings its own
  * credential, so its sign-in state does not count. */
@@ -43,9 +48,10 @@ const defaultModel = (instance: SelectableInstance) => instance.models.default.t
  *
  * A saved choice is intentional: an unavailable provider or removed model
  * sends new bots to setup instead of silently changing their provider.
- * Without one, an engine that can run a turn now wins (Claude first), then the
- * first available one. On an enrolled desktop a working personal engine
- * still beats a Company one, so billing stays the person's explicit choice. */
+ * Without one, an engine that can run a turn now wins (the bundled RipoBot
+ * Brain first, then Claude), then the first available one. On an enrolled
+ * desktop a working personal engine still beats a Company one, so billing
+ * stays the person's explicit choice. */
 export function selectDefaultModelSelection(
   instances: readonly SelectableInstance[],
   preferred?: ModelSelection,
@@ -77,9 +83,9 @@ export function selectDefaultModelSelection(
   const ready = available.filter((instance) => readyToRun(instance, context));
   const company = context.company;
   const personal = company && instances.some((instance) => company(instance.instanceId))
-    ? claudeFirst(ready.filter((instance) => !company(instance.instanceId)))
+    ? ripobotFirst(ready.filter((instance) => !company(instance.instanceId)))
     : undefined;
-  const pick = personal ?? claudeFirst(ready) ?? claudeFirst(available);
+  const pick = personal ?? ripobotFirst(ready) ?? ripobotFirst(available);
   return { instanceId: pick?.instanceId ?? "", model: pick ? defaultModel(pick) : "" };
 }
 

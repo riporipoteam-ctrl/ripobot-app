@@ -250,8 +250,8 @@ export function useCloudPhoneDestination(enabled: boolean): { cloud: CloudPhoneD
 
 /** What choosing a destination does. Here: Settings → Remote access on this
  * window's pairing. Cloud: open the Cloud in this window on its phone
- * pairing, as Settings → OMB Cloud's Use your Cloud on your phone does; if
- * that fails, Settings → OMB Cloud, which says what to do. */
+ * pairing, as Settings → RIPO Cloud's Use your Cloud on your phone does; if
+ * that fails, Settings → RIPO Cloud, which says what to do. */
 export function selectPhoneDestination(destination: PhoneDestination, { bridge, dispatch }: { bridge?: Pick<CloudAccountBridge, "connectHomeForPhone">; dispatch: (action: Action) => void }): void {
   if (destination.id !== "cloud" || !bridge) {
     dispatch(phonePairingSettingsAction());
@@ -318,7 +318,7 @@ export function profileMenuItems({
   /** Settings has a Usage page here (not on a remote server's window) */
   usage: boolean;
   update: SidebarMenuItem | null;
-  /** the account this app signs in to (OpenMausBot Cloud), when it has one here */
+  /** the account this app signs in to (RipoBot Cloud), when it has one here */
   account: string | null;
   onUsage: () => void;
   onSettings: () => void;
@@ -367,7 +367,7 @@ export function SidebarProfileMenu({ iconOnly = false }: { iconOnly?: boolean } 
   const name = profileLabel(profile);
   const connectTo = (destination: PhoneDestination) => selectPhoneDestination(destination, { bridge: cloudPhone.bridge, dispatch });
   const remote = window.ogb?.remoteClient?.active === true;
-  // the same rule Settings uses to show its OpenMausBot Cloud page
+  // the same rule Settings uses to show its RipoBot Cloud page
   const cloudAccount = !remote && Boolean(window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true));
 
   const items = profileMenuItems({

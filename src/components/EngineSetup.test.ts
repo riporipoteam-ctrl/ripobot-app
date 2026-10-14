@@ -164,8 +164,8 @@ describe("server device-code sign-in", () => {
     };
     const markup = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: engine })));
     expect(markup).toContain("Continue with ChatGPT");
-    // Any OMB Cloud plan, not only Pro.
-    expect(markup).toContain("separate from MausBot Cloud and API billing");
+    // Any RIPO Cloud plan, not only Pro.
+    expect(markup).toContain("separate from RipoBot Cloud and API billing");
     expect(markup).not.toContain("codex login");
     expect(markup).not.toContain("Device-code login");
   });
@@ -240,7 +240,7 @@ describe("API-key engine setup", () => {
 
   it("has no button on a remote client, whose settings hide the keys", () => {
     const html = render(keyEngine("openai-compat", { state: "unavailable" }), { platform: "darwin", remoteClient: { active: true } });
-    expect(html).toContain("on the computer running OpenMausBot");
+    expect(html).toContain("on the computer running RipoBot");
     expect(html).not.toContain("Open API keys");
   });
 

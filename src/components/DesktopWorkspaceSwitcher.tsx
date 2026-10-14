@@ -10,7 +10,7 @@ export function openServerMenu(bridge: { menu: (options?: { from?: "howto" }) =>
   return bridge.menu(howTo ? { from: "howto" } : undefined).finally(() => { if (howTo) onClosed?.(); });
 }
 
-/** "· always on" after the server's name while the window shows an OMB Cloud
+/** "· always on" after the server's name while the window shows an RIPO Cloud
  * home (config.cloudHome), so people know which computer they are on. */
 function AlwaysOn() {
   return <span className="font-normal text-ink-secondary"> · {t("cloudSetup.alwaysOn")}</span>;

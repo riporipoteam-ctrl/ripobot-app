@@ -139,7 +139,7 @@ describe("the stored choice", () => {
     expect(fresh.analyticsEnabled()).toBe(false);
     await fresh.initAnalytics();
     expect(ph.loads).toBe(0);
-    expect(store.get("omb-installed")).toBeUndefined();
+    expect(store.get("ripo-installed")).toBeUndefined();
   });
 
   it("treats unusable storage as a fresh install rather than failing", () => {
@@ -158,7 +158,7 @@ describe("the stored choice", () => {
 
 describe("initAnalytics while opted out", () => {
   it("returns before loading the client or touching the install marker", async () => {
-    store.set("omb-analytics-opt-out", "1"); // as a previous session left it
+    store.set("ripo-analytics-opt-out", "1"); // as a previous session left it
     const fresh = await freshAnalytics();
 
     expect(fresh.analyticsEnabled()).toBe(false);
@@ -171,7 +171,7 @@ describe("initAnalytics while opted out", () => {
     // still counts the install.
     expect(ph.loads).toBe(0);
     expect(ph.calls).toEqual([]);
-    expect(store.get("omb-installed")).toBeUndefined();
+    expect(store.get("ripo-installed")).toBeUndefined();
   });
 });
 
@@ -246,7 +246,7 @@ describe("loading the client", () => {
     await loading;
 
     expect(ph.calls).toEqual([]);
-    expect(store.get("omb-installed")).toBeUndefined();
+    expect(store.get("ripo-installed")).toBeUndefined();
 
     // a later opt-in starts a clean session; the email never goes out
     fresh.setAnalyticsEnabled(true);

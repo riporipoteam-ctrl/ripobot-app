@@ -11,11 +11,11 @@ import { emailGateDone } from "@/lib/analytics";
 import { currentStep } from "@/lib/guided-tour";
 import { anchorFor, cardAnswered, nextSpotlight, placementFor, tourComplete, type ChatObservation, type SpotlightId } from "@/lib/first-conversation";
 import { t } from "@/lib/i18n";
-import type { MausState } from "@/lib/mascot";
+import type { RipoState } from "@/lib/mascot";
 import { api, useStore } from "@/state/store";
 import { Spotlight } from "./Spotlight";
 
-const COPY: Record<SpotlightId, { key: "onboarding.spot.composer" | "onboarding.spot.model" | "onboarding.spot.approval" | "onboarding.spot.connector"; mascot: MausState }> = {
+const COPY: Record<SpotlightId, { key: "onboarding.spot.composer" | "onboarding.spot.model" | "onboarding.spot.approval" | "onboarding.spot.connector"; mascot: RipoState }> = {
   "spot.composer": { key: "onboarding.spot.composer", mascot: "happy" },
   "spot.model": { key: "onboarding.spot.model", mascot: "curious" },
   "spot.approval": { key: "onboarding.spot.approval", mascot: "suspicious" },

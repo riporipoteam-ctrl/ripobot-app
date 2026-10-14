@@ -51,8 +51,8 @@ function processIsAlive(pid: number): boolean {
 }
 
 const CONTROL_PLANE_FIXTURE = {
-  OMB_CLOUD_READY_TOKEN: "ready-should-not-leak", OMB_CLOUD_BOOTSTRAP: "bootstrap-should-not-leak",
-  OMB_LICENSE_KEY: "license-should-not-leak", OMB_INSTALLATION_CREDENTIAL: "fleet-should-not-leak",
+  RIPO_CLOUD_READY_TOKEN: "ready-should-not-leak", RIPO_CLOUD_BOOTSTRAP: "bootstrap-should-not-leak",
+  RIPO_LICENSE_KEY: "license-should-not-leak", RIPO_INSTALLATION_CREDENTIAL: "fleet-should-not-leak",
 };
 
 describe("CodexDriver.decodeConfig", () => {
@@ -125,9 +125,9 @@ describe("fake app-server shell policy", () => {
   };
 
   it("lets a `-c exclude` override drop the lower layers' filters but keep their include_only", async () => {
-    const policy = await readPolicy(["-c", 'shell_environment_policy.exclude=["OPENMAUSBOT_CHATGPT_TOKEN"]'],
+    const policy = await readPolicy(["-c", 'shell_environment_policy.exclude=["RIPOBOT_CHATGPT_TOKEN"]'],
       { filters: { "USER_SECRET_*": "exclude" }, include_only: ["PATH", "HOME"] });
-    expect(policy).toMatchObject({ exclude: ["OPENMAUSBOT_CHATGPT_TOKEN"], filters: null, include_only: ["PATH", "HOME"] });
+    expect(policy).toMatchObject({ exclude: ["RIPOBOT_CHATGPT_TOKEN"], filters: null, include_only: ["PATH", "HOME"] });
     expect(await readPolicy([], { filters: { "USER_SECRET_*": "exclude" } })).toMatchObject({ exclude: null, filters: { "USER_SECRET_*": "exclude" } });
   });
 });
@@ -145,7 +145,7 @@ describe("CodexDriver turns (fake app-server)", () => {
       instanceId: "codex-test",
       displayName: "Codex Test",
       environment: {
-        ...(opts.managed ? { HOME: scratch, USERPROFILE: scratch, CODEX_HOME: join(scratch, ".codex"), OPENMAUSBOT_COMPANY_API_KEY: "synthetic-company-fixture" } : {}),
+        ...(opts.managed ? { HOME: scratch, USERPROFILE: scratch, CODEX_HOME: join(scratch, ".codex"), RIPOBOT_COMPANY_API_KEY: "synthetic-company-fixture" } : {}),
         ...opts.environment,
       },
       enabled: true,
@@ -160,11 +160,11 @@ describe("CodexDriver turns (fake app-server)", () => {
   };
 
   /** A remote-proxy mount's private record (mcp-gate-config.ts). */
-  const record = (mount: string) => `OMB_REMOTE_MCP_CONFIG_${createHash("sha256").update(mount).digest("hex")}`;
+  const record = (mount: string) => `RIPO_REMOTE_MCP_CONFIG_${createHash("sha256").update(mount).digest("hex")}`;
 
   beforeEach(() => {
     chmodSync(FAKE_CLI, 0o755);
-    scratch = mkdtempSync(join(tmpdir(), "omb-codex-test-"));
+    scratch = mkdtempSync(join(tmpdir(), "ripo-codex-test-"));
   });
 
   it("refuses native selection before a Codex prompt, including resumed Full-access turns", async () => {
@@ -182,18 +182,18 @@ describe("CodexDriver turns (fake app-server)", () => {
     await recorder.until((event) => event.type === "turn.completed");
     const seen = JSON.parse(readFileSync(dump, "utf8"));
     expect(seen.argv).toContain("mcp_servers.notes.enabled=false");
-    expect(JSON.stringify(seen.argv)).toContain("OMB_GATE_CONFIG_");
+    expect(JSON.stringify(seen.argv)).toContain("RIPO_GATE_CONFIG_");
     expect(JSON.stringify(seen.argv)).not.toContain("https://example.test/notes");
     const before = seen.calls.filter((call: { method: string }) => call.method === "turn/start").length;
     expect(before).toBe(1);
-    expect(Object.keys(seen.calls.find((call: { method: string }) => call.method === "thread/start").params.config.mcp_servers)).toEqual(["notes_openmausbot"]);
-    expect(seen.calls.find((call: { method: string }) => call.method === "thread/start").params.config.mcp_servers.notes_openmausbot.default_tools_approval_mode).toBe("prompt");
+    expect(Object.keys(seen.calls.find((call: { method: string }) => call.method === "thread/start").params.config.mcp_servers)).toEqual(["notes_ripobot"]);
+    expect(seen.calls.find((call: { method: string }) => call.method === "thread/start").params.config.mcp_servers.notes_ripobot.default_tools_approval_mode).toBe("prompt");
     recorder.events.length = 0;
     await instance.adapter.sendTurn({ threadId: "scope-mcp", text: "Continue", resumeCursor: "old-session", toolScope: { allow: ["native:*", "mcp:notes:read"] }, integrations: { custom: { notes: { type: "sse", url: "https://example.test/notes", headers: {} } } } });
     await recorder.until((event) => event.type === "turn.completed");
     const restored = JSON.parse(readFileSync(dump, "utf8"));
-    expect(Object.keys(restored.calls.find((call: { method: string }) => call.method === "thread/resume").params.config.mcp_servers)).toEqual(["notes_openmausbot"]);
-    expect(restored.calls.find((call: { method: string }) => call.method === "thread/resume").params.config.mcp_servers.notes_openmausbot.default_tools_approval_mode).toBe("prompt");
+    expect(Object.keys(restored.calls.find((call: { method: string }) => call.method === "thread/resume").params.config.mcp_servers)).toEqual(["notes_ripobot"]);
+    expect(restored.calls.find((call: { method: string }) => call.method === "thread/resume").params.config.mcp_servers.notes_ripobot.default_tools_approval_mode).toBe("prompt");
   });
 
   it("refuses a scoped prompt when effective Codex configuration still has an ambient MCP server", async () => {
@@ -223,9 +223,9 @@ describe("CodexDriver turns (fake app-server)", () => {
       expect(seen.argv).toContain("features.shell_snapshot=false");
       const thread = seen.calls.find((call: { method: string }) => call.method === (resumeCursor ? "thread/resume" : "thread/start"));
       // the gate record, and the switch the gate's mount sets, stay out of the shell
-      expect(thread.params.config["shell_environment_policy.exclude"]).toEqual([...policy.exclude, "OMB_GATE_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
+      expect(thread.params.config["shell_environment_policy.exclude"]).toEqual([...policy.exclude, "RIPO_GATE_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
       expect(thread.params.config).not.toHaveProperty("shell_environment_policy");
-      expect(Object.keys(seen.env).some(name => name.startsWith("OMB_GATE_CONFIG_"))).toBe(true);
+      expect(Object.keys(seen.env).some(name => name.startsWith("RIPO_GATE_CONFIG_"))).toBe(true);
       expect(JSON.stringify({ argv: seen.argv, calls: seen.calls })).not.toContain("synthetic-fixture-credential");
     }
   });
@@ -245,7 +245,7 @@ describe("CodexDriver turns (fake app-server)", () => {
       expect(completed).toMatchObject({ ok: true });
       const seen = JSON.parse(readFileSync(dump, "utf8"));
       const config = seen.calls.find((call: { method: string }) => call.method === (resumeCursor ? "thread/resume" : "thread/start")).params.config;
-      expect(config["shell_environment_policy.exclude"]).toEqual(["OMB_GATE_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
+      expect(config["shell_environment_policy.exclude"]).toEqual(["RIPO_GATE_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
       expect(Object.keys(config).filter(key => key.startsWith("shell_environment_policy"))).toEqual(["shell_environment_policy.exclude"]);
     }
   });
@@ -254,7 +254,7 @@ describe("CodexDriver turns (fake app-server)", () => {
   // `filters` table (codex-cli 0.160), so their own rules are extended in kind.
   it("keeps a person's shell filters and adds the gate pattern as an exclude filter", async () => {
     const dump = join(scratch, "shell-filters.json"); process.env.FAKE_CODEX_DUMP = dump;
-    const policy = { inherit: "all", filters: { "USER_SECRET_*": "exclude", "KEEP_*": "include", "omb_gate_config_*": "include" } };
+    const policy = { inherit: "all", filters: { "USER_SECRET_*": "exclude", "KEEP_*": "include", "ripo_gate_config_*": "include" } };
     await create({ mode: "resume", environment: { HOME: scratch, CODEX_HOME: join(scratch, ".codex"),
       FAKE_CODEX_MCP_OVERRIDES: "1", FAKE_CODEX_SHELL_ENVIRONMENT_POLICY: JSON.stringify(policy) } });
     for (const resumeCursor of [undefined, "old-session"]) {
@@ -268,7 +268,7 @@ describe("CodexDriver turns (fake app-server)", () => {
       const config = seen.calls.find((call: { method: string }) => call.method === (resumeCursor ? "thread/resume" : "thread/start")).params.config;
       // Codex matches (and rejects duplicate) filter patterns ignoring case:
       // the gate pattern replaces a case variant rather than sitting beside it.
-      expect(config["shell_environment_policy.filters"]).toEqual({ "USER_SECRET_*": "exclude", "KEEP_*": "include", "OMB_GATE_CONFIG_*": "exclude", ELECTRON_RUN_AS_NODE: "exclude" });
+      expect(config["shell_environment_policy.filters"]).toEqual({ "USER_SECRET_*": "exclude", "KEEP_*": "include", "RIPO_GATE_CONFIG_*": "exclude", ELECTRON_RUN_AS_NODE: "exclude" });
       expect(Object.keys(config).filter(key => key.startsWith("shell_environment_policy"))).toEqual(["shell_environment_policy.filters"]);
     }
   });
@@ -315,7 +315,7 @@ describe("CodexDriver turns (fake app-server)", () => {
 createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);if(m.id===undefined)return;let result={};
 if(m.method==='initialize')result={protocolVersion:m.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:process.env.IDENTITY,version:'1'}};
 if(m.method==='tools/list')result={tools:[process.env.TOOL,'forbidden'].map(name=>({name,inputSchema:{type:'object'}}))};
-if(m.method==='tools/call'){appendFileSync(process.env.RECEIPT,process.env.IDENTITY+':'+m.params.name+'\\n');result={content:[{type:'text',text:Object.keys(process.env).some(key=>key.startsWith('OMB_GATE_'))?'private-config-leak':process.env.IDENTITY}]};}
+if(m.method==='tools/call'){appendFileSync(process.env.RECEIPT,process.env.IDENTITY+':'+m.params.name+'\\n');result={content:[{type:'text',text:Object.keys(process.env).some(key=>key.startsWith('RIPO_GATE_'))?'private-config-leak':process.env.IDENTITY}]};}
 process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`);
     await create({ mode: "resume", environment: { HOME: scratch, CODEX_HOME: join(scratch, ".codex"), FAKE_CODEX_MCP_OVERRIDES: "1" } });
     const turn = { threadId: "multi-scope", text: "Fixture", toolScope: { allow: ["native:*", "mcp:agents:list_bots", "mcp:notes:read_notes"] }, integrations: {
@@ -329,7 +329,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       expect(recorder.events.filter(event => event.type === "runtime.error")).toEqual([]);
       const seen = JSON.parse(readFileSync(dump, "utf8"));
       const config = seen.calls.find((call: { method: string }) => call.method === (resumeCursor ? "thread/resume" : "thread/start")).params.config.mcp_servers;
-      // OpenMausBot's own coordination tools never ask; a person's own server still does.
+      // RipoBot's own coordination tools never ask; a person's own server still does.
       expect(config.agents.default_tools_approval_mode).toBe("approve");
       expect(config.notes.default_tools_approval_mode).toBe("prompt");
       for (const [name, tool] of [["agents", "list_bots"], ["notes", "read_notes"]]) {
@@ -390,7 +390,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     delete process.env.FAKE_CODEX_INTERRUPT_GRACE_MS;
     delete process.env.OPENAI_API_KEY;
     delete process.env.BOX_TOKEN;
-    delete process.env.OMB_TTS_KEY;
+    delete process.env.RIPO_TTS_KEY;
     for (const name of Object.keys(CONTROL_PLANE_FIXTURE)) delete process.env[name];
     recorder?.stop();
     await instance?.dispose();
@@ -569,7 +569,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     // workspace credentials the harness may hold (env-injected at boot by
     // the desktop shell) must never ride into the CLI child
     process.env.BOX_TOKEN = "box-should-not-leak";
-    process.env.OMB_TTS_KEY = "tts-should-not-leak";
+    process.env.RIPO_TTS_KEY = "tts-should-not-leak";
     Object.assign(process.env, CONTROL_PLANE_FIXTURE);
 
     const { turnId } = await instance.adapter.sendTurn({
@@ -585,7 +585,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       "turn.started",
       "session.started",
       "item.started", // commandExecution ls -la
-      "item.started", // webSearch OpenMausBot
+      "item.started", // webSearch RipoBot
       "item.completed", // commandExecution done
       "item.completed", // webSearch done
       "content.delta",
@@ -625,7 +625,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     expect(processIsAlive(seen.pid)).toBe(false);
     expect(seen.env.OPENAI_API_KEY).toBeUndefined();
     expect(seen.env.BOX_TOKEN).toBeUndefined();
-    expect(seen.env.OMB_TTS_KEY).toBeUndefined();
+    expect(seen.env.RIPO_TTS_KEY).toBeUndefined();
     for (const name of Object.keys(CONTROL_PLANE_FIXTURE)) expect(seen.env[name]).toBeUndefined();
     const methods = seen.calls.map((c: { method: string }) => c.method);
     expect(methods).toEqual(["initialize", "initialized", "config/read", "thread/start", "turn/start"]);
@@ -672,7 +672,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       const input = calls.find((c) => c.method === "turn/start")?.params?.input as Array<{ text?: string }> | undefined;
       return input?.[0]?.text;
     };
-    expect(turnText(first)).toBe("Context from OpenMausBot updated since this conversation started; it replaces any earlier copy:\n\nMemory: likes quiet hours.\n\nfirst");
+    expect(turnText(first)).toBe("Context from RipoBot updated since this conversation started; it replaces any earlier copy:\n\nMemory: likes quiet hours.\n\nfirst");
     expect(turnText(second)).toBe("second");
     expect(turnText(third)).toContain("Memory: moved to Toronto.");
     expect(turnText(third)).toContain("third");
@@ -1068,24 +1068,24 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
           command: process.execPath,
           args: ["/tmp/connector-proxy.js"],
           env: {
-            OMB_CONNECTOR_UPSTREAM_URL: "http://127.0.0.1:8799/api/internal/connectors/mcp",
-            OMB_CONNECTOR_TOKEN: "per-turn-connector-token",
+            RIPO_CONNECTOR_UPSTREAM_URL: "http://127.0.0.1:8799/api/internal/connectors/mcp",
+            RIPO_CONNECTOR_TOKEN: "per-turn-connector-token",
           },
         },
         agents: {
           command: process.execPath,
           args: ["/tmp/agents-proxy.js"],
-          env: { OMB_COMMS_TOKEN: "peer-comms-secret" },
+          env: { RIPO_COMMS_TOKEN: "peer-comms-secret" },
         },
       },
     });
     await recorder.until((event) => event.type === "turn.completed");
     const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(seen.argv.join(" ")).toContain("mcp_servers.openmausbot_connectors.command");
-    expect(seen.argv.join(" ")).toContain("OMB_CONNECTOR_TOKEN");
+    expect(seen.argv.join(" ")).toContain("mcp_servers.ripobot_connectors.command");
+    expect(seen.argv.join(" ")).toContain("RIPO_CONNECTOR_TOKEN");
     expect(seen.argv.join(" ")).not.toContain("per-turn-connector-token");
-    expect(seen.env.OMB_CONNECTOR_TOKEN).toBe("per-turn-connector-token");
-    expect(seen.env.OMB_COMMS_TOKEN).toBe("peer-comms-secret");
+    expect(seen.env.RIPO_CONNECTOR_TOKEN).toBe("per-turn-connector-token");
+    expect(seen.env.RIPO_COMMS_TOKEN).toBe("peer-comms-secret");
   });
 
   it("mounts custom MCP servers on-request while built-ins stay pre-quieted", async () => {
@@ -1104,7 +1104,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
         composio: {
           command: process.execPath,
           args: ["/tmp/connector-proxy.js"],
-          env: { OMB_COMMS_TOKEN: "per-boot-token" },
+          env: { RIPO_COMMS_TOKEN: "per-boot-token" },
         },
       },
     });
@@ -1118,7 +1118,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     expect(seen.env.NOTES_TOKEN).toBe("tok-notes");
     // the built-in keeps codex's pre-quieted approval mode; the custom
     // server does NOT — its tool calls arrive as approval cards
-    expect(argv).toContain('mcp_servers.openmausbot_connectors.default_tools_approval_mode');
+    expect(argv).toContain('mcp_servers.ripobot_connectors.default_tools_approval_mode');
     expect(argv).not.toContain('mcp_servers.notes.default_tools_approval_mode');
   });
 
@@ -1144,13 +1144,13 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     const argv = JSON.parse(readFileSync(dump, "utf8")).argv.join(" ");
     // the colliding server moves aside; a stdio command over the url entry
     // would have been "invalid configuration" for the whole app-server
-    expect(argv).toContain("mcp_servers.fibery_openmausbot.command");
+    expect(argv).toContain("mcp_servers.fibery_ripobot.sitey.mymand");
     expect(argv).not.toContain("mcp_servers.fibery.command");
     // an unrelated name is untouched
     expect(argv).toContain("mcp_servers.notes.command");
   });
 
-  it("reaches a url server through OpenMausBot's connector on Codex's own login, header values off argv", async () => {
+  it("reaches a url server through RipoBot's connector on Codex's own login, header values off argv", async () => {
     await create();
     const dump = join(scratch, "remote-mcp.json");
     process.env.FAKE_CODEX_DUMP = dump;
@@ -1171,25 +1171,25 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     expect(argv).not.toContain("tok-docs");
     expect(argv).not.toContain("docs.example");
     const settings = JSON.parse(seen.env[record("docs")]);
-    expect(JSON.parse(settings.OMB_REMOTE_MCP_SERVER)).toEqual(docs);
+    expect(JSON.parse(settings.RIPO_REMOTE_MCP_SERVER)).toEqual(docs);
     // Codex on its own login searches tools itself: the catalog passes through
-    expect(settings.OMB_REMOTE_MCP_DIRECTORY).toBeUndefined();
-    expect(Object.keys(seen.env).filter((name) => name.startsWith("OMB_MCP_HEADER_"))).toEqual([]);
+    expect(settings.RIPO_REMOTE_MCP_DIRECTORY).toBeUndefined();
+    expect(Object.keys(seen.env).filter((name) => name.startsWith("RIPO_MCP_HEADER_"))).toEqual([]);
     // the proxy speaks SSE, so Codex reaches that server too
-    expect(JSON.parse(seen.env[record("legacy")]).OMB_REMOTE_MCP_SERVER).toBe(JSON.stringify(legacy));
+    expect(JSON.parse(seen.env[record("legacy")]).RIPO_REMOTE_MCP_SERVER).toBe(JSON.stringify(legacy));
     // a user server keeps codex's on-request approval policy
     expect(argv).not.toContain("mcp_servers.docs.default_tools_approval_mode");
     // the record sits in Codex's environment, so its shell must not see it
     expect(seen.argv).toContain("features.shell_snapshot=false");
     const thread = seen.calls.find((call: { method: string }) => call.method === "thread/start");
-    expect(thread.params.config["shell_environment_policy.exclude"]).toEqual(["OMB_REMOTE_MCP_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
+    expect(thread.params.config["shell_environment_policy.exclude"]).toEqual(["RIPO_REMOTE_MCP_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
   });
 
   // A server that deserializes initialize strictly refuses the field
   // Codex's own client can add (a Voluum server: "Unrecognized field
   // 'schemaValidation'"), and Codex then runs the thread without its tools.
   // The fake starts each mount as codex-cli 0.160.1 does and sends that
-  // handshake: only OpenMausBot's connector gets through.
+  // handshake: only RipoBot's connector gets through.
   describe("a strict URL server", () => {
     const STRICT_TOOLS = [{ name: "report", inputSchema: { type: "object" } }, { name: "campaigns", inputSchema: { type: "object" } }];
     const SCHEMA_VALIDATION = { protocolVersion: "2025-06-18", capabilities: { elicitation: { form: { schemaValidation: true }, url: {} } }, clientInfo: { name: "codex-mcp-client", title: "Codex", version: "0.160.1" } };
@@ -1212,7 +1212,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       const seen = JSON.parse(readFileSync(dump, "utf8"));
       expect(seen.mcpStartup.voluum).toEqual({ status: "ready", tools: ["report", "campaigns"] });
       // upstream saw only the minimal handshake, never Codex's own
-      expect(strict.initializes).toEqual([{ protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "OpenMausBot tool proxy", version: "1" } }]);
+      expect(strict.initializes).toEqual([{ protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "RipoBot tool proxy", version: "1" } }]);
       expect(seen.argv.join(" ")).not.toContain("tok-voluum");
     });
 
@@ -1248,7 +1248,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       expect(await recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: true });
       const seen = JSON.parse(readFileSync(dump, "utf8"));
       expect(seen.mcpStartup.voluum).toEqual({ status: "ready", tools: ["report"] });
-      expect(strict.initializes).toEqual([{ protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "OpenMausBot tool proxy", version: "1" } }]);
+      expect(strict.initializes).toEqual([{ protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "RipoBot tool proxy", version: "1" } }]);
     });
   });
 
@@ -1262,7 +1262,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === turnId)).toMatchObject({ ok: true });
       const seen = JSON.parse(readFileSync(dump, "utf8"));
       const thread = seen.calls.find((call: { method: string }) => call.method === (resumeCursor ? "thread/resume" : "thread/start"));
-      expect(thread.params.config["shell_environment_policy.exclude"]).toEqual(["USER_SECRET_*", "OMB_REMOTE_MCP_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
+      expect(thread.params.config["shell_environment_policy.exclude"]).toEqual(["USER_SECRET_*", "RIPO_REMOTE_MCP_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
     }
     // a turn without such values leaves the person's policy alone
     const { turnId } = await instance.adapter.sendTurn({ threadId: "no-header-shell", text: "go" });
@@ -1279,9 +1279,9 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       // already here before any mount: one passed along unchanged, one a mount overrides
       SHARED_SETTING: "same", OVERRIDDEN: "person", ELECTRON_RUN_AS_NODE: "1" } });
     await instance.adapter.sendTurn({ threadId: "mount-env-shell", text: "go", integrations: {
-      agents: { command: process.execPath, args: ["/tmp/agents-proxy.js"], env: { ELECTRON_RUN_AS_NODE: "1", OMB_COMMS_TOKEN: "agents-capability" } },
-      composio: { command: process.execPath, args: ["/tmp/connector-proxy.js"], env: { OMB_CONNECTORS_TOKEN: "connector-capability" } },
-      phone: { command: process.execPath, args: ["/tmp/phone-proxy.js"], env: { OMB_PHONE_TOKEN: "phone-capability" } },
+      agents: { command: process.execPath, args: ["/tmp/agents-proxy.js"], env: { ELECTRON_RUN_AS_NODE: "1", RIPO_COMMS_TOKEN: "agents-capability" } },
+      composio: { command: process.execPath, args: ["/tmp/connector-proxy.js"], env: { RIPO_CONNECTORS_TOKEN: "connector-capability" } },
+      phone: { command: process.execPath, args: ["/tmp/phone-proxy.js"], env: { RIPO_PHONE_TOKEN: "phone-capability" } },
       custom: {
         // TZ is a variable no shell should lose, whoever set it
         notes: { command: "npx", args: ["-y", "@x/notes-mcp"], env: { GITHUB_PERSONAL_ACCESS_TOKEN: "ghp-synthetic", SHARED_SETTING: "same", OVERRIDDEN: "server", TZ: "UTC" } },
@@ -1292,8 +1292,8 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     const seen = JSON.parse(readFileSync(dump, "utf8"));
     expect(seen.argv).toContain("features.shell_snapshot=false");
     expect(seen.calls.find((call: { method: string }) => call.method === "thread/start").params.config["shell_environment_policy.exclude"]).toEqual([
-      "USER_SECRET_*", "OMB_REMOTE_MCP_CONFIG_*",
-      "ELECTRON_RUN_AS_NODE", "GITHUB_PERSONAL_ACCESS_TOKEN", "OMB_COMMS_TOKEN", "OMB_CONNECTORS_TOKEN", "OMB_PHONE_TOKEN", "OVERRIDDEN",
+      "USER_SECRET_*", "RIPO_REMOTE_MCP_CONFIG_*",
+      "ELECTRON_RUN_AS_NODE", "GITHUB_PERSONAL_ACCESS_TOKEN", "RIPO_COMMS_TOKEN", "RIPO_CONNECTORS_TOKEN", "RIPO_PHONE_TOKEN", "OVERRIDDEN",
     ]);
   });
 
@@ -1305,7 +1305,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     } } });
     expect(await recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: true });
     const thread = JSON.parse(readFileSync(dump, "utf8")).calls.find((call: { method: string }) => call.method === "thread/start");
-    expect(thread.params.config["shell_environment_policy.exclude"]).toEqual(["OMB_REMOTE_MCP_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
+    expect(thread.params.config["shell_environment_policy.exclude"]).toEqual(["RIPO_REMOTE_MCP_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
   });
 
   it("reads an MCP tool's name to the closing quote, so a lookalike is not auto-approved as web search", async () => {
@@ -1349,8 +1349,8 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       expect(argv).not.toContain("mcp_servers.whop.url");
       expect(argv).not.toContain("tok-whop");
       const settings = JSON.parse(seen.env[record("whop")]);
-      expect(JSON.parse(settings.OMB_REMOTE_MCP_SERVER)).toEqual(whop);
-      expect(JSON.parse(settings.OMB_REMOTE_MCP_DIRECTORY)).toEqual({ name: "whop" });
+      expect(JSON.parse(settings.RIPO_REMOTE_MCP_SERVER)).toEqual(whop);
+      expect(JSON.parse(settings.RIPO_REMOTE_MCP_DIRECTORY)).toEqual({ name: "whop" });
       // the proxy speaks SSE, so a plan turn reaches that server too
       expect(envVars("legacy")).toEqual(expect.arrayContaining(["ELECTRON_RUN_AS_NODE", record("legacy")]));
       // a command server is mounted as before
@@ -1358,7 +1358,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       // the proxies' records are kept from the shell, next to the plan token
       expect(seen.argv).toContain("features.shell_snapshot=false");
       const thread = seen.calls.find((call: { method: string }) => call.method === "thread/start");
-      expect(thread.params.config["shell_environment_policy.exclude"]).toEqual(["OPENMAUSBOT_CHATGPT_TOKEN", "OMB_REMOTE_MCP_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
+      expect(thread.params.config["shell_environment_policy.exclude"]).toEqual(["RIPOBOT_CHATGPT_TOKEN", "RIPO_REMOTE_MCP_CONFIG_*", "ELECTRON_RUN_AS_NODE"]);
       // still the person's own server: its tool calls keep asking
       expect(argv).not.toContain("mcp_servers.whop.default_tools_approval_mode");
     });
@@ -1395,8 +1395,8 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     // added to the policy in the person's own representation instead, on
     // every plan turn, with or without mounts.
     it.each([
-      ["list", { exclude: ["USER_SECRET_*"] }, "shell_environment_policy.exclude", ["USER_SECRET_*", "OPENMAUSBOT_CHATGPT_TOKEN"]],
-      ["filters", { filters: { "USER_SECRET_*": "exclude" } }, "shell_environment_policy.filters", { "USER_SECRET_*": "exclude", OPENMAUSBOT_CHATGPT_TOKEN: "exclude" }],
+      ["list", { exclude: ["USER_SECRET_*"] }, "shell_environment_policy.exclude", ["USER_SECRET_*", "RIPOBOT_CHATGPT_TOKEN"]],
+      ["filters", { filters: { "USER_SECRET_*": "exclude" } }, "shell_environment_policy.filters", { "USER_SECRET_*": "exclude", RIPOBOT_CHATGPT_TOKEN: "exclude" }],
     ] as const)("keeps the person's own shell %s and adds the plan token to it", async (_name, policy, key, expected) => {
       plan();
       await create({ mode: "resume", authMode: "chatgpt-plan", environment: { FAKE_CODEX_SHELL_ENVIRONMENT_POLICY: JSON.stringify(policy) } });
@@ -1413,7 +1413,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
 
     it("refuses the turn when Codex's shell exclusions cannot be confirmed", async () => {
       plan();
-      await create({ authMode: "chatgpt-plan", environment: { FAKE_CODEX_SHELL_ENVIRONMENT_POLICY: JSON.stringify({ filters: { "OMB_*": "maybe" } }) } });
+      await create({ authMode: "chatgpt-plan", environment: { FAKE_CODEX_SHELL_ENVIRONMENT_POLICY: JSON.stringify({ filters: { "RIPO_*": "maybe" } }) } });
       const dump = join(scratch, "plan-bad-policy.json");
       process.env.FAKE_CODEX_DUMP = dump;
       await instance.adapter.sendTurn({ threadId: "t-plan-policy", text: "go", model: "gpt-6.1-sol", integrations: { custom: { whop } } });
@@ -1443,9 +1443,9 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       await recorder.until((event) => event.type === "turn.completed");
       expect(recorder.events.at(-1)).toMatchObject({ ok: true });
       const seen = JSON.parse(readFileSync(dump, "utf8"));
-      const gate = JSON.parse(seen.env[`OMB_GATE_CONFIG_${createHash("sha256").update("whop").digest("hex")}`]);
-      expect(gate.OMB_GATE_DIRECTORY).toBe("1");
-      expect(JSON.parse(JSON.parse(gate.OMB_GATE_UPSTREAM).env.OMB_REMOTE_MCP_DIRECTORY)).toEqual({ name: "whop", toolScope: { allow: ["native:*", "mcp:whop:*"], deny: ["mcp:whop:payments_create"] } });
+      const gate = JSON.parse(seen.env[`RIPO_GATE_CONFIG_${createHash("sha256").update("whop").digest("hex")}`]);
+      expect(gate.RIPO_GATE_DIRECTORY).toBe("1");
+      expect(JSON.parse(JSON.parse(gate.RIPO_GATE_UPSTREAM).env.RIPO_REMOTE_MCP_DIRECTORY)).toEqual({ name: "whop", toolScope: { allow: ["native:*", "mcp:whop:*"], deny: ["mcp:whop:payments_create"] } });
       expect(seen.argv.join(" ")).not.toContain("tok-whop");
     });
 
@@ -1515,17 +1515,17 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
         agents: {
           command: process.execPath,
           args: ["/tmp/agents-proxy.js"],
-          env: { OMB_COMMS_TOKEN: "fresh-turn-bearer" },
+          env: { RIPO_COMMS_TOKEN: "fresh-turn-bearer" },
         },
         custom: {
           hostile: {
             command: "hostile-mcp",
             args: [],
-            env: { OMB_HARNESS_URL: "https://attacker.invalid" },
+            env: { RIPO_HARNESS_URL: "https://attacker.invalid" },
           },
         },
       },
-    })).rejects.toThrow(/reserved environment variable.*OMB_HARNESS_URL/i);
+    })).rejects.toThrow(/reserved environment variable.*RIPO_HARNESS_URL/i);
   });
 
   it.each(["ask", "auto"] as const)("pre-allows peer-agent comms without exposing its token in %s mode", async (approvalMode) => {
@@ -1543,11 +1543,11 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
           args: ["/tmp/agents-proxy.js"],
           env: {
             ELECTRON_RUN_AS_NODE: "1",
-            OMB_HARNESS_URL: "http://127.0.0.1:8799",
-            OMB_BOT_ID: "captain",
-            OMB_THREAD_ID: "t-agents",
-            OMB_COMMS_TOKEN: "peer-comms-secret",
-            OMB_TURN_DEPTH: "0",
+            RIPO_HARNESS_URL: "http://127.0.0.1:8799",
+            RIPO_BOT_ID: "captain",
+            RIPO_THREAD_ID: "t-agents",
+            RIPO_COMMS_TOKEN: "peer-comms-secret",
+            RIPO_TURN_DEPTH: "0",
           },
         },
       },
@@ -1559,9 +1559,9 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     // Coordination never raises a card: "auto" would quiet only read-only tools.
     expect(seen.argv).toContain('mcp_servers.agents.default_tools_approval_mode="approve"');
     expect(seen.argv.join(" ")).toContain("/tmp/agents-proxy.js");
-    expect(seen.argv.join(" ")).toContain("OMB_COMMS_TOKEN");
+    expect(seen.argv.join(" ")).toContain("RIPO_COMMS_TOKEN");
     expect(seen.argv.join(" ")).not.toContain("peer-comms-secret");
-    expect(seen.env.OMB_COMMS_TOKEN).toBe("peer-comms-secret");
+    expect(seen.env.RIPO_COMMS_TOKEN).toBe("peer-comms-secret");
     expect(instance.adapter.capabilities.agentsMcp).toBe(true);
   });
 
@@ -1579,8 +1579,8 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
           command: process.execPath,
           args: ["/tmp/harness-mcp-proxy.js"],
           env: {
-            OMB_HARNESS_URL: "http://127.0.0.1:8799",
-            OMB_MCP_TOKEN_BROWSER: "browser-capability-secret",
+            RIPO_HARNESS_URL: "http://127.0.0.1:8799",
+            RIPO_MCP_TOKEN_BROWSER: "browser-capability-secret",
           },
         },
       },
@@ -1599,7 +1599,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     expect(seen.argv).not.toContain('mcp_servers.browser.default_tools_approval_mode="approve"');
     expect(seen.argv.join(" ")).toContain("/tmp/harness-mcp-proxy.js");
     expect(seen.argv.join(" ")).not.toContain("browser-capability-secret");
-    expect(seen.env.OMB_MCP_TOKEN_BROWSER).toBe("browser-capability-secret");
+    expect(seen.env.RIPO_MCP_TOKEN_BROWSER).toBe("browser-capability-secret");
     for (const method of ["thread/start", "turn/start"]) {
       expect(seen.calls.find((call: { method: string }) => call.method === method)?.params).toMatchObject({
         approvalPolicy: "on-request",
@@ -1620,8 +1620,8 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       integrations: {
         localComputer: {
           command: process.execPath,
-          args: ["/tmp/container-mcp.js", "podman", "openmausbot-computer", "/run/cua.sock"],
-          env: { ELECTRON_RUN_AS_NODE: "1", OMB_VM_TOKEN: "vm-secret" },
+          args: ["/tmp/container-mcp.js", "podman", "ripobot-computer", "/run/cua.sock"],
+          env: { ELECTRON_RUN_AS_NODE: "1", RIPO_VM_TOKEN: "vm-secret" },
         },
       },
     });
@@ -1630,9 +1630,9 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     const seen = JSON.parse(readFileSync(dump, "utf8"));
     expect(seen.argv.join(" ")).toContain("mcp_servers.computer.command");
     expect(seen.argv.join(" ")).toContain("/tmp/container-mcp.js");
-    expect(seen.argv.join(" ")).toContain("OMB_VM_TOKEN");
+    expect(seen.argv.join(" ")).toContain("RIPO_VM_TOKEN");
     expect(seen.argv.join(" ")).not.toContain("vm-secret");
-    expect(seen.env.OMB_VM_TOKEN).toBe("vm-secret");
+    expect(seen.env.RIPO_VM_TOKEN).toBe("vm-secret");
   });
 
 
@@ -1654,7 +1654,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     const seen = JSON.parse(readFileSync(dump, "utf8"));
     expect(seen.argv).toContain("model_providers.unsloth.base_url=\"http://127.0.0.1:8888/v1\"");
     expect(JSON.stringify(seen.argv)).not.toContain("unsloth-secret");
-    expect(seen.env.OPENMAUSBOT_LOCAL_UNSLOTH_API_KEY).toBe("unsloth-secret");
+    expect(seen.env.RIPOBOT_LOCAL_UNSLOTH_API_KEY).toBe("unsloth-secret");
   });
 
   it("streams agentMessage deltas without re-emitting the settled text", async () => {
@@ -1720,15 +1720,15 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       ["gpt-6.1-sol", "gpt-6.1-sol", "openai_chatgpt_plan"],
     ] },
     { name: "Company", opts: { managed: true }, selections: [
-      ["company-codex-model", "company-codex-model", "openmaus_company"],
-      ["company-codex-model", "company-codex-model", "openmaus_company"],
+      ["company-codex-model", "company-codex-model", "ripo_company"],
+      ["company-codex-model", "company-codex-model", "ripo_company"],
     ] },
   ])("reasserts the selected model and provider after $name app-server restarts", async ({ opts, selections }) => {
     const token = vi.spyOn(ChatGptPlanAuthController.prototype, "accessToken").mockResolvedValue("synthetic-chatgpt-token");
     const catalog = vi.spyOn(ChatGptPlanAuthController.prototype, "models").mockResolvedValue({
       default: "gpt-6.1-sol", options: ["gpt-5.6-sol", "gpt-6.1-sol"].map(id => ({ id, label: id })),
     });
-    vi.stubEnv("OPENMAUSBOT_CHATGPT_TOKEN", "inherited-token-must-not-leak");
+    vi.stubEnv("RIPOBOT_CHATGPT_TOKEN", "inherited-token-must-not-leak");
     vi.stubEnv("OPENAI_API_KEY", "inherited-api-key-must-not-leak");
     await create({ ...opts, mode: "resume", environment: { HOME: scratch, USERPROFILE: scratch, CODEX_HOME: join(scratch, ".codex") } });
     const dump = join(scratch, "model-provider-resume.json");
@@ -1747,7 +1747,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       pids.add(seen.pid);
       const plan = "authMode" in opts;
       expect(seen.env.OPENAI_API_KEY).toBeUndefined();
-      expect(seen.env.OPENMAUSBOT_CHATGPT_TOKEN).toBe(plan ? "synthetic-chatgpt-token" : undefined);
+      expect(seen.env.RIPOBOT_CHATGPT_TOKEN).toBe(plan ? "synthetic-chatgpt-token" : undefined);
       expect(JSON.stringify({ argv: seen.argv, calls: seen.calls })).not.toContain("synthetic-chatgpt-token");
       if (plan) {
         expect(seen.env.CODEX_HOME.startsWith(join(DATA_DIR, "providers", "chatgpt-plan") + sep)).toBe(true);
@@ -1758,7 +1758,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       } else expect(seen.env.CODEX_HOME).toBe(join(scratch, ".codex"));
       const threadCalls = seen.calls.filter((call: { method: string }) => ["thread/start", "thread/resume"].includes(call.method));
       expect(threadCalls).toHaveLength(1);
-      if (plan) expect(threadCalls[0].params.config["shell_environment_policy.exclude"]).toEqual(["OPENMAUSBOT_CHATGPT_TOKEN"]);
+      if (plan) expect(threadCalls[0].params.config["shell_environment_policy.exclude"]).toEqual(["RIPOBOT_CHATGPT_TOKEN"]);
       expect(threadCalls[0]).toMatchObject({
         method: index ? "thread/resume" : "thread/start",
         params: { model: expectedModel, modelProvider, ...(index ? { threadId: "codex-thread-1" } : {}) },
@@ -1770,8 +1770,8 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
   });
 
   it.each([
-    ["Cloud home", "OMB_CLOUD_ROLE", "home"],
-    ["hosted enterprise", "OMB_ADMIN_URL", "https://admin.example.test"],
+    ["Cloud home", "RIPO_CLOUD_ROLE", "home"],
+    ["hosted enterprise", "RIPO_ADMIN_URL", "https://admin.example.test"],
   ])("refuses desktop ChatGPT plan sign-in on %s before accessing credentials or spawning", async (_name, variable, value) => {
     vi.stubEnv(variable, value);
     const spawn = vi.spyOn(procs, "spawnCli").mockImplementation(() => { throw new Error("Unexpected process"); });
@@ -1887,7 +1887,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
   it("reports local ChatGPT sign-out with a warning when remote revocation is unconfirmed", async () => {
     vi.spyOn(ChatGptPlanAuthController.prototype, "models").mockResolvedValue({ default: "gpt-6.1-sol", options: [{ id: "gpt-6.1-sol", label: "GPT-6.1 Sol" }] });
     vi.spyOn(ChatGptPlanAuthController.prototype, "snapshot").mockResolvedValue({ authenticated: false });
-    const message = "Signed out locally, but remote revocation was not confirmed. Disconnect OpenMausBot in ChatGPT Settings → Usage to end access there.";
+    const message = "Signed out locally, but remote revocation was not confirmed. Disconnect RipoBot in ChatGPT Settings → Usage to end access there.";
     vi.spyOn(ChatGptPlanAuthController.prototype, "signOut").mockRejectedValue(Object.assign(new Error(message), { code: "chatgpt_revocation_unconfirmed" }));
     await create({ authMode: "chatgpt-plan" });
     await expect(instance.signOut!()).resolves.toBeUndefined();
@@ -1921,9 +1921,9 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
   });
 
   it("names a missing Company API key or CODEX_HOME instead of one blanket refusal", async () => {
-    await create({ managed: true, environment: { OPENMAUSBOT_COMPANY_API_KEY: "" } });
+    await create({ managed: true, environment: { RIPOBOT_COMPANY_API_KEY: "" } });
     await expect(instance.adapter.sendTurn({ threadId: "company-no-key", text: "hi", model: "company-codex-model" }))
-      .rejects.toThrow("OPENMAUSBOT_COMPANY_API_KEY is missing");
+      .rejects.toThrow("RIPOBOT_COMPANY_API_KEY is missing");
     await create({ managed: true, environment: { CODEX_HOME: "" } });
     await expect(instance.adapter.sendTurn({ threadId: "company-no-home", text: "hi", model: "company-codex-model" }))
       .rejects.toThrow("CODEX_HOME is missing");
@@ -1946,7 +1946,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       "initialize", "initialized", "config/read", "thread/resume", "thread/start", "turn/start",
     ]);
     expect(seen.calls.find((call: { method: string }) => call.method === "thread/start").params).toMatchObject({
-      model: "company-codex-model", modelProvider: "openmaus_company", cwd: scratch,
+      model: "company-codex-model", modelProvider: "ripo_company", cwd: scratch,
       developerInstructions: expect.stringContaining("Keep current bot rules."),
       approvalPolicy: "never", sandbox: "danger-full-access", ephemeral: false,
     });
@@ -1954,7 +1954,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       threadId: "codex-thread-1",
       input: [{ type: "text", text: recoveryText }, { type: "localImage", path: imagePath }],
     });
-    expect(seen.argv).toContain('model_provider="openmaus_company"');
+    expect(seen.argv).toContain('model_provider="ripo_company"');
     expect(JSON.stringify(seen.argv)).not.toContain("synthetic-company-fixture");
     expect(recorder.events.filter((event) => event.type === "session.started")).toMatchObject([{ sessionId: "codex-thread-1", rebuilt: true }]);
   });
@@ -2104,7 +2104,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       if (index > 0) expect(threadCalls[0].method).toBe("thread/resume");
       const updates = calls.filter((call) => call.method === "thread/inject_items");
       expect(updates).toHaveLength(index === 2 || index === 3 ? 1 : 0);
-      if (updates.length) expect(JSON.stringify(updates[0].params)).toContain(system || "No OpenMausBot bot-specific instructions remain.");
+      if (updates.length) expect(JSON.stringify(updates[0].params)).toContain(system || "No RipoBot bot-specific instructions remain.");
       for (const call of calls.filter((call) => call.method === "turn/start")) {
         expect(call.params.input).toEqual([{ type: "text", text: `message-${index}` }]);
       }
@@ -2126,7 +2126,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       await expect(recorder.until((event) => event.type === "turn.completed" && event.turnId === turnId)).resolves.toMatchObject({ ok: true });
       const calls = JSON.parse(readFileSync(dump, "utf8")).calls;
       const threadCall = calls.find((call: { method: string }) => call.method === (index ? "thread/resume" : "thread/start"));
-      expect(threadCall.params.developerInstructions).toBe(`${system || "No OpenMausBot bot-specific instructions remain."}\n\nPrivate native rules.`);
+      expect(threadCall.params.developerInstructions).toBe(`${system || "No RipoBot bot-specific instructions remain."}\n\nPrivate native rules.`);
       expect(calls.filter((call: { method: string }) => call.method === "thread/inject_items")).toHaveLength(index === 1 ? 1 : 0);
       expect(calls.find((call: { method: string }) => call.method === "turn/start").params.input).toEqual([{ type: "text", text: `message-${index}` }]);
     }

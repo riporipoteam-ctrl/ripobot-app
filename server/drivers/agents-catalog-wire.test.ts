@@ -60,10 +60,10 @@ function profiles(): Record<string, Profile> {
             .filter(Boolean).join("+") || "default";
           all[name] = {
             env: {
-              OMB_SKILL_AUTHORING_ENABLED: flag(skills),
-              OMB_SHARED_COMPUTERS_ENABLED: flag(shared),
-              OMB_VOICE_NOTES: flag(voice),
-              OMB_CHIEF_OF_STAFF: flag(chief),
+              RIPO_SKILL_AUTHORING_ENABLED: flag(skills),
+              RIPO_SHARED_COMPUTERS_ENABLED: flag(shared),
+              RIPO_VOICE_NOTES: flag(voice),
+              RIPO_CHIEF_OF_STAFF: flag(chief),
             },
           };
         }
@@ -74,12 +74,12 @@ function profiles(): Record<string, Profile> {
   // profiles are pinned, and differ from the full catalog only where the
   // test below says they may.
   for (const name of ["skills+shared+voice", "skills+shared+voice+non-chief"]) {
-    all[`${name}+cloud-home`] = { env: { ...all[name]!.env, OMB_CLOUD_HOME: "1" } };
+    all[`${name}+cloud-home`] = { env: { ...all[name]!.env, RIPO_CLOUD_HOME: "1" } };
   }
   // The switches that once picked a catalog profile (a room turn, own-thread
   // creation, a standing external runtime) change nothing now; pin that.
   all["default+legacy-switches"] = {
-    env: { ...all.default!.env, OMB_ROOM_TURN: "1", OMB_OWN_THREAD_CREATION: "1", OMB_EXTERNAL_RUNTIME: "1" },
+    env: { ...all.default!.env, RIPO_ROOM_TURN: "1", RIPO_OWN_THREAD_CREATION: "1", RIPO_EXTERNAL_RUNTIME: "1" },
   };
   return all;
 }
@@ -132,11 +132,11 @@ const RPC_PREFIX = '{"jsonrpc":"2.0","id":1,"result":';
 /** The exact `result` text of one tools/list answer from a freshly spawned
  * proxy. Sliced out of the raw stdout line, never re-serialized. */
 async function toolsListWire(entry: string, env: Record<string, string>): Promise<string> {
-  // A developer shell (or an OpenMausBot turn running this suite) can carry
-  // OMB_* switches of its own; the profile must be the only source.
-  const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("OMB_")));
+  // A developer shell (or an RipoBot turn running this suite) can carry
+  // RIPO_* switches of its own; the profile must be the only source.
+  const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("RIPO_")));
   const child = spawn(process.execPath, [entry], {
-    env: { ...inherited, OMB_HARNESS_URL: "http://127.0.0.1:9", OMB_BOT_ID: "bot-golden", OMB_THREAD_ID: "thread-golden", OMB_COMMS_TOKEN: "unused", OMB_TURN_DEPTH: "0", ...env },
+    env: { ...inherited, RIPO_HARNESS_URL: "http://127.0.0.1:9", RIPO_BOT_ID: "bot-golden", RIPO_THREAD_ID: "thread-golden", RIPO_COMMS_TOKEN: "unused", RIPO_TURN_DEPTH: "0", ...env },
     stdio: ["pipe", "pipe", "inherit"],
   });
   try {
@@ -222,8 +222,8 @@ describe("agents proxy tools/list golden", () => {
       for (const tool of toolsOf(wires[name]!)) {
         // A Cloud home's own select_computer is pinned by the next test, and
         // a non-Chief's propose_profile and propose_model by the one after.
-        if (profile.env.OMB_CLOUD_HOME === "1" && tool.name === "select_computer") continue;
-        if (profile.env.OMB_CHIEF_OF_STAFF === "0" && CHIEF_TARGET_TOOLS.includes(tool.name)) continue;
+        if (profile.env.RIPO_CLOUD_HOME === "1" && tool.name === "select_computer") continue;
+        if (profile.env.RIPO_CHIEF_OF_STAFF === "0" && CHIEF_TARGET_TOOLS.includes(tool.name)) continue;
         expect(JSON.stringify(tool), `${name}: ${tool.name}`).toBe(full.get(tool.name));
       }
     }
@@ -252,7 +252,7 @@ describe("agents proxy tools/list golden", () => {
 
   it("ignores the switches that once picked a catalog profile", () => {
     expect(wires["default+legacy-switches"]).toBe(wires.default);
-    const profile = catalogProfileFromEnv({ OMB_BOT_ID: "bot-golden", OMB_CHIEF_OF_STAFF: "1", OMB_ROOM_TURN: "1", OMB_OWN_THREAD_CREATION: "1", OMB_EXTERNAL_RUNTIME: "1" });
+    const profile = catalogProfileFromEnv({ RIPO_BOT_ID: "bot-golden", RIPO_CHIEF_OF_STAFF: "1", RIPO_ROOM_TURN: "1", RIPO_OWN_THREAD_CREATION: "1", RIPO_EXTERNAL_RUNTIME: "1" });
     expect(JSON.stringify({ tools: availableTools(profile) })).toBe(wires.default);
     expect(profile).not.toHaveProperty("coordinating");
     expect(profile).not.toHaveProperty("externalRuntime");
@@ -280,7 +280,7 @@ describe("agents proxy tools/list golden", () => {
     // Every route behind these refuses a bot that is not a Chief, so the rest
     // are not shown them; otherwise the two catalogs are the same to the byte.
     type SchemaTool = Tool & { description: string; inputSchema: { properties: Record<string, unknown> } };
-    const nonChief = Object.keys(PROFILES).filter((name) => PROFILES[name]!.env.OMB_CHIEF_OF_STAFF === "0");
+    const nonChief = Object.keys(PROFILES).filter((name) => PROFILES[name]!.env.RIPO_CHIEF_OF_STAFF === "0");
     expect(nonChief).toHaveLength(9);
     for (const name of nonChief) {
       const chiefTools = toolsOf(wires[name === "non-chief" ? "default" : name.replace("+non-chief", "")]!) as SchemaTool[];
@@ -307,7 +307,7 @@ describe("agents proxy tools/list golden", () => {
 
   it("is what the catalog module computes in-process, so another front end mounts the same tools", () => {
     for (const [name, profile] of Object.entries(PROFILES)) {
-      const tools = availableTools(catalogProfileFromEnv({ OMB_BOT_ID: "bot-golden", ...profile.env }));
+      const tools = availableTools(catalogProfileFromEnv({ RIPO_BOT_ID: "bot-golden", ...profile.env }));
       expect(JSON.stringify({ tools }), name).toBe(wires[name]);
     }
   });
@@ -344,7 +344,7 @@ describe("agents proxy tools/list from the packaged bundle", () => {
     // dist-server/ that the desktop app, the npm package and the container
     // image all copy whole. The proxy runs as its own process there, so every
     // module it imports has to be inlined into this one file.
-    directory = realpathSync(mkdtempSync(join(tmpdir(), "omb-agents-proxy-bundle-")));
+    directory = realpathSync(mkdtempSync(join(tmpdir(), "ripo-agents-proxy-bundle-")));
     await build({
       entryPoints: [PROXY_SOURCE],
       bundle: true,

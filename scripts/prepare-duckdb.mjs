@@ -8,7 +8,7 @@
 // The packaged app ships no node_modules (the server is an esbuild bundle), so
 // both travel as one extraResources tree that server/data/engine.ts loads
 // through createRequire; the Docker build stages the same way and points
-// OMB_DUCKDB_DIR at it.
+// RIPO_DUCKDB_DIR at it.
 //
 // Each tree holds exactly the pinned version from package.json: a binding and
 // its libduckdb must come from the same release, and the extension directory
@@ -205,7 +205,7 @@ export async function stageDuckdb({
   nodeModules = join(root, "node_modules"),
   stage = join(root, "dist-native", "duckdb"),
   targets = targetsFor(),
-  cache = join(nodeModules, ".cache", "openmausbot", "duckdb"),
+  cache = join(nodeModules, ".cache", "ripobot", "duckdb"),
   pack = packedPackage,
   sign = process.platform === "darwin",
   log = console.log,

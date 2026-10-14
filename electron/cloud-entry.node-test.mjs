@@ -22,20 +22,20 @@ function fixture({ open = async () => true } = {}) {
 const settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
 
 test("the Cloud protocol is a fixed action without URL routing or credentials", () => {
-  assert.equal(CLOUD_DEEP_LINK, "openmausbot://cloud");
-  assert.equal(isCloudDeepLink("openmausbot://cloud"), true);
-  for (const value of [null, undefined, {}, ["openmausbot://cloud"], "", "openmausbot://cloud/", "openmausbot://cloud?", "openmausbot://cloud#",
-    "openmausbot://cloud?code=ABCDE-FGHJK", "openmausbot://cloud#code=ABCD-EFGH-JKLM", "openmausbot://cloud?url=https://home.example",
-    "openmausbot://cloud/pair", "openmausbot://user@cloud", "openmausbot://cloud:443", "openmausbot://cloud.evil", "openmausbot://CLOUD",
-    "OPENMAUSBOT://cloud", "openmausbot:cloud", "openmausbot:///cloud", "https://cloud", " openmausbot://cloud", "openmausbot://cloud ",
-    "openmausbot://%63loud", "openmausbot://organization", "openmausbot://install?url=https://github.com/x/y"]) {
+  assert.equal(CLOUD_DEEP_LINK, "ripobot://cloud");
+  assert.equal(isCloudDeepLink("ripobot://cloud"), true);
+  for (const value of [null, undefined, {}, ["ripobot://cloud"], "", "ripobot://cloud/", "ripobot://cloud?", "ripobot://cloud#",
+    "ripobot://cloud?code=ABCDE-FGHJK", "ripobot://cloud#code=ABCD-EFGH-JKLM", "ripobot://cloud?url=https://home.example",
+    "ripobot://cloud/pair", "ripobot://user@cloud", "ripobot://cloud:443", "ripobot://cloud.evil", "ripobot://CLOUD",
+    "RIPOBOT://cloud", "ripobot:cloud", "ripobot:///cloud", "https://cloud", " ripobot://cloud", "ripobot://cloud ",
+    "ripobot://%63loud", "ripobot://organization", "ripobot://install?url=https://github.com/x/y"]) {
     assert.equal(isCloudDeepLink(value), false, String(value));
   }
 });
 
 test("consuming a launch action prevents it replaying on a later restart without changing other arguments", () => {
-  const original = ["/Applications/OpenMausBot", "--profile=fixture", "openmausbot://cloud?ignored", "openmausbot://organization", "openmausbot://install/example"];
-  const argv = [...original, "openmausbot://cloud", "openmausbot://cloud"];
+  const original = ["/Applications/RipoBot", "--profile=fixture", "ripobot://cloud?ignored", "ripobot://organization", "ripobot://install/example"];
+  const argv = [...original, "ripobot://cloud", "ripobot://cloud"];
   assert.equal(takeCloudDeepLink(argv), true);
   assert.deepEqual(argv, original);
   assert.equal(takeCloudDeepLink(argv), false, "the action is consumed exactly once");
@@ -44,9 +44,9 @@ test("consuming a launch action prevents it replaying on a later restart without
 
 test("a cold-start link waits until main can navigate, then opens exactly once", async () => {
   const h = fixture();
-  const argv = ["/Applications/OpenMausBot", "--fixture", "openmausbot://cloud"];
+  const argv = ["/Applications/RipoBot", "--fixture", "ripobot://cloud"];
   assert.equal(h.entry.fromLaunch(argv), true);
-  assert.deepEqual(argv, ["/Applications/OpenMausBot", "--fixture"]);
+  assert.deepEqual(argv, ["/Applications/RipoBot", "--fixture"]);
   await settle();
   assert.deepEqual(h.calls, [], "no window exists to reveal or navigate yet");
   assert.equal(await h.entry.ready(), true);
@@ -57,15 +57,15 @@ test("a cold-start link waits until main can navigate, then opens exactly once",
 
 test("a launch without the link leaves nothing pending", async () => {
   const h = fixture();
-  assert.equal(h.entry.fromLaunch(["/Applications/OpenMausBot", "openmausbot://cloud/"]), false);
+  assert.equal(h.entry.fromLaunch(["/Applications/RipoBot", "ripobot://cloud/"]), false);
   assert.equal(await h.entry.ready(), false);
   assert.deepEqual(h.calls, []);
 });
 
 test("macOS open-url before ready is held, and several links open once", async () => {
   const h = fixture();
-  assert.equal(h.entry.fromUrl("openmausbot://cloud"), true);
-  assert.equal(h.entry.fromUrl("openmausbot://cloud"), true);
+  assert.equal(h.entry.fromUrl("ripobot://cloud"), true);
+  assert.equal(h.entry.fromUrl("ripobot://cloud"), true);
   await settle();
   assert.deepEqual(h.calls, ["reveal", "reveal"]);
   assert.equal(await h.entry.ready(), true);
@@ -75,20 +75,20 @@ test("macOS open-url before ready is held, and several links open once", async (
 test("once ready, open-url and a second instance open immediately and consume the argument", async () => {
   const h = fixture();
   await h.entry.ready();
-  assert.equal(h.entry.fromUrl("openmausbot://cloud"), true);
+  assert.equal(h.entry.fromUrl("ripobot://cloud"), true);
   await settle();
   assert.deepEqual(h.calls, ["reveal", "open"]);
-  const commandLine = ["C:\\OpenMausBot.exe", "--flag", "openmausbot://cloud"];
+  const commandLine = ["C:\\RipoBot.exe", "--flag", "ripobot://cloud"];
   assert.equal(h.entry.fromArgs(commandLine), true);
   await settle();
   assert.deepEqual(h.calls, ["reveal", "open", "reveal", "open"]);
-  assert.deepEqual(commandLine, ["C:\\OpenMausBot.exe", "--flag"]);
+  assert.deepEqual(commandLine, ["C:\\RipoBot.exe", "--flag"]);
 });
 
 test("anything else is left to the other link handlers without revealing or opening", async () => {
   const h = fixture();
   await h.entry.ready();
-  for (const url of ["openmausbot://organization", "openmausbot://install?url=https://github.com/x/y", "openmausbot://cloud?code=X", "openmausbot://cloud/"]) {
+  for (const url of ["ripobot://organization", "ripobot://install?url=https://github.com/x/y", "ripobot://cloud?code=X", "ripobot://cloud/"]) {
     assert.equal(h.entry.fromUrl(url), false);
     const argv = ["/app", url];
     assert.equal(h.entry.fromArgs(argv), false);
@@ -101,16 +101,16 @@ test("anything else is left to the other link handlers without revealing or open
 test("a failed open is contained and a later link still opens", async () => {
   let fail = true;
   const h = fixture({ open: async () => { if (fail) throw new Error("load failed"); return true; } });
-  h.entry.fromLaunch(["/app", "openmausbot://cloud"]);
+  h.entry.fromLaunch(["/app", "ripobot://cloud"]);
   assert.equal(await h.entry.ready(), false);
   fail = false;
-  h.entry.fromUrl("openmausbot://cloud");
+  h.entry.fromUrl("ripobot://cloud");
   await settle();
   assert.deepEqual(h.calls, ["open", "reveal", "open"]);
 });
 
 test("a consumed launch link is not replayed by the companion or updater relaunch", () => {
-  const argv = ["/fixture/OpenMausBot", "--fixture", "openmausbot://cloud", "openmausbot://cloud?ignored"];
+  const argv = ["/fixture/RipoBot", "--fixture", "ripobot://cloud", "ripobot://cloud?ignored"];
   takeCloudDeepLink(argv);
   const calls = [];
   runInNewContext(`${between("function relaunchAfterDesktopRemoteChange()", 'ipcMain.handle("desktop-remote:state"')}\nrelaunchAfterDesktopRemoteChange();`, {
@@ -119,7 +119,7 @@ test("a consumed launch link is not replayed by the companion or updater relaunc
   });
   const patched = patchOrganizationUpdater("      relaunch() {\n        this.app.relaunch();\n      }");
   runInNewContext(`({ app, ${patched} }).relaunch();`, { process: { argv }, app: { relaunch: options => calls.push(options.args) } });
-  assert.deepEqual(calls, [["--fixture", "openmausbot://cloud?ignored"], ["--fixture", "openmausbot://cloud?ignored"]]);
+  assert.deepEqual(calls, [["--fixture", "ripobot://cloud?ignored"], ["--fixture", "ripobot://cloud?ignored"]]);
 });
 
 test("main takes the link from launch arguments, open-url and a second instance", () => {
@@ -168,7 +168,7 @@ test("Add a Cloud… is decided in main: someone with a Cloud gets the native bo
   const box = add.indexOf("if (cloudOwned(state)) { await anotherCloudBox(state); return; }");
   assert.ok(box > add.indexOf("await cloudAccountRestored();"));
   for (const action of ["persistEnvironments(", "createWindow(", "win.webContents.send(", "win.loadURL("]) assert.ok(add.indexOf(action) > box, `${action} after the box`);
-  // From a server's page, the window switches to this computer first, as openmausbot://cloud does.
+  // From a server's page, the window switches to this computer first, as ripobot://cloud does.
   assert.ok(add.indexOf("persistEnvironments(withActive(environmentsState, LOCAL_ID))") < add.indexOf("win.webContents.send("));
   // Only the two fixed actions reach the page.
   assert.match(add, /const action = source === "app_howto" \? "cloud-add-howto" : "cloud-add";/);

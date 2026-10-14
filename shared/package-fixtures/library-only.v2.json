@@ -1,5 +1,5 @@
 {
-  "format": "openmaus.package",
+  "format": "ripo.package",
   "version": 2,
   "package": {
     "id": "sales-skills",

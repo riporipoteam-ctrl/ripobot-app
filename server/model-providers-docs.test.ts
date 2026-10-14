@@ -1,5 +1,5 @@
 // The "Other model providers" docs page tells people how to use OpenRouter,
-// Fireworks AI, DeepSeek and Cline before OpenMausBot has a screen for them.
+// Fireworks AI, DeepSeek and Cline before RipoBot has a screen for them.
 // Each workaround it gives depends on a detail of today's code, so each one
 // is pinned here to that code. When one of these fails, the behaviour moved:
 // update apps/docs/content/docs/providers/model-providers.mdx with it.
@@ -49,7 +49,7 @@ describe("Claude Code section", () => {
   // the env block, plus FireConnect's header and the model settings the page
   // says are and aren't carried over. Every value is fake.
   const settingsHome = (env: Record<string, string>, extra: Record<string, unknown> = {}) => {
-    const home = scratch("omb-docs-claude-");
+    const home = scratch("ripo-docs-claude-");
     mkdirSync(join(home, ".claude"), { recursive: true });
     writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ ...extra, env }));
     return home;
@@ -106,7 +106,7 @@ describe("Claude Code section", () => {
     expect(label).toBe("Use a local model");
     const text = section("### Claude Code");
     expect(text).toContain(`If you also set \`ANTHROPIC_MODEL\` there, that model appears under **${label}** in the Claude model picker; pick it.`);
-    expect(text).toContain("FireConnect's model list doesn't show up in OpenMausBot, so add `ANTHROPIC_MODEL` yourself.");
+    expect(text).toContain("FireConnect's model list doesn't show up in RipoBot, so add `ANTHROPIC_MODEL` yourself.");
     expect(text).toContain("`ANTHROPIC_DEFAULT_*_MODEL` and `CLAUDE_CODE_SUBAGENT_MODEL` aren't carried over.");
     // The old, wrong advice: ANTHROPIC_MODEL is carried over as a pick.
     expect(text).not.toMatch(/such as `ANTHROPIC_MODEL`, aren't carried/u);
@@ -121,7 +121,7 @@ describe("Claude Code section", () => {
 
 describe("OpenCode 2.x section", () => {
   it("lists provider models from ACP even when OpenCode 2 rejects models --verbose", async () => {
-    const dir = scratch("omb-docs-opencode2-");
+    const dir = scratch("ripo-docs-opencode2-");
     const catalog = await discoverOpenCodeModels({
       ...process.env, HOME: dir, USERPROFILE: dir,
       XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"),
@@ -131,7 +131,7 @@ describe("OpenCode 2.x section", () => {
     expect(catalog.options.map((option) => option.id)).toEqual([
       "openrouter/deepseek/deepseek-chat", "opencode/longcat-2.5-preview-free",
     ]);
-    expect(section("### OpenCode")).toContain("OpenMausBot reads the model list from an ACP session on both OpenCode 1.x and 2.x.");
+    expect(section("### OpenCode")).toContain("RipoBot reads the model list from an ACP session on both OpenCode 1.x and 2.x.");
     expect(section("## OpenCode 2.x")).not.toContain("picker shows only OpenCode's free models");
   });
 });
@@ -144,7 +144,7 @@ describe("OpenCode config file", () => {
     return block![1]!.replace(/^ {3}/gmu, "");
   };
   const configHome = (content: string) => {
-    const home = scratch("omb-docs-opencode-json-");
+    const home = scratch("ripo-docs-opencode-json-");
     const dir = join(home, ".config", "opencode");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "opencode.json"), content);
@@ -172,7 +172,7 @@ describe("OpenCode config file", () => {
     expect(after.provider.myrouter).toBeUndefined();
 
     expect(section("### OpenCode")).toContain(
-      "Keep this file plain JSON, with no comments or trailing commas. OpenMausBot edits it when an OpenCode bot uses a model running on this computer.",
+      "Keep this file plain JSON, with no comments or trailing commas. RipoBot edits it when an OpenCode bot uses a model running on this computer.",
     );
   });
 });

@@ -54,19 +54,19 @@ export function createManagedDesktopRelay({ timeoutMs = 15_000 } = {}) {
   return {
     send(proc, connection) {
       if (!proc) return connection ? Promise.reject(new Error("The local bot runtime is not available.")) : Promise.resolve();
-      return post(proc, { type: "openmausbot:managed-desktop", connection });
+      return post(proc, { type: "ripobot:managed-desktop", connection });
     },
     /** The runtime has no policy until it starts; its ready hook refreshes. */
     sendPolicy(proc, policy) {
-      return proc ? post(proc, { type: "openmausbot:managed-desktop-policy", policy }) : Promise.resolve();
+      return proc ? post(proc, { type: "ripobot:managed-desktop-policy", policy }) : Promise.resolve();
     },
     /** A saved enrollment's identity (no token) so its old ids can migrate. */
     sendIdentity(proc, identity) {
-      return proc ? post(proc, { type: "openmausbot:managed-desktop-identity", identity }) : Promise.resolve();
+      return proc ? post(proc, { type: "ripobot:managed-desktop-identity", identity }) : Promise.resolve();
     },
     receive(proc, raw) {
       const message = raw?.data ?? raw;
-      if (message?.type !== "openmausbot:managed-desktop-result") return false;
+      if (message?.type !== "ripobot:managed-desktop-result") return false;
       if (pending.get(message.requestId)?.proc === proc && typeof message.ok === "boolean") settle(message.requestId, !message.ok);
       return true;
     },
@@ -74,7 +74,7 @@ export function createManagedDesktopRelay({ timeoutMs = 15_000 } = {}) {
      * The runtime acks before any install work; no runtime means not delivered. */
     sendLibrary(proc, library) {
       if (!proc) return library ? Promise.reject(new Error("The local bot runtime is not available.")) : Promise.resolve();
-      return post(proc, { type: "openmausbot:managed-library", library });
+      return post(proc, { type: "ripobot:managed-library", library });
     },
     rejectProcess(proc) { for (const [id, entry] of pending) if (entry.proc === proc) settle(id, true); },
   };
@@ -315,7 +315,7 @@ export function createManagedDesktopClient({ store, applyConnection, applyPolicy
       if (persisted.status === "fulfilled") { cleanupGrant = null; cleanupNeeded = false; }
       if (!current(stamp)) return snapshot();
       const warnings = [];
-      if (runtime.status === "rejected") warnings.push("The local runtime did not confirm stopping Company tasks. Quit and reopen OpenMausBot before using Company models again.");
+      if (runtime.status === "rejected") warnings.push("The local runtime did not confirm stopping Company tasks. Quit and reopen RipoBot before using Company models again.");
       if (revoked.status === "rejected") warnings.push("The portal was unreachable; ask your administrator to revoke this device there too.");
       if (persisted.status === "rejected") return publish({ status: "unavailable", message: [
         "The saved company sign-in could not be cleared. Unlock your system keychain and Disconnect again before reconnecting.", ...warnings,
@@ -331,7 +331,7 @@ export function createManagedDesktopClient({ store, applyConnection, applyPolicy
     await sendIdentity(grant);
     await Promise.resolve().then(() => applyPolicy(null)).catch(() => {});
     try { await applyConnection(null); }
-    catch { message += " Quit and reopen OpenMausBot to confirm Company tasks have stopped."; }
+    catch { message += " Quit and reopen RipoBot to confirm Company tasks have stopped."; }
     return current(stamp) ? publish({ status: "reauth-required", message }) : snapshot();
   }
   /** Renew once per start and when fewer than seven days remain, only when
@@ -474,7 +474,7 @@ export function createManagedDesktopClient({ store, applyConnection, applyPolicy
       schedule(poll, attempt.interval);
     }
   }
-  const RESTORE_FAILED = "The saved company sign-in can't be read right now. OpenMausBot tries again every minute.";
+  const RESTORE_FAILED = "The saved company sign-in can't be read right now. RipoBot tries again every minute.";
   /** The saved enrollment could not be used. One that never will be is
    * removed, and signing in again is the one next step. One that may only be
    * locked (the keychain) is kept, never removed, and read again shortly. */

@@ -1,6 +1,6 @@
 /**
  * Saved logins: a website username and password (and optionally its 2FA key)
- * the person keeps in OpenMausBot so a bot can sign in without them. The bot
+ * the person keeps in RipoBot so a bot can sign in without them. The bot
  * never receives the password: it calls fill_login on the login page and the
  * server fills the fields itself (server/login-fill.ts). This is the shape
  * every client sees — a saved login as a list row, never its secrets — and
@@ -89,5 +89,5 @@ export function loginUsableBy(login: { bots: LoginBots }, botId: string): boolea
 
 /** The resume line after the person saved a login from a sign-in card. */
 export function savedLoginResumePrompt(host: string): string {
-  return `OpenMausBot sign-in update: the person saved a login for ${host}. Open its login page in your browser and call fill_login there, then submit the form and check you are signed in. You never see the password. Never ask for a password or a one-time code in chat.`;
+  return `RipoBot sign-in update: the person saved a login for ${host}. Open its login page in your browser and call fill_login there, then submit the form and check you are signed in. You never see the password. Never ask for a password or a one-time code in chat.`;
 }

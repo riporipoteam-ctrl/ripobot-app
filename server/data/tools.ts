@@ -89,7 +89,7 @@ export const DATA_TOOLS = [
   ),
   tool(
     "data_sql",
-    "Run one DuckDB statement. SELECT-like statements are kept as a result table (omb_results.q_<n>) you can show or export, and return columns, the exact row count and the first rows. CREATE [OR REPLACE] TABLE|VIEW … AS … is allowed; other writes are refused (load data with data_load instead).",
+    "Run one DuckDB statement. SELECT-like statements are kept as a result table (ripo_results.q_<n>) you can show or export, and return columns, the exact row count and the first rows. CREATE [OR REPLACE] TABLE|VIEW … AS … is allowed; other writes are refused (load data with data_load instead).",
     {
       sql: { type: "string", minLength: 1, maxLength: 100000 },
       limit: { type: "integer", minimum: 1, maximum: DATA_LIMITS.sqlRowsMax, description: `Rows to return. Default ${DATA_LIMITS.sqlRowsDefault}.` },
@@ -594,7 +594,7 @@ export async function loadData(ctx: DataContext, input: LoadInput): Promise<Load
     const attach = plan.attach!;
     // A foreign database is attached read-only for the snapshot and detached
     // again whatever happens: the connection string never persists.
-    const alias = `omb_src_${Date.now().toString(36)}`;
+    const alias = `ripo_src_${Date.now().toString(36)}`;
     await ctx.database.run(`ATTACH ${quoteLiteral(attach.connection)} AS ${quoteIdent(alias)} (TYPE ${attach.type}, READ_ONLY)`, runOptions(ctx, { extensions: [attach.type] }));
     try {
       let chosen: Array<{ schema: string; table: string }>;
@@ -687,7 +687,7 @@ async function describeSavedResult(ctx: DataContext, id?: string): Promise<Recor
 
 export interface SqlInput { sql: string; limit?: number; name?: string }
 export interface SqlOutput {
-  /** The result table (omb_results.q_<n>), the created table, or null for metadata statements. */
+  /** The result table (ripo_results.q_<n>), the created table, or null for metadata statements. */
   table: string | null;
   columns: DataColumn[];
   rowCount: number;

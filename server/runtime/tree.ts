@@ -8,12 +8,12 @@ import type { RuntimeStore } from "./store.ts";
 import { terminal, type Assignment, type Owner, type TurnEvidence } from "./types.ts";
 
 /** A turn a restart cut runs again once; cut again, it ends with this. */
-export const CUT_TWICE = "Interrupted by another OpenMausBot restart after resuming once; not resumed again. Some of its steps may already have taken effect.";
+export const CUT_TWICE = "Interrupted by another RipoBot restart after resuming once; not resumed again. Some of its steps may already have taken effect.";
 
 /** A cut turn that already acted outward is not run again: its outcome
  * detail opens with this (the host's restart line and a requester's restart
  * note read it), then names what it did. */
-export const INTERRUPTED_OUTWARD = "Interrupted by an OpenMausBot restart after it already";
+export const INTERRUPTED_OUTWARD = "Interrupted by an RipoBot restart after it already";
 
 const OUTWARD_SHOWN = 4;
 const OUTWARD_LABEL_MAX = 48;
@@ -168,8 +168,8 @@ export function ownsConversation(n: Assignment, owner: Owner): boolean {
 export function restartNote(n: Assignment, children: readonly Assignment[], nameOf: (child: Assignment) => string): string {
   if (!n.restart) return "";
   const own = n.restart === "rerun"
-    ? "OpenMausBot restarted while your previous turn here was running and cut it off; this turn continues it. First check what that turn already did (files, commits, messages, anything sent or started) and verify anything uncertain, so nothing is done twice; then finish and report as usual. A restart alone is not a blocker."
-    : n.restart === "cut" ? "OpenMausBot restarted before your previous turn here finished, after it sent work to teammates. Check what that turn already did before repeating any of it." : "";
+    ? "RipoBot restarted while your previous turn here was running and cut it off; this turn continues it. First check what that turn already did (files, commits, messages, anything sent or started) and verify anything uncertain, so nothing is done twice; then finish and report as usual. A restart alone is not a blocker."
+    : n.restart === "cut" ? "RipoBot restarted before your previous turn here finished, after it sent work to teammates. Check what that turn already did before repeating any of it." : "";
   // Only a rerun that completed is known to have finished; any other end
   // (never started, start refused, stopped or expired mid-run) may leave
   // part of it done, and its result says how it ended. A turn that had

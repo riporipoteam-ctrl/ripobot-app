@@ -1,5 +1,5 @@
 // The Data surface: what the server, the bots' tools and the panel agree on.
-// DuckDB runs in the OMB server (one database per bot); bots load, query and
+// DuckDB runs in the RIPO server (one database per bot); bots load, query and
 // show data through five tools; the Computer panel's Data tab renders the
 // sheet of cards. Plan: _plans/data-surface-2026-10-09/PLAN.md.
 
@@ -37,7 +37,7 @@ export const DATA_LIMITS = {
  * tables are per connection, so the panel could never see the bot's; a real
  * schema is visible to both connections and survives a restart. The Sources
  * strip hides it. */
-export const DATA_RESULTS_SCHEMA = "omb_results";
+export const DATA_RESULTS_SCHEMA = "ripo_results";
 
 export type DataErrorCode =
   | "invalid_input"

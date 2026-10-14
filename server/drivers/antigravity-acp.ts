@@ -52,7 +52,7 @@ const REMOVED_ENVIRONMENT_KEYS = new Set([
   "CLOUDSDK_CORE_PROJECT",
   "AGY_ACP_CCPA_PROJECT",
   "AGY_ACP_ENABLE_OAUTH",
-  // OMB sets the new-session model itself (antigravity.ts sessionModelEnv).
+  // RIPO sets the new-session model itself (antigravity.ts sessionModelEnv).
   "AGY_ACP_DEFAULT_MODEL",
   "GEMINI_HOME",
   "AGY_ACP_FORCE_FILE_STORAGE",
@@ -62,7 +62,7 @@ const REMOVED_ENVIRONMENT_KEYS = new Set([
   "ELECTRON_RUN_AS_NODE",
 ]);
 
-const BROWSER_MARKER = "__OPENMAUS_ANTIGRAVITY_AUTH_URL__";
+const BROWSER_MARKER = "__RIPO_ANTIGRAVITY_AUTH_URL__";
 const browserHelperSource =
   `process.stderr.on("error",()=>process.exit(0)).write(` +
   `"${BROWSER_MARKER}"+JSON.stringify(process.argv[1])+"\\n",` +
@@ -148,7 +148,7 @@ export async function prepareAntigravityProfile(input: {
 
   const executable = process.platform === "win32" ? process.execPath.replaceAll("\\", "/") : process.execPath;
   if (/\r|\n|\0|%s/u.test(executable) || executable.includes(delimiter)) {
-    throw new Error("The OpenMausBot runtime path cannot safely suppress Antigravity browser launches.");
+    throw new Error("The RipoBot runtime path cannot safely suppress Antigravity browser launches.");
   }
   const browserCommand = [executable, "-e", browserHelperSource, "--", "%s"]
     .map(quoteBrowserArgument)
@@ -167,7 +167,7 @@ export async function prepareAntigravityProfile(input: {
     ELECTRON_RUN_AS_NODE: "1",
   });
   // On Windows the runtime unpacks 0.34-1.26 GB into TEMP on every launch.
-  // Keep that in a folder OMB owns and can clean. It is the same folder for
+  // Keep that in a folder RIPO owns and can clean. It is the same folder for
   // every launch of this instance, so the pooled process's spawn contract
   // (which hashes this environment) does not change from turn to turn.
   let tempDirectory: string | undefined;
@@ -339,7 +339,7 @@ export class AntigravityAcpClient {
             "The executable was found, but did not finish starting. " +
             (this.nativeStartupHint ? `${this.nativeStartupHint} ` : "") +
             `Startup output: ${this.startupOutputBytes} bytes; diagnostic output: ${this.startupDiagnosticBytes} bytes. ` +
-            "Retry setup. If it still fails, share this error and your OpenMausBot version; do not paste Google sign-in links or tokens.",
+            "Retry setup. If it still fails, share this error and your RipoBot version; do not paste Google sign-in links or tokens.",
           ));
         } else reject(new Error(`${method} timed out.`));
       }, timeoutMs);
@@ -352,7 +352,7 @@ export class AntigravityAcpClient {
   async initialize(timeoutMs = STARTUP_TIMEOUT_MS): Promise<any> {
     const initialized = await this.request("initialize", {
       protocolVersion: 1,
-      clientInfo: { name: "openmausbot", version: "0.0.0" },
+      clientInfo: { name: "ripobot", version: "0.0.0" },
       clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
     }, timeoutMs);
     this.initializationComplete = true;
@@ -590,7 +590,7 @@ export function isValidAntigravityInitializeResult(
  * @returns A promise that resolves when verification succeeds, or rejects if initialization fails.
  */
 export async function validateAntigravityRuntime(runtime: AntigravityRuntime, expectedVersion: string): Promise<void> {
-  const profileDirectory = await mkdtemp(join(tmpdir(), "openmaus-antigravity-verify-"));
+  const profileDirectory = await mkdtemp(join(tmpdir(), "ripo-antigravity-verify-"));
   let client: AntigravityAcpClient | undefined;
   let tempDirectory: string | undefined;
   let failed = false;

@@ -426,12 +426,12 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
     // has allowed computer access, keeps re-checking the lease with
     // `action: "check"`, and cuts the relay when it no longer holds.
     //
-    // A phone paired with this server directly (`openmausbot serve`, no
+    // A phone paired with this server directly (`ripobot serve`, no
     // sidecar) never sees that address. It gets this server's own
     // authenticated desktop proxy, bound to its lease: the proxy re-checks
     // the lease and the session every few seconds and closes the socket when
     // either lapses. Reaching here at all took the admin scope, which a
-    // chat-only pairing (`openmausbot pair --client`) does not have, so
+    // chat-only pairing (`ripobot pair --client`) does not have, so
     // computer access is the same explicit choice the owner's browser makes.
     m = path.match(/^\/api\/bots\/([\w-]+)\/local-computer\/join$/);
     if (m && method === "POST") {

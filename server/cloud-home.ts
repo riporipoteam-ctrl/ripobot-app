@@ -1,6 +1,6 @@
-// OMB Cloud Pro home machine: the boot contract, the places it offers, the
+// RIPO Cloud Pro home machine: the boot contract, the places it offers, the
 // Admin's signed pairing request, and the volume the machine lives on. docs/cloud-pro.md is the
-// contract of record (and openmaus-cloud docs/consumer-cloud.md its Admin
+// contract of record (and ripo-cloud docs/consumer-cloud.md its Admin
 // half); keep them in step.
 //
 // One Fly app per customer runs this server behind an edge proxy on
@@ -20,7 +20,7 @@
 // Cloud Pro includes no AI. The person signs in on the machine with their own
 // Claude or ChatGPT account, or an API key, exactly as on any server; nothing
 // on a Cloud home is ever routed to a platform model gateway. The one
-// exception is a free trial's Claude credit, on OpenMausBot's own chat engine
+// exception is a free trial's Claude credit, on RipoBot's own chat engine
 // until they connect their own (cloud-credit-provider.ts).
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
@@ -32,11 +32,11 @@ import { hostedWorkspaceConfigured } from "./enterprise.ts";
 import { formatPairingCode, type SessionRegistry } from "./sessions.ts";
 
 /** Any of these switches the server into Cloud home mode; then all are required. */
-export const CLOUD_HOME_KEYS = ["OMB_CLOUD_ROLE", "OMB_CLOUD_MACHINE_ID", "OMB_CLOUD_ADMIN_URL", "OMB_CLOUD_BOOTSTRAP_SECRET"] as const;
+export const CLOUD_HOME_KEYS = ["RIPO_CLOUD_ROLE", "RIPO_CLOUD_MACHINE_ID", "RIPO_CLOUD_ADMIN_URL", "RIPO_CLOUD_BOOTSTRAP_SECRET"] as const;
 /** A platform model gateway's settings. A Cloud home never uses them: given
  * any, it logs one warning, and neither the server nor anything it starts
  * ever sees them. */
-export const CLOUD_IGNORED_KEYS = ["OMB_HOSTED_MODEL_URL", "OMB_HOSTED_MODEL_TOKEN", "OMB_HOSTED_MODELS"] as const;
+export const CLOUD_IGNORED_KEYS = ["RIPO_HOSTED_MODEL_URL", "RIPO_HOSTED_MODEL_TOKEN", "RIPO_HOSTED_MODELS"] as const;
 export const CLOUD_PAIRING_PATH = "/api/cloud/pairing";
 export const CLOUD_PAIRING_DEFAULT_TTL_S = 300;
 export const CLOUD_PAIRING_MAX_TTL_S = 600;
@@ -49,7 +49,7 @@ export const CLOUD_PAIRING_SKEW_S = 300;
 /** How long a used nonce is refused. Longer than the whole accepted window. */
 export const CLOUD_PAIRING_NONCE_MS = 10 * 60_000;
 const MAX_NONCES = 10_000;
-export const CLOUD_HOME_MARKER = ".omb-cloud-home.json";
+export const CLOUD_HOME_MARKER = ".ripo-cloud-home.json";
 
 export interface CloudHomeConfig {
   machineId: string;
@@ -84,15 +84,15 @@ function exactHttpsOrigin(raw: string | undefined, name: string): string {
  * throws (so the server refuses to start) on a partial or invalid one. */
 export function cloudHomeConfiguration(env: NodeJS.ProcessEnv = process.env): CloudHomeConfig | null {
   if (!cloudHomeConfigured(env)) return null;
-  if (env.OMB_DESKTOP_PARENT === "1") invalid("the desktop app cannot run as a Cloud home machine");
-  if (hostedWorkspaceConfigured(env)) invalid("a Cloud home is not a hosted team workspace; remove OMB_ADMIN_URL, OMB_ADMIN_WORKSPACE and OMB_ADMIN_MEMBERSHIP");
-  if (env.OMB_CLOUD_ROLE !== "home") invalid('OMB_CLOUD_ROLE must be "home"; this image runs the home machine');
-  const machineId = env.OMB_CLOUD_MACHINE_ID ?? "";
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/.test(machineId)) invalid("OMB_CLOUD_MACHINE_ID must be the Admin's machine id (letters, digits, dashes)");
-  const adminOrigin = exactHttpsOrigin(env.OMB_CLOUD_ADMIN_URL, "OMB_CLOUD_ADMIN_URL");
-  const publicOrigin = exactHttpsOrigin(env.OMB_PUBLIC_URL, "OMB_PUBLIC_URL");
-  const bootstrapSecret = env.OMB_CLOUD_BOOTSTRAP_SECRET ?? "";
-  if (!/^[A-Za-z0-9_-]{43,128}$/.test(bootstrapSecret)) invalid("OMB_CLOUD_BOOTSTRAP_SECRET must be at least 256 bits of base64url");
+  if (env.RIPO_DESKTOP_PARENT === "1") invalid("the desktop app cannot run as a Cloud home machine");
+  if (hostedWorkspaceConfigured(env)) invalid("a Cloud home is not a hosted team workspace; remove RIPO_ADMIN_URL, RIPO_ADMIN_WORKSPACE and RIPO_ADMIN_MEMBERSHIP");
+  if (env.RIPO_CLOUD_ROLE !== "home") invalid('RIPO_CLOUD_ROLE must be "home"; this image runs the home machine');
+  const machineId = env.RIPO_CLOUD_MACHINE_ID ?? "";
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/.test(machineId)) invalid("RIPO_CLOUD_MACHINE_ID must be the Admin's machine id (letters, digits, dashes)");
+  const adminOrigin = exactHttpsOrigin(env.RIPO_CLOUD_ADMIN_URL, "RIPO_CLOUD_ADMIN_URL");
+  const publicOrigin = exactHttpsOrigin(env.RIPO_PUBLIC_URL, "RIPO_PUBLIC_URL");
+  const bootstrapSecret = env.RIPO_CLOUD_BOOTSTRAP_SECRET ?? "";
+  if (!/^[A-Za-z0-9_-]{43,128}$/.test(bootstrapSecret)) invalid("RIPO_CLOUD_BOOTSTRAP_SECRET must be at least 256 bits of base64url");
   const warnings: string[] = [];
   const ignored = CLOUD_IGNORED_KEYS.filter((key) => env[key] !== undefined);
   if (ignored.length) warnings.push(`ignoring ${ignored.join(", ")}: Cloud Pro includes no AI; people sign in with their own Claude or ChatGPT account, or an API key`);
@@ -118,7 +118,7 @@ export { cloudHomeOffersPlace } from "../shared/cloud-home.ts";
  * the person's, no Local VM), in the words the person reads; undefined for a
  * place it offers. A turn's error shows 160 characters, so each fits. */
 export function cloudHomePlaceRefusal(place: Surface): string | undefined {
-  if (place === "local") return "This computer isn't a place on My Cloud. Set Works on to Auto, Cloud computer or Browser, or lend your Mac under Settings → MausBot Cloud.";
+  if (place === "local") return "This computer isn't a place on My Cloud. Set Works on to Auto, Cloud computer or Browser, or lend your Mac under Settings → RipoBot Cloud.";
   if (place === "vm") return "Bots on My Cloud can't use a Local VM. Set Works on to Auto, Cloud computer or Browser.";
   return undefined;
 }
@@ -136,7 +136,7 @@ export function firstCloudTurnPatch(turn: { cloudHome: boolean; recorded: string
   return { onboarding: { firstTurnAt: (turn.now ?? new Date()).toISOString() } };
 }
 
-/** The Admin's side of the signature (openmaus-cloud cloudPairingSignature). */
+/** The Admin's side of the signature (ripo-cloud cloudPairingSignature). */
 export function cloudPairingSignature(secret: string, timestamp: string, nonce: string, body: Buffer | string): string {
   const bodyHash = createHash("sha256").update(body).digest("base64url");
   return createHmac("sha256", secret).update(`v1\n${timestamp}\n${nonce}\nPOST\n${CLOUD_PAIRING_PATH}\n${bodyHash}`).digest("base64url");
@@ -199,7 +199,7 @@ export function createCloudPairing(options: {
       const ttl = Math.min((ttlSeconds as number | undefined) ?? CLOUD_PAIRING_DEFAULT_TTL_S, browser ? CLOUD_BROWSER_SIGN_IN_MAX_TTL_S : CLOUD_PAIRING_MAX_TTL_S);
       const opened = sessions.openPairing({
         scopes: ["admin", "client"],
-        label: typeof label === "string" && label.trim() ? label.trim() : "MausBot Cloud",
+        label: typeof label === "string" && label.trim() ? label.trim() : "RipoBot Cloud",
         ttlMs: ttl * 1000,
         browser,
         ...(browser ? { owner: owner as string } : {}),

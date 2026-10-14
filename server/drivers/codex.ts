@@ -122,7 +122,7 @@ function missingNativeCodexThread(error: unknown, cursor: string): boolean {
 
 /** Ask the configured executable to update itself. This matters when the user
  * selected a non-PATH Codex: installing a second global copy would leave
- * OpenMausBot pointing at the old binary. */
+ * RipoBot pointing at the old binary. */
 export function codexUpdateCommand(cli: string, platform: NodeJS.Platform = process.platform): string {
   if (cli === "codex") return "codex update";
   const trimmed = cli.trim();
@@ -178,14 +178,14 @@ export function chatgptPlanCodexArgs(): string[] {
     "-c", 'model_provider="openai_chatgpt_plan"',
     "-c", 'model_providers.openai_chatgpt_plan.name="ChatGPT plan"',
     "-c", 'model_providers.openai_chatgpt_plan.base_url="https://api.openai.com/v1"',
-    "-c", 'model_providers.openai_chatgpt_plan.env_key="OPENMAUSBOT_CHATGPT_TOKEN"',
+    "-c", 'model_providers.openai_chatgpt_plan.env_key="RIPOBOT_CHATGPT_TOKEN"',
     "-c", 'model_providers.openai_chatgpt_plan.wire_api="responses"',
     "-c", "model_providers.openai_chatgpt_plan.requires_openai_auth=false",
     "-c", "model_providers.openai_chatgpt_plan.supports_websockets=false",
     "-c", 'cli_auth_credentials_store="ephemeral"',
     "-c", "features.tool_search=false",
     "-c", "shell_environment_policy.ignore_default_excludes=false",
-    // OPENMAUSBOT_CHATGPT_TOKEN is excluded on the thread, in the policy's
+    // RIPOBOT_CHATGPT_TOKEN is excluded on the thread, in the policy's
     // own representation (extendShellExclusions): a `-c exclude` here would
     // replace the lower layers' list and drop their filters.
   ];
@@ -208,12 +208,12 @@ export function managedCodexArgs(config: NonNullable<CodexConfig["managed"]>): s
   // Credential stays in the instance environment, never argv or config.toml.
   // https://learn.chatgpt.com/docs/config-file/config-reference
   return [
-    "-c", 'model_provider="openmaus_company"',
-    "-c", 'model_providers.openmaus_company.name="Company"',
-    "-c", `model_providers.openmaus_company.base_url=${JSON.stringify(config.url)}`,
-    "-c", 'model_providers.openmaus_company.env_key="OPENMAUSBOT_COMPANY_API_KEY"',
-    "-c", 'model_providers.openmaus_company.wire_api="responses"',
-    "-c", "model_providers.openmaus_company.requires_openai_auth=false",
+    "-c", 'model_provider="ripo_company"',
+    "-c", 'model_providers.ripo_company.name="Company"',
+    "-c", `model_providers.ripo_company.base_url=${JSON.stringify(config.url)}`,
+    "-c", 'model_providers.ripo_company.env_key="RIPOBOT_COMPANY_API_KEY"',
+    "-c", 'model_providers.ripo_company.wire_api="responses"',
+    "-c", "model_providers.ripo_company.requires_openai_auth=false",
     "-c", 'cli_auth_credentials_store="ephemeral"',
     "-c", "shell_environment_policy.ignore_default_excludes=false",
   ];
@@ -222,14 +222,14 @@ export function managedCodexArgs(config: NonNullable<CodexConfig["managed"]>): s
 /** Names of variable families mounts write, excluded by one pattern each:
  * gate and remote-proxy private records (a URL server's address and header
  * values live in the latter). */
-const PRIVATE_ENV_FAMILIES = ["OMB_GATE_CONFIG_", "OMB_REMOTE_MCP_CONFIG_"];
+const PRIVATE_ENV_FAMILIES = ["RIPO_GATE_CONFIG_", "RIPO_REMOTE_MCP_CONFIG_"];
 /** The remote proxy's settings that are not secret (mcp-gate-config.ts). */
 const PROXY_LITERAL_ENV = ["NODE_USE_ENV_PROXY", "NO_PROXY", "no_proxy"];
 /** Variables a shell cannot work without: never excluded, whoever set them. */
 const SHELL_ESSENTIALS = new Set(["PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TERM", "LANG", "TZ"]);
 
 const DENY_TIMEOUT_NOTE =
-  "OpenMausBot: nobody answered this permission request in time. Skip this action and finish what you can without it.";
+  "RipoBot: nobody answered this permission request in time. Skip this action and finish what you can without it.";
 
 const renamedMcpServers = new Set<string>();
 /** Logged once per name: the rename is deliberate, not a lost server. */
@@ -616,7 +616,7 @@ export function codexNativeIncomingLogMessage(
 type McpApprovalMode = "approve" | "auto" | "prompt";
 
 /** Every mount is a command Codex starts: URL servers arrive here already
- * behind OpenMausBot's remote proxy (see scopedServer in sendTurn). */
+ * behind RipoBot's remote proxy (see scopedServer in sendTurn). */
 function mountMcpServer(
   appServerArgs: string[],
   env: Record<string, string | undefined>,
@@ -683,7 +683,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
       // The harness process may hold workspace credentials (xai/box/voice
       // keys, env-injected at boot); none of them are this CLI's to see.
       stripWorkspaceCredentialEnv(env);
-      delete env.OPENMAUSBOT_CHATGPT_TOKEN;
+      delete env.RIPOBOT_CHATGPT_TOKEN;
       if (plan) env.CODEX_HOME = join(planDirectory, "codex");
       return env;
     };
@@ -738,7 +738,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         },
       }))?.pending ?? null;
     }
-    // Codex's own ChatGPT login (not ChatGPT plan, whose tokens OpenMausBot
+    // Codex's own ChatGPT login (not ChatGPT plan, whose tokens RipoBot
     // holds, nor Company routing) can be refused by OpenAI while `codex login
     // status` still reports it. A refusal marks it the way a rejected API key
     // is marked (key-rejections.ts): its credential home, plus the stored
@@ -821,8 +821,8 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         if (!config.managed.models.includes(turn.model)) {
           throw new Error("Company model access is unavailable: " + turn.model + " is not approved for your organization. Reconnect your organization; personal billing will not be used.");
         }
-        if (!input.environment.OPENMAUSBOT_COMPANY_API_KEY) {
-          throw new Error("Company model access is unavailable: OPENMAUSBOT_COMPANY_API_KEY is missing. Reconnect your organization; personal billing will not be used.");
+        if (!input.environment.RIPOBOT_COMPANY_API_KEY) {
+          throw new Error("Company model access is unavailable: RIPOBOT_COMPANY_API_KEY is missing. Reconnect your organization; personal billing will not be used.");
         }
         if (!input.environment.CODEX_HOME) {
           throw new Error("Company model access is unavailable: CODEX_HOME is missing. Reconnect your organization; personal billing will not be used.");
@@ -863,7 +863,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         decodeCodexSelection(turn.model || models.default).modelProvider === OFFICIAL_CODEX_PROVIDER;
       const launchAttempt = async (attempt: number): Promise<void> => {
         const env = childEnv();
-        if (planToken) env.OPENMAUSBOT_CHATGPT_TOKEN = planToken;
+        if (planToken) env.RIPOBOT_CHATGPT_TOKEN = planToken;
         const appServerArgs = ["app-server", ...(plan ? chatgptPlanCodexArgs() : config.managed ? managedCodexArgs(config.managed) : codexLocalProviderArgs(env, turn.model)), ...codexToolSurfaceArgs(),
           // Native snapshots can restore inherited variables after the shell
           // policy has filtered them. Scoped MCP gate settings must stay private.
@@ -884,7 +884,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         const literalEnvs = new Map<string, Record<string, string>>();
         const scopedServer = (name: string, mountName: string, server: McpServerSpec): StdioMcpSpec | null => {
           if (!canUseMcpServer(turn.toolScope, name)) return null;
-          // Every URL server is reached through OpenMausBot's remote proxy,
+          // Every URL server is reached through RipoBot's remote proxy,
           // on every Codex login, never by Codex's own MCP client: the proxy
           // opens the connection with the same minimal handshake as Settings
           // → Test (mcp-http.ts). Codex's own client adds capability fields
@@ -904,9 +904,9 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           // A proxy's network settings come from the environment Codex runs
           // with: Codex itself starts MCP children with only a few names.
           const proxy = turn.toolScope === undefined
-            ? mcpStdioServer(server, { nodeEnv: { ELECTRON_RUN_AS_NODE: "1" }, ...(directory ? { directory: { name } } : {}), configEnvName: `OMB_REMOTE_MCP_CONFIG_${hash}`, sourceEnv: env })
+            ? mcpStdioServer(server, { nodeEnv: { ELECTRON_RUN_AS_NODE: "1" }, ...(directory ? { directory: { name } } : {}), configEnvName: `RIPO_REMOTE_MCP_CONFIG_${hash}`, sourceEnv: env })
             : gateServer({ name, server, threadId, budget: 0, toolScope: turn.toolScope, nodeEnv: { ELECTRON_RUN_AS_NODE: "1" },
-              configEnvName: `OMB_GATE_CONFIG_${hash}`, directory, sourceEnv: env });
+              configEnvName: `RIPO_GATE_CONFIG_${hash}`, directory, sourceEnv: env });
           if (proxy && directory) directoryMounts.add(mountName);
           if (!proxy) return null;
           // The proxy's own network switches go in its env table, so the
@@ -930,10 +930,10 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           }
         };
         if (turn.integrations?.composio) {
-          mountSelected("composio", "openmausbot_connectors", turn.integrations.composio);
+          mountSelected("composio", "ripobot_connectors", turn.integrations.composio);
         }
         if (turn.integrations?.agents) {
-          // OpenMausBot's own coordination tools never ask, as on Claude
+          // RipoBot's own coordination tools never ask, as on Claude
           // (mcp__agents is pre-allowed): "auto" quiets only read-only tools,
           // so coordinate_bots raised a card on every hand-off and an
           // unattended Chief's job died when the card timed out. A teammate's
@@ -967,12 +967,12 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         }
         if (turn.integrations?.phone) {
           if (turn.toolScope !== undefined) {
-            mountSelected("phone", "openmausbot_phone", turn.integrations.phone);
+            mountSelected("phone", "ripobot_phone", turn.integrations.phone);
           } else {
           const bridge = turn.integrations.phone;
           Object.assign(env, bridge.env);
           for (const name of Object.keys(bridge.env)) mountedNames.add(name);
-          const prefix = "mcp_servers.openmausbot_phone";
+          const prefix = "mcp_servers.ripobot_phone";
           appServerArgs.push(
             "-c", `${prefix}.command=${JSON.stringify(bridge.command)}`,
             "-c", `${prefix}.args=${JSON.stringify(bridge.args)}`,
@@ -996,7 +996,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         const mountedEnv = [...mountedNames].filter((name) => env[name] !== undefined && !SHELL_ESSENTIALS.has(name) && !name.startsWith("LC_")
           && (name === "ELECTRON_RUN_AS_NODE" || baseEnv.get(name) !== env[name]));
         const privateEnv = [...new Set([
-          ...(turn.toolScope !== undefined ? ["OMB_GATE_CONFIG_*"] : []),
+          ...(turn.toolScope !== undefined ? ["RIPO_GATE_CONFIG_*"] : []),
           ...PRIVATE_ENV_FAMILIES.filter((family) => mountedEnv.some((name) => name.startsWith(family))).map((family) => `${family}*`),
           ...mountedEnv.filter((name) => !PRIVATE_ENV_FAMILIES.some((family) => name.startsWith(family))).sort(),
         ])];
@@ -1150,7 +1150,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
       const settle = async (ok: boolean, stopReason: string | null) => {
         if (state.settled) return;
         state.settled = true;
-        for (const finish of Array.from(asks.values())) finish("deny", "OpenMausBot: the turn ended", "system");
+        for (const finish of Array.from(asks.values())) finish("deny", "RipoBot: the turn ended", "system");
         for (const p of rpcPending.values()) p.reject(new Error("turn settled"));
         rpcPending.clear();
         const complete = () => {
@@ -1777,7 +1777,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
       // nothing streamed yet, and never for auth/shape errors or interrupts
       try {
         await request("initialize", {
-          clientInfo: { name: "openmausbot", title: "OpenMausBot", version: serverVersion() },
+          clientInfo: { name: "ripobot", title: "RipoBot", version: serverVersion() },
           // Named permission profiles are an experimental app-server field in
           // Codex 0.151. Negotiate them explicitly; older servers ignore this
           // capability and remain on the legacy Custom fallback below.
@@ -1822,7 +1822,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
             throw new Error("Codex could not confirm its shell environment policy. No prompt was sent.");
           }
           selectionConfig.config = { ...selectionConfig.config,
-            ...extendShellExclusions((rawPolicy ?? {}) as Record<string, unknown>, [...(plan ? ["OPENMAUSBOT_CHATGPT_TOKEN"] : []), ...privateEnv]) };
+            ...extendShellExclusions((rawPolicy ?? {}) as Record<string, unknown>, [...(plan ? ["RIPOBOT_CHATGPT_TOKEN"] : []), ...privateEnv]) };
         }
         if (turn.toolScope !== undefined) {
           const catalog = (effectiveConfig as { mcp_servers?: unknown } | null)?.mcp_servers;
@@ -1872,7 +1872,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           approvalParams = namedApprovalParams(approvalMode);
         }
         // Codex's `never` means "do not ask to escalate", not "grant every
-        // requested permission". Only the user's explicit OpenMausBot Full
+        // requested permission". Only the user's explicit RipoBot Full
         // mode may synthesize approvals; Custom must preserve the sandbox
         // boundary from config.toml (for example never + read-only).
         autoAcceptPermissions = approvalMode === "full";
@@ -1880,7 +1880,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         // on start AND resume so Codex owns their lifetime through compaction.
         // Removed bot rules are cleared without dropping native configured rules.
         const selection = config.managed
-          ? { model: turn.model, modelProvider: "openmaus_company" }
+          ? { model: turn.model, modelProvider: "ripo_company" }
           : config.authMode === "chatgpt-plan"
             ? { model: turn.model, modelProvider: "openai_chatgpt_plan" }
             : decodeCodexSelection(turn.model);
@@ -2082,7 +2082,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
     if (!version) return { state: "unavailable", reason: `\`${config.cli}\` CLI not found`, ...(plan ? { chatgptPlan: true } : {}) };
     if (planAuth) return { state: "available", version, chatgptPlan: true, billing: "subscription", ...await planAuth.snapshot(), update: await codexReleaseUpdate(version, config.cli),
       ...(planWarning ? { warning: { title: "Check ChatGPT connection", message: planWarning } } : {}) };
-    if (config.managed) return { state: "available", version, authenticated: Boolean(input.environment.OPENMAUSBOT_COMPANY_API_KEY && input.environment.CODEX_HOME), billing: "metered" };
+    if (config.managed) return { state: "available", version, authenticated: Boolean(input.environment.RIPOBOT_COMPANY_API_KEY && input.environment.CODEX_HOME), billing: "metered" };
     const authenticated = await new Promise<boolean>((resolve) => {
       execCli(config.cli, ["login", "status"], { timeout: 8000, env }, (err, stdout, stderr) =>
         resolve(!err && /^logged in\b/im.test(`${stdout}\n${stderr ?? ""}`)),
@@ -2121,12 +2121,12 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
     if (planAuth) {
       if (planSigningOut) throw new Error("This ChatGPT account is being disconnected.");
       if (!models.options.length) await refreshModels();
-      env.OPENMAUSBOT_CHATGPT_TOKEN = await planAuth.accessToken();
+      env.RIPOBOT_CHATGPT_TOKEN = await planAuth.accessToken();
       if (planSigningOut || disposed) throw new Error("This ChatGPT account is being disconnected.");
       mkdirSync(join(planDirectory, "codex"), { recursive: true, mode: 0o700 });
       providerArgs = chatgptPlanCodexArgs();
     } else if (config.managed) {
-      if (!input.environment.OPENMAUSBOT_COMPANY_API_KEY || !input.environment.CODEX_HOME) {
+      if (!input.environment.RIPOBOT_COMPANY_API_KEY || !input.environment.CODEX_HOME) {
         throw new Error("Company model access is unavailable. Reconnect your organization; personal billing will not be used.");
       }
       providerArgs = managedCodexArgs(config.managed);

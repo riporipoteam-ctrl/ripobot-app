@@ -13,9 +13,9 @@ import { join } from "node:path";
  */
 
 /** Resolve the handoff directory the same way the server resolves its data
- * dir (server/cli.ts): OMB_DATA_DIR wins, else ~/.openmausbot. */
+ * dir (server/cli.ts): RIPO_DATA_DIR wins, else ~/.ripobot. */
 export function handoffDir(): string {
-  return join(process.env.OMB_DATA_DIR || join(homedir(), ".openmausbot"), "handoffs");
+  return join(process.env.RIPO_DATA_DIR || join(homedir(), ".ripobot"), "handoffs");
 }
 
 export interface HandoffInput {

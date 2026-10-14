@@ -7,7 +7,7 @@ import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-ripo.ts";
 import { handleToolCall, request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { memoryDate } from "./workspace.ts";
@@ -70,7 +70,7 @@ describe("independent bot tasks through the isolated control surface", () => {
   beforeEach(async () => {
     // The broker's "nobody answered" deadline fires on a marker file
     // (server/testing/approval-clock-hooks.mjs), never on its own.
-    session = await launchVerificationServer({ ...process.env, OMB_TEST_APPROVAL_CLOCK: "1" });
+    session = await launchVerificationServer({ ...process.env, RIPO_TEST_APPROVAL_CLOCK: "1" });
     evidence = [{ fixture: session.info }];
     const wrapper = join(session.info.dataDir, "gated-claude.mjs");
     const fake = pathToFileURL(join(process.cwd(), "server/testing/fake-claude-cli.ts")).href;
@@ -80,7 +80,7 @@ describe("independent bot tasks through the isolated control surface", () => {
       'const at = process.argv.indexOf("--model");',
       'const model = (at < 0 ? "probe" : process.argv[at + 1]).replace(/[^\\w-]/g, "_");',
       'process.env.FAKE_CLAUDE_MODE = "slow";',
-      'process.env.OMB_FIXTURE_CWD = process.cwd();',
+      'process.env.RIPO_FIXTURE_CWD = process.cwd();',
       `process.env.FAKE_CLAUDE_SLOW_FINISH_GATE = join(${JSON.stringify(session.info.dataDir)}, model + ".gate");`,
       `process.env.FAKE_CLAUDE_DUMP = join(${JSON.stringify(session.info.dataDir)}, model + ".json");`,
       `await import(${JSON.stringify(fake)});`,
@@ -110,7 +110,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     // One thread per bot: the card's thread holds the peer's only slot.
     expect((await api("PATCH", "/api/config", { threads: { maxConcurrentPerBot: 1 } })).status).toBe(200);
     await control(["send", "--bot", chief.id, "--text", "Ask the reviewer to check the release notes, then return the result here."]);
-    const token = (await dump(models[0])).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token = (await dump(models[0])).mcpConfig.mcpServers.agents.env.RIPO_COMMS_TOKEN;
     const roster = await internal(token, "GET", "/api/internal/agents");
     expect(roster.status).toBe(200);
     expect(roster.body.bots.find((bot: any) => bot.id === peer.id)).toMatchObject({
@@ -194,7 +194,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     const peer = (await tool("create_bot", { name: "Release Peer", instance_id: "claude", model: models[1] })).bot;
     expect((await api("PATCH", `/api/bots/${peer.id}`, { approvalMode: "ask" })).status).toBe(200);
     await control(["send", "--bot", chief.id, "--text", "Ask the reviewer to run the release checks, then report back."]);
-    const token = (await dump(models[0])).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token = (await dump(models[0])).mcpConfig.mcpServers.agents.env.RIPO_COMMS_TOKEN;
     const sent = await internal(token, "POST", "/api/internal/coordinate-bots", {
       botIds: [peer.id], message: "RELEASE_CHECKS: run the release checks.",
     });
@@ -255,7 +255,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     writeFileSync(modelFile(models[1], "gate"), "finish");
     await expect.poll(() => handoff()?.status, { timeout: 20_000 }).toBe("completed");
     const result: string = handoff()!.result;
-    expect(result.startsWith("[OpenMausBot: nobody answered the approval for “Bash: npm run release-check” in time, so it did not run. Do not report it as done;")).toBe(true);
+    expect(result.startsWith("[RipoBot: nobody answered the approval for “Bash: npm run release-check” in time, so it did not run. Do not report it as done;")).toBe(true);
     expect(result).toContain("reply to:");
     expect(result).not.toContain("git push");
     expect(result).not.toContain("npm run lint");
@@ -280,7 +280,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     const run = (await api("POST", `/api/routines/${routine.body.routine.id}/run`)).body.run;
     const runThread = async () => (await api("GET", "/api/routines")).body.runs.find((candidate: any) => candidate.id === run.id)?.threadId as string | undefined;
     await expect.poll(runThread).toBeTruthy();
-    const token = (await dump(models[0])).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token = (await dump(models[0])).mcpConfig.mcpServers.agents.env.RIPO_COMMS_TOKEN;
     const delegated = await internal(token, "POST", "/api/internal/coordinate-bots", { botIds: [peer.id], message: "RELEASE_CHECKS: run the release checks." });
     expect(delegated.status).toBe(200);
     expect(delegated.body.receipts).toEqual([expect.objectContaining({ botId: peer.id, outcome: "queued", requestId: expect.any(String) })]);
@@ -306,7 +306,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     // whole, so the engine never reads the gate half-written
     writeFileSync(`${modelFile(models[1], "gate")}.tmp`, ending);
     renameSync(`${modelFile(models[1], "gate")}.tmp`, modelFile(models[1], "gate"));
-    const note = "[OpenMausBot: nobody answered the approval for “Bash: npm run release-check” in time, so it did not run.";
+    const note = "[RipoBot: nobody answered the approval for “Bash: npm run release-check” in time, so it did not run.";
     const runMessages = async () => (await api("GET", `/api/threads/${await runThread()}/messages?limit=100`)).body.messages as any[];
     // The result reaches the run's thread as the teammate's reply chip, the
     // note ahead of the teammate's own words, and the run is resumed with it.
@@ -328,7 +328,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     // The run's resume carries the report (docs/runtime-contract.md §4): the
     // action that never ran is named ahead of whatever the teammate said.
     const woken = async () => JSON.stringify((await dump(models[0])).prompt);
-    await expect.poll(woken, { timeout: 20_000 }).toContain("[OpenMausBot report from @Delegated Peer on assignment");
+    await expect.poll(woken, { timeout: 20_000 }).toContain("[RipoBot report from @Delegated Peer on assignment");
     expect(await woken()).toContain("nobody answered the approval for “Bash: npm run release-check” in time, so it did not run. Do not report it as done; it needs the person's approval.");
   }, 60_000);
 
@@ -343,7 +343,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     expect(created.status).toBe(201);
     const room = created.body.group;
     expect((await api("POST", `/api/groups/${room.id}/messages`, { threadId: room.threadId, text: "Have the reviewer run the release checks." })).status).toBe(202);
-    const token = (await dump(models[0])).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token = (await dump(models[0])).mcpConfig.mcpServers.agents.env.RIPO_COMMS_TOKEN;
     const sent = await internal(token, "POST", "/api/internal/coordinate-bots", { botIds: [peer.id], message: "RELEASE_CHECKS: run the release checks." });
     expect(sent.status).toBe(200);
     const requestId = sent.body.receipts[0].requestId;
@@ -359,7 +359,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     rmSync(expiry, { force: true });
     writeFileSync(modelFile(models[1], "gate"), "finish");
     await expect.poll(() => handoff()?.status, { timeout: 20_000 }).toBe("completed");
-    expect(handoff()!.result.startsWith("[OpenMausBot: nobody answered the approval for “Bash: npm run release-check” in time, so it did not run.")).toBe(true);
+    expect(handoff()!.result.startsWith("[RipoBot: nobody answered the approval for “Bash: npm run release-check” in time, so it did not run.")).toBe(true);
   }, 60_000);
 
   // A one-way notice (coordinate_bots with thread "new" and reply "none")
@@ -379,7 +379,7 @@ describe("independent bot tasks through the isolated control surface", () => {
       await expect.poll(async () => (await botState(recipient.id)).busy, { timeout: 15_000 }).toBe(true);
       await control(["send", "--bot", sender.id, "--text", "Prepare independent work."]);
       const launched = await dump(models[0]);
-      const token = launched.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+      const token = launched.mcpConfig.mcpServers.agents.env.RIPO_COMMS_TOKEN;
       const sent = await internal(token, "POST", "/api/internal/coordinate-bots", {
         botIds: [recipient.id], message: "Own this work.", thread: "new", reply: "none",
       });
@@ -455,7 +455,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     const threadId = task.body.task.threadId;
     await control(["send", "--bot", botId, "--task", threadId, "--text", "REVIEW_MEMORY_OWNER"]);
     const launched = await dump(models[0]);
-    const token = launched.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token = launched.mcpConfig.mcpServers.agents.env.RIPO_COMMS_TOKEN;
     expect((await internal(token, "POST", "/api/internal/memory", { action: "append", text: "A unique saved fact." })).status).toBe(200);
     for (const text of ["", " \n\t "]) {
       expect((await internal(token, "POST", "/api/internal/memory", { action: "replace", oldText: "unique saved fact", text })).status).toBe(400);
@@ -547,11 +547,11 @@ describe("independent bot tasks through the isolated control surface", () => {
     expect(launchedA.argv[launchedA.argv.indexOf("--permission-mode") + 1]).toBe("default");
     expect(launchedB.argv[launchedB.argv.indexOf("--permission-mode") + 1]).toBe("auto");
     evidence.push({ providerSelections: [models[0], models[1]], distinctProcesses: true });
-    expect(launchedA.env.OMB_FIXTURE_CWD).toBe(realpathSync(join(session.info.dataDir, "task-workspaces", botId, taskA)));
-    expect(launchedB.env.OMB_FIXTURE_CWD).toBe(realpathSync(join(session.info.dataDir, "task-workspaces", botId, taskB)));
+    expect(launchedA.env.RIPO_FIXTURE_CWD).toBe(realpathSync(join(session.info.dataDir, "task-workspaces", botId, taskA)));
+    expect(launchedB.env.RIPO_FIXTURE_CWD).toBe(realpathSync(join(session.info.dataDir, "task-workspaces", botId, taskB)));
 
-    const tokenA = launchedA.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
-    const tokenB = launchedB.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const tokenA = launchedA.mcpConfig.mcpServers.agents.env.RIPO_COMMS_TOKEN;
+    const tokenB = launchedB.mcpConfig.mcpServers.agents.env.RIPO_COMMS_TOKEN;
     expect(tokenA).not.toBe(tokenB);
     const appended = await Promise.all([
       internal(tokenA, "POST", "/api/internal/memory", { botId, threadId: taskA, action: "append", text: "A remembers apples." }),
@@ -614,7 +614,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     const botId = created.bot.id;
     const selectedThread = created.bot.activeTaskId;
     const routine = await api("POST", "/api/routines", {
-      name: "Captured routine provider", prompt: "ROUTINE_PROVIDER_OWNER", botId, runOn: "maus", enabled: false,
+      name: "Captured routine provider", prompt: "ROUTINE_PROVIDER_OWNER", botId, runOn: "ripo", enabled: false,
       schedule: { type: "daily", time: "10:00", weekdays: [1] },
     });
     expect(routine.status).toBe(201);
@@ -675,7 +675,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     mkdirSync(cwd);
     expect((await api("PATCH", `/api/bots/${botId}`, { cwd })).status).toBe(200);
     await control(["send", "--bot", botId, "--task", taskA, "--text", "PROJECT_A"]);
-    expect((await dump(models[0])).env.OMB_FIXTURE_CWD).toBe(realpathSync(cwd));
+    expect((await dump(models[0])).env.RIPO_FIXTURE_CWD).toBe(realpathSync(cwd));
     const second = await tool("create_task", { target_type: "bot", target_id: botId, title: "Project sibling" });
     const taskB = second.task.taskId;
     await control(["set-model", "--bot", botId, "--task", taskB, "--instance", "claude", "--model", models[1]]);
@@ -683,7 +683,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     // Like two Claude Code sessions open in one repo: the second engine starts
     // in the same folder while the first still works there. The per-turn
     // snapshot queues per folder on its own (server/checkpoints.ts).
-    expect((await dump(models[1])).env.OMB_FIXTURE_CWD).toBe(realpathSync(cwd));
+    expect((await dump(models[1])).env.RIPO_FIXTURE_CWD).toBe(realpathSync(cwd));
     const both = await botState(botId);
     expect(both.tasks.find((task: any) => task.taskId === taskA)?.busy).toBe(true);
     expect(both.tasks.find((task: any) => task.taskId === taskB)?.busy).toBe(true);
@@ -696,7 +696,7 @@ describe("independent bot tasks through the isolated control surface", () => {
   it.skipIf(process.platform !== "darwin")("claims the shared computer only on first use and keeps a sibling stop from releasing it", async () => {
     // The fake provider only receives this inert descriptor; no UI driver is
     // launched and the descriptor lives inside the fixture's disposable home.
-    const descriptorDir = join(session.info.dataDir, "Library", "Application Support", "OpenMausBot");
+    const descriptorDir = join(session.info.dataDir, "Library", "Application Support", "RipoBot");
     mkdirSync(descriptorDir, { recursive: true });
     writeFileSync(join(descriptorDir, "cua-connection.json"), JSON.stringify({
       mode: "embedded", socketPath: join(session.info.dataDir, "never-used.sock"),
@@ -715,9 +715,9 @@ describe("independent bot tasks through the isolated control surface", () => {
     const launchedB = await dump(models[1]);
     const gate = (launched: any) => {
       const env = launched.mcpConfig.mcpServers.computer.env;
-      const url = new URL(env.OMB_CONTROL_URL);
+      const url = new URL(env.RIPO_CONTROL_URL);
       expect(url.origin).toBe(session.info.url);
-      return internal(env.OMB_CONTROL_TOKEN, "GET", `${url.pathname}${url.search}`);
+      return internal(env.RIPO_CONTROL_TOKEN, "GET", `${url.pathname}${url.search}`);
     };
     // B acquires first although A started first: mounting the tool did not
     // lock the shared computer. A's call waits behind B, its waiting chip
@@ -745,7 +745,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     const created = await tool("create_bot", { name: "Unattended fixture", instance_id: "claude", model: models[0] });
     const botId = created.bot.id;
     expect((await api("PATCH", `/api/bots/${botId}`, { approvalMode: "auto" })).status).toBe(200);
-    const hook = await api("POST", "/api/webhooks", { name: "Fixture event", prompt: "UNATTENDED_ONLY", botId, runOn: "maus" });
+    const hook = await api("POST", "/api/webhooks", { name: "Fixture event", prompt: "UNATTENDED_ONLY", botId, runOn: "ripo" });
     expect(hook.status).toBe(201);
     const delivered = await fetch(hook.body.credential.url, { method: "POST", body: "{}", headers: { "content-type": "application/json" } });
     expect(delivered.status).toBe(202);

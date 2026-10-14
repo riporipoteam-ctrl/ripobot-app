@@ -15,7 +15,7 @@ type PaletteEntry =
   | { kind: "room"; group: Group }
   | { kind: "message"; hit: SearchHit };
 
-const OPEN_EVENT = "omb:open-command-palette";
+const OPEN_EVENT = "ripo:open-command-palette";
 
 /** Open the palette from a button, for places with no room for a search box. */
 export function openCommandPalette() {

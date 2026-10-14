@@ -66,7 +66,7 @@ describe.skipIf(process.platform === "win32")("Grok Build sign-in with a device 
       instanceId: "grok", displayName: "Grok", enabled: true,
       config: GrokAgentDriver.decodeConfig({ cli: FAKE_GROK }),
       // A stray xAI key must not reach the subscription login (transformEnv).
-      environment: { HOME: home, USERPROFILE: home, OMB_DEVICE_AUTH_FIXTURE: "1", FAKE_GROK_MODE: mode, XAI_API_KEY: "xai-fixture-must-not-leak", ...environment },
+      environment: { HOME: home, USERPROFILE: home, RIPO_DEVICE_AUTH_FIXTURE: "1", FAKE_GROK_MODE: mode, XAI_API_KEY: "xai-fixture-must-not-leak", ...environment },
     });
     instances.push(instance);
     return instance;
@@ -77,7 +77,7 @@ describe.skipIf(process.platform === "win32")("Grok Build sign-in with a device 
 
   beforeEach(() => {
     chmodSync(FAKE_GROK, 0o755);
-    home = mkdtempSync(join(tmpdir(), "omb-grok-device-"));
+    home = mkdtempSync(join(tmpdir(), "ripo-grok-device-"));
     instances = [];
   });
   afterEach(async () => {
@@ -137,7 +137,7 @@ describe.skipIf(process.platform === "win32")("Grok Build sign-in with a device 
     // short lifetime shows what happens when nobody finishes.
     const controller = new DeviceAuthController(GROK_DEVICE_SIGN_IN, {
       cli: FAKE_GROK, lifetimeMs: 1_500, terminateTimeoutMs: 50,
-      environment: () => ({ ...process.env, HOME: home, OMB_DEVICE_AUTH_FIXTURE: "1", FAKE_GROK_MODE: "waiting" }),
+      environment: () => ({ ...process.env, HOME: home, RIPO_DEVICE_AUTH_FIXTURE: "1", FAKE_GROK_MODE: "waiting" }),
     });
     try {
       const start = await controller.start();
@@ -151,7 +151,7 @@ describe.skipIf(process.platform === "win32")("Grok Build sign-in with a device 
   it("does not show a page on another host, and gives up waiting for one", async () => {
     const controller = new DeviceAuthController(GROK_DEVICE_SIGN_IN, {
       cli: FAKE_GROK, startupTimeoutMs: 1_000, terminateTimeoutMs: 50,
-      environment: () => ({ ...process.env, HOME: home, OMB_DEVICE_AUTH_FIXTURE: "1", FAKE_GROK_MODE: "evil" }),
+      environment: () => ({ ...process.env, HOME: home, RIPO_DEVICE_AUTH_FIXTURE: "1", FAKE_GROK_MODE: "evil" }),
     });
     try {
       await expect(controller.start()).rejects.toThrow("Grok did not provide a sign-in code in time");
@@ -180,7 +180,7 @@ describe.skipIf(process.platform === "win32")("Grok Build sign-in with a device 
     const missing = await GrokAgentDriver.create({
       instanceId: "grok-missing", displayName: "Grok", enabled: true,
       config: GrokAgentDriver.decodeConfig({ cli: join(home, "no-such-grok") }),
-      environment: { HOME: home, OMB_DEVICE_AUTH_FIXTURE: "1" },
+      environment: { HOME: home, RIPO_DEVICE_AUTH_FIXTURE: "1" },
     });
     instances.push(missing);
     await expect(missing.startAuthentication!()).rejects.toThrow("Grok is not installed on this server.");
@@ -210,7 +210,7 @@ describe.skipIf(process.platform === "win32")("Grok Build sign-in with a device 
     const instance = await grok("approve");
     const start = await instance.startAuthentication!();
     expect((await instance.getAuthentication!(start.flowId!)).phase).toBe("waiting");
-    writeFileSync(join(home, ".omb-fake-grok-approved"), "approve fixture only\n");
+    writeFileSync(join(home, ".ripo-fake-grok-approved"), "approve fixture only\n");
     await expect.poll(async () => (await instance.getAuthentication!(start.flowId!)).phase, { timeout: 5_000 }).toBe("succeeded");
   });
 });

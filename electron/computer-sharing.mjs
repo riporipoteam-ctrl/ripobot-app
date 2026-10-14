@@ -117,7 +117,7 @@ class Paused extends Error {}
  * Two kinds of grant share this connector. A maintainer grant (any server,
  * behind the local `features.sharedComputers` flag, exactly as before). A
  * Cloud grant (`cloud: { accountId, origin }`): the person's own Mac lent to
- * their own OMB Cloud home, gated by their Cloud sign-in (`cloud()`), never
+ * their own RIPO Cloud home, gated by their Cloud sign-in (`cloud()`), never
  * by the maintainer flag. */
 export function createComputerSharing({ file, fetch: fetchImpl, environments, cuaConnection, hostControl, protectedPaths = [], enabled = async () => false, home = os.homedir(), activityFile, cloud = () => null, onChange = () => {} }) {
   // The grant store's own directory plus whatever the desktop shell names —
@@ -170,7 +170,7 @@ export function createComputerSharing({ file, fetch: fetchImpl, environments, cu
     const verdict = cloudLendingVerdict(grant.cloud, cloud(), env);
     if (verdict.allow) return;
     if (verdict.stop) { endCloud(env, verdict.stop); throw new Error("Lending to My Cloud stopped."); }
-    throw new Paused("Waiting for your MausBot Cloud sign-in.");
+    throw new Paused("Waiting for your RipoBot Cloud sign-in.");
   };
   const store = next => {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -185,7 +185,7 @@ export function createComputerSharing({ file, fetch: fetchImpl, environments, cu
     const response = await fetchImpl(`${env.origin}${route}`, {
       method: body === undefined ? "GET" : "POST", credentials: "include", redirect: "error", cache: "no-store",
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(35_000)]) : AbortSignal.timeout(10_000),
-      headers: { origin: env.origin, ...(body === undefined ? {} : { "content-type": "application/json" }), ...(secret ? { "x-omb-computer-secret": secret } : {}) },
+      headers: { origin: env.origin, ...(body === undefined ? {} : { "content-type": "application/json" }), ...(secret ? { "x-ripo-computer-secret": secret } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const chunks = []; let bytes = 0;
@@ -193,12 +193,12 @@ export function createComputerSharing({ file, fetch: fetchImpl, environments, cu
       bytes += chunk.length; if (bytes > 4_000_000) throw new Error("Server response exceeded limit");
       chunks.push(Buffer.from(chunk));
     }
-    let json; try { json = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new Error("This server does not support computer sharing. Update its OpenMausBot installation."); }
+    let json; try { json = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new Error("This server does not support computer sharing. Update its RipoBot installation."); }
     if (!response.ok) throw Object.assign(new Error(response.status === 401 || response.status === 403 ? "Pair this desktop again before sharing computer access." : `Server request failed (${response.status}). Update the server if needed.`), { status: response.status });
     return json;
   };
   const describe = async env => {
-    const [auth, descriptor] = await Promise.all([request(env, "/api/auth/session"), request(env, "/.well-known/openmausbot/environment")])
+    const [auth, descriptor] = await Promise.all([request(env, "/api/auth/session"), request(env, "/.well-known/ripobot/environment")])
       .catch(error => { throw error.status === 401 || error.status === 403 ? Object.assign(error, { problem: "connect-first" }) : error; });
     if (auth.kind !== "session" || !uuid(auth.id) || !uuid(descriptor.environmentId)) throw Object.assign(new Error("Complete server pairing or sign-in first"), { problem: "connect-first" });
     if (descriptor.capabilities?.sharedComputers !== true) throw new Error("Update this server to enable computer sharing");
@@ -376,7 +376,7 @@ export function createComputerSharing({ file, fetch: fetchImpl, environments, cu
       disconnect(env, records[env.id]);
       store({ ...records, [env.id]: grant }); run(env, grant); changed(); return state(env.id);
     },
-    /** What this Mac lends to the person's Cloud, for Settings → OMB Cloud. */
+    /** What this Mac lends to the person's Cloud, for Settings → RIPO Cloud. */
     cloudState,
     /** Lend this Mac to the person's own Cloud: chosen folders (read-only or
      * editable) and optionally apps and screen. Never a terminal. The Cloud

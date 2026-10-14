@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 // Sandboxed preloads receive Electron's restricted `require`, which cannot
 // load sibling CommonJS files. Keep this tiny predicate inline here; main's
-const desktopRemoteClient = process.argv.includes("--openmausbot-remote-client");
+const desktopRemoteClient = process.argv.includes("--ripobot-remote-client");
 
 let pendingPackageInstallUrl = null;
 const packageInstallListeners = new Set();
@@ -29,8 +29,8 @@ ipcRenderer.on("chat:open", (_event, link) => {
 });
 
 // Main can finish loading the document before React subscribes. Retain only
-// the fixed actions (Organisation, the openmausbot://cloud link, plain
-// Settings → OpenMausBot Cloud from the lending menu-bar item, and the Add a
+// the fixed actions (Organisation, the ripobot://cloud link, plain
+// Settings → RipoBot Cloud from the lending menu-bar item, and the Add a
 // Cloud dialog from the server menu, plain or reached through Show me how),
 // never a destination supplied by a renderer.
 const FIXED_SETTINGS_ACTIONS = new Set(["organization", "cloud", "cloud-settings", "cloud-add", "cloud-add-howto"]);
@@ -48,7 +48,7 @@ ipcRenderer.on("app:open-settings", (_event, section) => {
 // UI. A remote server's page (Server menu) gets the safe subset: nothing that
 // captures this screen, touches this computer's files or logins, or runs
 // helpers here. Main enforces the same rule on the sensitive channels.
-const localOrigin = process.argv.find((arg) => arg.startsWith("--omb-local-origin="))?.slice("--omb-local-origin=".length) ?? null;
+const localOrigin = process.argv.find((arg) => arg.startsWith("--ripo-local-origin="))?.slice("--ripo-local-origin=".length) ?? null;
 const isLocalPage = !localOrigin || location.origin === localOrigin;
 // cloudMove: main answers a remote page about that page's own server only,
 // while it is this window's active server (Copy this computer here's card and
@@ -72,12 +72,12 @@ const remoteKeys = isLocalPage ? REMOTE_SAFE : new Set([...REMOTE_SAFE, ...(upda
 // parity with shared/workspace-backup-client.ts (covered by the preload test).
 // Only main can request a fresh snapshot; there is no renderer-callable method.
 const COMPANY_BACKUP_CLIENT_KEYS = [
-  "omb-drafts", "omb-draft-attachments", "omb-draft-send-ids", "omb-draft-channel-modes",
-  "omb-skin", "omb-show-threads", "omb-show-run-card", "omb-send-key", "omb-color-user-bubbles", "openmausbot.sidebarDensity",
-  "openmausbot.sidebarCollapsedSections.v1", "openmausbot.sidebarSectionOrder.v1",
-  "omb-analytics-opt-out", "openmausbot.remote-voice.v1",
+  "ripo-drafts", "ripo-draft-attachments", "ripo-draft-send-ids", "ripo-draft-channel-modes",
+  "ripo-skin", "ripo-show-threads", "ripo-show-run-card", "ripo-send-key", "ripo-color-user-bubbles", "ripobot.sidebarDensity",
+  "ripobot.sidebarCollapsedSections.v1", "ripobot.sidebarSectionOrder.v1",
+  "ripo-analytics-opt-out", "ripobot.remote-voice.v1",
 ];
-if (isLocalPage && !desktopRemoteClient && process.argv.includes("--omb-company-desktop=1")) {
+if (isLocalPage && !desktopRemoteClient && process.argv.includes("--ripo-company-desktop=1")) {
   ipcRenderer.on("company-backups:collect-client-state", (_event, request) => {
     if (!request || typeof request.requestId !== "string" || !/^[a-f0-9-]{36}$/.test(request.requestId)) return;
     try {
@@ -112,7 +112,7 @@ const bridge = {
     ipcRenderer.on("desktop:capabilities-changed", handler);
     return () => ipcRenderer.removeListener("desktop:capabilities-changed", handler);
   },
-  /** Pair this desktop app to another OpenMausBot host. The bearer remains in
+  /** Pair this desktop app to another RipoBot host. The bearer remains in
    * the main process and is never returned over this bridge. */
   remoteClient: {
     active: desktopRemoteClient,
@@ -244,13 +244,13 @@ const bridge = {
       return () => ipcRenderer.removeListener("window:maximized-changed", handler);
     },
   },
-  /** A reviewed BotMRR package opened through openmausbot://install. */
+  /** A reviewed BotMRR package opened through ripobot://install. */
   onPackageInstall: (cb) => {
     packageInstallListeners.add(cb);
     if (pendingPackageInstallUrl) cb(pendingPackageInstallUrl);
     return () => packageInstallListeners.delete(cb);
   },
-  /** A chat link (openmausbot://thread/… or openmausbot://bot/…) opened from
+  /** A chat link (ripobot://thread/… or ripobot://bot/…) opened from
    * outside the app. */
   onChatLink: (cb) => {
     chatLinkListeners.add(cb);
@@ -291,7 +291,7 @@ const bridge = {
   /** Writes the redacted diagnostics report to a user-chosen file; resolves
    * the path, or null when the save dialog was cancelled. */
   exportDiagnostics: () => ipcRenderer.invoke("desktop:export-diagnostics"),
-  /** Ask where to save a bot-created file (inside ~/.openmausbot), copy it
+  /** Ask where to save a bot-created file (inside ~/.ripobot), copy it
    * there and reveal it. Returns the chosen path, or null if the user
    * cancelled the dialog. The chat bubble shows the
    * rejection text verbatim, so strip the "Error invoking remote method"
@@ -346,7 +346,7 @@ const bridge = {
       return () => ipcRenderer.removeListener("workspaces:open-settings", handler);
     },
   },
-  cloudAccount: process.argv.includes("--omb-company-desktop=1") ? {
+  cloudAccount: process.argv.includes("--ripo-company-desktop=1") ? {
     state: () => ipcRenderer.invoke("cloud-account:state"),
     begin: () => ipcRenderer.invoke("cloud-account:begin"),
     signInAgain: () => ipcRenderer.invoke("cloud-account:signInAgain"),
@@ -380,7 +380,7 @@ const bridge = {
    * main answers it about itself, and its Copy (only from the person's own
    * click) opens this computer's Settings on that copy, or, on the verified
    * Cloud, starts it. */
-  cloudMove: process.argv.includes("--omb-company-desktop=1") ? {
+  cloudMove: process.argv.includes("--ripo-company-desktop=1") ? {
     state: id => ipcRenderer.invoke("cloud-move:state", ...savedServer(id)),
     start: id => isLocalPage ? ipcRenderer.invoke("cloud-move:start", ...savedServer(id))
       : navigator.userActivation?.isActive === true ? ipcRenderer.invoke("cloud-move:start") : Promise.reject(new Error("Choose Copy to start copying.")),
@@ -394,9 +394,9 @@ const bridge = {
     },
   } : undefined,
   /** The Cloud's setup checklist: "Let your Cloud use this Mac" opens the
-   * lending switch in this app's own Settings → OMB Cloud. No arguments; it
+   * lending switch in this app's own Settings → RIPO Cloud. No arguments; it
    * shows the switch and changes nothing. */
-  cloudLending: process.argv.includes("--omb-company-desktop=1") ? {
+  cloudLending: process.argv.includes("--ripo-company-desktop=1") ? {
     open: () => ipcRenderer.invoke("cloud-lending:open"),
   } : undefined,
   /** The plan, read only, in Settings on the person's own Cloud: its name and
@@ -404,7 +404,7 @@ const bridge = {
    * back to this computer. No arguments; a remote page acts only on a click.
    * Also the free trial's popup, on this computer's page and the Cloud's:
    * noticeSeen says the notice due now was shown (main knows which). */
-  cloudPlan: process.argv.includes("--omb-company-desktop=1") ? {
+  cloudPlan: process.argv.includes("--ripo-company-desktop=1") ? {
     state: () => ipcRenderer.invoke("cloud-plan:state"),
     manage: () => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("cloud-plan:manage") : Promise.reject(new Error("Choose Manage to open your Plan page.")),
@@ -412,7 +412,7 @@ const bridge = {
       ? ipcRenderer.invoke("cloud-plan:local") : Promise.reject(new Error("Choose Use this computer to switch.")),
     noticeSeen: () => ipcRenderer.invoke("cloud-plan:notice-seen"),
   } : undefined,
-  organization: process.argv.includes("--omb-company-desktop=1") ? {
+  organization: process.argv.includes("--ripo-company-desktop=1") ? {
     settingsOpened: () => ipcRenderer.invoke("organization:settings-opened"),
     state: () => ipcRenderer.invoke("organization:state"),
     begin: input => ipcRenderer.invoke("organization:begin", input),
@@ -426,7 +426,7 @@ const bridge = {
       return () => ipcRenderer.removeListener("organization:state-changed", handler);
     },
   } : undefined,
-  companyBackups: process.argv.includes("--omb-company-desktop=1") ? {
+  companyBackups: process.argv.includes("--ripo-company-desktop=1") ? {
     state: () => ipcRenderer.invoke("company-backups:state"),
     list: () => ipcRenderer.invoke("company-backups:list"),
     create: input => ipcRenderer.invoke("company-backups:create", input),

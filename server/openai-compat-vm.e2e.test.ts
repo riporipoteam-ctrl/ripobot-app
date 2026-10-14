@@ -92,7 +92,7 @@ const nativeToolNames = (threadId: string): string[] => {
 const idle = (botId: string) => until(() => api("GET", "/api/bots?messages=0"), s => !s.bots.find((b: any) => b.id === botId)?.busy);
 
 beforeAll(async () => {
-  fixtureHome = mkdtempSync(join(tmpdir(), "omb-openai-vm-"));
+  fixtureHome = mkdtempSync(join(tmpdir(), "ripo-openai-vm-"));
   stateFile = join(fixtureHome, "vm.json");
   dumpFile = join(fixtureHome, "dump.json");
   vmState({ containers: [] });
@@ -153,12 +153,12 @@ beforeAll(async () => {
     cwd: ROOT,
     env: {
       PATH: [fakebin, dirname(process.execPath), "/usr/bin", "/bin"].join(delimiter),
-      HOME: fixtureHome, USERPROFILE: fixtureHome, OMB_DATA_DIR: data,
+      HOME: fixtureHome, USERPROFILE: fixtureHome, RIPO_DATA_DIR: data,
       APPDATA: join(fixtureHome, "appdata"), LOCALAPPDATA: join(fixtureHome, "localappdata"),
       TEMP: fixtureHome, TMP: fixtureHome, TMPDIR: fixtureHome,
-      OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_STATIC_DIR: ui,
-      OMB_TEST_VM_STATE: stateFile, OMB_EXTRA_PATH: fakebin,
-      OMB_USER_DATA: join(fixtureHome, "user-data"),
+      RIPO_PORT: String(port), RIPO_WEBHOOK_PORT: String(port + 1), RIPO_STATIC_DIR: ui,
+      RIPO_TEST_VM_STATE: stateFile, RIPO_EXTRA_PATH: fakebin,
+      RIPO_USER_DATA: join(fixtureHome, "user-data"),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -239,6 +239,6 @@ describe("openai-compat Local VM tools", () => {
     }, Boolean);
     await idle(bot.id);
     expect(dump!.mcpConfig?.mcpServers?.computer).toBeTruthy();
-    expect(String(dump!.mcpConfig!.mcpServers!.computer.env?.OMB_CONTROL_URL ?? "")).toContain("127.0.0.1");
+    expect(String(dump!.mcpConfig!.mcpServers!.computer.env?.RIPO_CONTROL_URL ?? "")).toContain("127.0.0.1");
   }, 60_000);
 });

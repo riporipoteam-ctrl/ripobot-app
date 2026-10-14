@@ -1,8 +1,8 @@
-// Entry point of the OMB Cloud Pro home image (the Dockerfile's cloud-home target).
+// Entry point of the RIPO Cloud Pro home image (the Dockerfile's cloud-home target).
 //
 // Starts as root, hands a fresh Fly volume (mounted root-owned at /data) to
-// the unprivileged `maus` user, and stays a small root supervisor of two
-// children that run as `maus`: the OpenMausBot server on 127.0.0.1:8799
+// the unprivileged `ripo` user, and stays a small root supervisor of two
+// children that run as `ripo`: the RipoBot server on 127.0.0.1:8799
 // (and its webhook receiver on :8800) and the Caddy edge on 0.0.0.0:8080.
 // The edge is the only listener the network can reach, and it always
 // forwards with X-Forwarded-*, so request-auth.ts never grants a remote
@@ -17,8 +17,8 @@
 // them over an inherited pipe it reads first thing and closes
 // (cloud-secrets.ts), and an environment built from an allow-list, so a
 // secret the platform adds later never reaches it either. This process stays
-// root, so its own environment and memory are out of `maus`'s reach, and it
-// runs and trusts only code `maus` cannot change: the image's, never the
+// root, so its own environment and memory are out of `ripo`'s reach, and it
+// runs and trusts only code `ripo` cannot change: the image's, never the
 // volume's (codeTrustProblem).
 import { spawn, type ChildProcess } from "node:child_process";
 import { chownSync, readFileSync, statSync, type Stats } from "node:fs";
@@ -30,7 +30,7 @@ import {
 } from "./cloud-home.ts";
 import { restartPolicy } from "./restart.ts";
 
-const SERVICE_USER = "maus";
+const SERVICE_USER = "ripo";
 /** The descriptor the server reads its secrets from. */
 const SECRETS_FD = 3;
 
@@ -49,9 +49,9 @@ export function passwdIds(passwd: string, name: string): { uid: number; gid: num
  * later, a test's key, a platform gateway's settings) is left out. */
 const SERVER_ENV_NAMES = new Set([
   "PATH", "SHELL", "HOSTNAME", "LANG", "LANGUAGE", "TZ", "TERM", "TMPDIR", "NO_COLOR", "NODE_ENV", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR",
-  "AGENT_BROWSER_EXECUTABLE_PATH", "OMB_STATIC_DIR", "OMB_DATA_DIR",
-  "OMB_CLOUD_ROLE", "OMB_CLOUD_MACHINE_ID", "OMB_CLOUD_ADMIN_URL", "OMB_CLOUD_IMAGE", "OMB_PUBLIC_URL", "OMB_WEBHOOK_PUBLIC_URL",
-  "OMB_CLOUD_BOAT_URL", "OMB_CLOUD_VOICE_URL", "OMB_CLOUD_DECIDER_URL", "OMB_CLOUD_AI_URL", "OMB_TTS_DEFAULT_VOICE",
+  "AGENT_BROWSER_EXECUTABLE_PATH", "RIPO_STATIC_DIR", "RIPO_DATA_DIR",
+  "RIPO_CLOUD_ROLE", "RIPO_CLOUD_MACHINE_ID", "RIPO_CLOUD_ADMIN_URL", "RIPO_CLOUD_IMAGE", "RIPO_PUBLIC_URL", "RIPO_WEBHOOK_PUBLIC_URL",
+  "RIPO_CLOUD_BOAT_URL", "RIPO_CLOUD_VOICE_URL", "RIPO_CLOUD_DECIDER_URL", "RIPO_CLOUD_AI_URL", "RIPO_TTS_DEFAULT_VOICE",
 ]);
 export function serverEnvironmentAllowed(name: string): boolean {
   return SERVER_ENV_NAMES.has(name) || name.startsWith("LC_");
@@ -68,23 +68,23 @@ export function cloudHomeChildEnvironments(config: CloudHomeConfig, env: NodeJS.
   const allowed = Object.fromEntries(Object.entries(offered).filter(([name, value]) => value !== undefined && serverEnvironmentAllowed(name)));
   const dropped = Object.keys(offered).filter((name) => !serverEnvironmentAllowed(name) && name !== "HOME").sort();
   const server: NodeJS.ProcessEnv = {
-    ...allowed, HOME: home, OMB_DATA_DIR: env.OMB_DATA_DIR || posix.join(home, ".openmausbot"),
-    OMB_PORT: "8799", OMB_WEBHOOK_PORT: "8800", OMB_PUBLIC_URL: config.publicOrigin,
-    OMB_WEBHOOK_PUBLIC_URL: env.OMB_WEBHOOK_PUBLIC_URL || config.publicOrigin,
+    ...allowed, HOME: home, RIPO_DATA_DIR: env.RIPO_DATA_DIR || posix.join(home, ".ripobot"),
+    RIPO_PORT: "8799", RIPO_WEBHOOK_PORT: "8800", RIPO_PUBLIC_URL: config.publicOrigin,
+    RIPO_WEBHOOK_PUBLIC_URL: env.RIPO_WEBHOOK_PUBLIC_URL || config.publicOrigin,
     [CLOUD_SECRETS_FD_ENV]: String(SECRETS_FD),
   };
   const edge: NodeJS.ProcessEnv = {
-    PATH: env.PATH ?? "/usr/local/bin:/usr/bin:/bin", HOME: "/tmp/omb-edge",
-    XDG_DATA_HOME: "/tmp/omb-edge/data", XDG_CONFIG_HOME: "/tmp/omb-edge/config",
-    OMB_CLOUD_PUBLIC_HOST: cloudHomeHost(config),
+    PATH: env.PATH ?? "/usr/local/bin:/usr/bin:/bin", HOME: "/tmp/ripo-edge",
+    XDG_DATA_HOME: "/tmp/ripo-edge/data", XDG_CONFIG_HOME: "/tmp/ripo-edge/config",
+    RIPO_CLOUD_PUBLIC_HOST: cloudHomeHost(config),
   };
   return { server, edge, secrets: cloudHomeSecrets(env), dropped };
 }
 
 /** Why the root supervisor must not run or trust `files`, or null: each
  * must be root's and not writable by anyone else (nor any folder above it),
- * and none may live on the volume `home`, which `maus` owns. The image makes its code
- * root's (the Dockerfile's cloud-home target); a file `maus` could rewrite would run as
+ * and none may live on the volume `home`, which `ripo` owns. The image makes its code
+ * root's (the Dockerfile's cloud-home target); a file `ripo` could rewrite would run as
  * root at the next start, or be handed the secrets. */
 export function codeTrustProblem(files: readonly string[], home: string, stat: (path: string) => Pick<Stats, "uid" | "mode"> = statSync): string | null {
   const volume = posix.join(home, "/");
@@ -120,11 +120,11 @@ export function spawnWithSecrets(command: string, args: string[], env: NodeJS.Pr
 export function startCloudHome(env: NodeJS.ProcessEnv = process.env) {
   process.umask(0o077);
   const config = cloudHomeConfiguration(env);
-  if (!config) throw new Error("This image runs a My Cloud machine for MausBot Cloud; set its boot contract (docs/cloud-pro.md).");
+  if (!config) throw new Error("This image runs a My Cloud machine for RipoBot Cloud; set its boot contract (docs/cloud-pro.md).");
   // Logged here once: the server child never sees what they are about.
   for (const warning of config.warnings) console.warn(`cloud home: ${warning}`);
   const home = env.HOME || "/data";
-  // Who the children run as: `maus` when this starts as root (the image),
+  // Who the children run as: `ripo` when this starts as root (the image),
   // else whoever started it (a test, a dev machine).
   let ids: { uid: number; gid: number } | null = null;
   if (process.getuid?.() === 0) {
@@ -135,7 +135,7 @@ export function startCloudHome(env: NodeJS.ProcessEnv = process.env) {
     const stat = statSync(home);
     if (stat.uid !== ids.uid || stat.gid !== ids.gid) chownSync(home, ids.uid, ids.gid);
     process.setgroups?.([]);
-    // The volume is prepared as `maus`, so what it creates is theirs.
+    // The volume is prepared as `ripo`, so what it creates is theirs.
     process.setegid!(ids.gid);
     process.seteuid!(ids.uid);
     try { prepareCloudHomeVolume(home, config.machineId); } finally {
@@ -146,8 +146,8 @@ export function startCloudHome(env: NodeJS.ProcessEnv = process.env) {
     prepareCloudHomeVolume(home, config.machineId);
   }
   const here = dirname(fileURLToPath(import.meta.url));
-  const edgeBin = env.OMB_CLOUD_EDGE_BIN || "/usr/local/bin/caddy";
-  const edgeConfig = env.OMB_CLOUD_EDGE_CONFIG || "/app/cloud/Caddyfile";
+  const edgeBin = env.RIPO_CLOUD_EDGE_BIN || "/usr/local/bin/caddy";
+  const edgeConfig = env.RIPO_CLOUD_EDGE_CONFIG || "/app/cloud/Caddyfile";
   if (ids) {
     const problem = codeTrustProblem([process.execPath, fileURLToPath(import.meta.url), join(here, "index.js"), edgeBin, edgeConfig], home);
     if (problem) throw new Error(`This image's code is not safe to run as root: ${problem}. Rebuild it with docker build --target cloud-home.`);

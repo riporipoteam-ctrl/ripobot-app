@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb } from "../scripts/control-ripo.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { FakeLoginPage, LOGIN_FORM } from "./testing/fake-login-page.ts";
 import { freePortBlock } from "./testing/ports.ts";
@@ -50,7 +50,7 @@ it.skipIf(process.platform === "win32")("saves a login from the sign-in card, an
   });
   await new Promise<void>((ready) => bridge.listen(port, "127.0.0.1", ready));
 
-  const tools = mkdtempSync(join(tmpdir(), "omb-saved-login-e2e-"));
+  const tools = mkdtempSync(join(tmpdir(), "ripo-saved-login-e2e-"));
   const binaryPath = join(tools, "agent-browser");
   // The stand-in agent-browser: its browser is always running, `mcp` and
   // `close` do nothing, and every other command goes to the bridge.

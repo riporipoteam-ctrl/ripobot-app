@@ -1,4 +1,4 @@
-// The server's first import (server/index.ts): on an OMB Cloud home, the
+// The server's first import (server/index.ts): on an RIPO Cloud home, the
 // secrets the launcher hands over its pipe are read, and the pipe closed,
 // before any other module is loaded, so no process the server starts can
 // inherit it (cloud-secrets.ts, cloud-home-start.ts).

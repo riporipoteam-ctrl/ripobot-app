@@ -1,6 +1,6 @@
 // Copy this computer here (docs/copy-workspace.md): a person's copy of their
 // desktop's workspace onto a server they own and added in the desktop app, an
-// OMB Cloud home included. The desktop exports the ordinary encrypted
+// RIPO Cloud home included. The desktop exports the ordinary encrypted
 // workspace backup (workspace-backup.ts) and uploads it here in parts; this
 // server then previews and restores it like any other backup, so everything
 // that backup policy keeps out (credentials, sign-ins, pairing and sessions,
@@ -266,7 +266,7 @@ function readPrevious(folder: string): PreviousMeta | null {
   try {
     const value: unknown = JSON.parse(readFileSync(join(folder, "previous.json"), "utf8"));
     if (!record(value) || typeof value.password !== "string" || typeof value.createdAt !== "string" || !record(value.contents)) return null;
-    if (!lstatSync(join(folder, "workspace.ombbackup")).isFile()) return null;
+    if (!lstatSync(join(folder, "workspace.ripobackup")).isFile()) return null;
     return value as unknown as PreviousMeta;
   } catch { return null; }
 }
@@ -276,7 +276,7 @@ function readPrevious(folder: string): PreviousMeta | null {
 export function previousCloud(dataDir: string): PreviousCloud | null {
   const previous = readPrevious(previousFolder(dataDir));
   if (!previous || isEmptyWorkspace(previous.contents)) return null;
-  return { createdAt: previous.createdAt, ...previous.contents, bytes: lstatSync(join(previousFolder(dataDir), "workspace.ombbackup")).size };
+  return { createdAt: previous.createdAt, ...previous.contents, bytes: lstatSync(join(previousFolder(dataDir), "workspace.ripobackup")).size };
 }
 
 /** Back up this workspace as the next previous Cloud, for the restore
@@ -292,7 +292,7 @@ export async function prepareNextPreviousCloud(dataDir: string, restoreId: strin
     backupsRoot(dataDir);
     rmSync(next, { recursive: true, force: true });
     privateFolder(next);
-    renameSync(created.path, join(next, "workspace.ombbackup"));
+    renameSync(created.path, join(next, "workspace.ripobackup"));
     const meta: PreviousMeta = { password, createdAt: new Date().toISOString(), contents, forRestore: restoreId };
     writeFileAtomic(join(next, "previous.json"), JSON.stringify(meta), { mode: 0o600 });
     return { createdAt: meta.createdAt, ...contents };
@@ -313,14 +313,14 @@ export function discardNextPreviousCloud(dataDir: string): void {
 export async function stagePreviousCloud(dataDir: string, appVersion: string): Promise<{ id: string; summary: WorkspaceBackupSummary; bytes: number }> {
   const previous = readPrevious(previousFolder(dataDir));
   if (!previous || isEmptyWorkspace(previous.contents)) throw fail("There is nothing on this server to swap back to.", 404);
-  const archive = join(previousFolder(dataDir), "workspace.ombbackup");
+  const archive = join(previousFolder(dataDir), "workspace.ripobackup");
   const staged = await stageWorkspaceBackup(dataDir, archive, { password: previous.password, currentAppVersion: appVersion });
   return { ...staged, bytes: lstatSync(archive).size };
 }
 
 /** The archive size of the previous Cloud (0 without one), for space checks. */
 export function previousCloudArchiveBytes(dataDir: string): number {
-  try { return lstatSync(join(previousFolder(dataDir), "workspace.ombbackup")).size; } catch { return 0; }
+  try { return lstatSync(join(previousFolder(dataDir), "workspace.ripobackup")).size; } catch { return 0; }
 }
 
 function readMoveRestores(dataDir: string): string[] {

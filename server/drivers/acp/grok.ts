@@ -338,7 +338,7 @@ export function grokToolScopeProfile(scope: unknown, init: unknown, inherited?: 
   // Grok rejects an empty curated construction. A real read entry explicitly
   // disabled by its exact native name constructs an empty final registry.
   return {
-    ...inherited, name: inherited?.name ?? "openmausbot-tools", description: inherited?.description ?? "Owner-selected tools",
+    ...inherited, name: inherited?.name ?? "ripobot-tools", description: inherited?.description ?? "Owner-selected tools",
     injectDefaultTools: false, discoverSkills: false,
     toolConfig: { ...inherited?.toolConfig, tools: selected.length ? selected : [{ id: "GrokBuild:read_file", name_override: "read_file" }] },
     tools: [], disallowedTools: [...new Set([...(inherited?.disallowedTools ?? []), ...(selected.length ? [] : ["read_file"])])],

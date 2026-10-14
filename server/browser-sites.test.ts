@@ -39,7 +39,7 @@ afterEach(async () => {
 });
 
 function profile(session = "work") {
-  const home = mkdtempSync(join(tmpdir(), "omb-browser-sites-"));
+  const home = mkdtempSync(join(tmpdir(), "ripo-browser-sites-"));
   scratch.push(home);
   const directory = join(home, ".agent-browser", "sessions");
   mkdirSync(directory, { recursive: true });

@@ -10,7 +10,7 @@
 // than cross-fade so a placeholder and a value never show as two objects.
 import { useEffect, useState } from "react";
 import { ArrowUp, CalendarClock, Check, Folder, Plug } from "lucide-react";
-import { MausAvatar } from "@/components/Avatar";
+import { RipoAvatar } from "@/components/Avatar";
 import { ServiceIcon, type ToolkitCard } from "@/components/PluginsPanel";
 import { cn } from "@/lib/cn";
 import { reducedMotion } from "@/lib/onboarding";
@@ -176,7 +176,7 @@ export function Setup({ playing, onCue, onEnded, label }: SceneProps) {
           {sent && (
             <div className="flex items-center gap-2">
               <div className="shrink-0 drop-shadow-[0_6px_14px_rgba(0,0,0,0.35)]">
-                <MausAvatar
+                <RipoAvatar
                   color="green"
                   state={configured ? "proud" : replied ? "writing" : "working"}
                   size={26}
@@ -230,7 +230,7 @@ export function Setup({ playing, onCue, onEnded, label }: SceneProps) {
           )}
         >
           <div className="flex items-center gap-2.5 border-b border-hairline/40 pb-3">
-            <MausAvatar color="green" state={configured ? "proud" : sent ? "working" : "idle"} size={34} animated={!still} trackPointer={false} />
+            <RipoAvatar color="green" state={configured ? "proud" : sent ? "working" : "idle"} size={34} animated={!still} trackPointer={false} />
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-semibold text-ink">
                 <Reveal shown={steps >= 1} bar="w-24">

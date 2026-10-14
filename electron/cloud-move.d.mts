@@ -9,7 +9,7 @@ export interface MoveTarget extends MoveDestination {
   grant(): Promise<{ origin: string; code: string; expiresAt?: number }>;
   /** The disk the person's plan has and may grow to (cloud-home.mjs cloudPlanDisk). */
   disk?: () => import("./cloud-home.mjs").CloudPlanDisk | null;
-  /** Ask OMB Cloud to grow the disk now (cloud-account.mjs growDisk). */
+  /** Ask RIPO Cloud to grow the disk now (cloud-account.mjs growDisk). */
   grow?: (sizeGb: number) => Promise<{ supported: boolean; refused?: boolean }>;
 }
 /** Why a copy to a destination cannot start now (cloud-move.mjs moveBlocked). */

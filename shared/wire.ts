@@ -59,14 +59,14 @@ export type CloudBackend = "box" | "vps";
  * person's seat they are the same "cloud computer" panel. */
 export type Surface = "cloud" | "vm" | "local" | "browser";
 
-export type MausColor =
+export type RipoColor =
   | "green" | "blue" | "red" | "orange" | "purple" | "cyan" | "pink"
   | "yellow" | "teal" | "coral";
 
 /** The face a bot rests on, as one of the engine's state names. Kept as a
  * plain string rather than a union: bots saved under the app's earlier
  * ten-face vocabulary still carry those names. */
-export type MausExpression = string;
+export type RipoExpression = string;
 
 /** What the bot is doing right now, as the harness sees it. `parked.computer`
  * is task-level only (ADR-2, #1651): a thread whose turn settled at the
@@ -285,8 +285,8 @@ export interface WireBot {
   /** The SOUL.md mirror differed from soul at the last turn dispatch. */
   soulDrift?: boolean;
   notifications: boolean;
-  color: MausColor;
-  mascotExpression?: MausExpression | null;
+  color: RipoColor;
+  mascotExpression?: RipoExpression | null;
   mascotBody?: MascotBodyId | null;
   /** App-owned attachment served as this bot's custom profile image;
    * always present on the wire, null when the bot has none. */
@@ -406,7 +406,7 @@ export interface ResolvedSender {
  * owner on this machine, or a session-less local caller on a shared server
  * (`worker`: the Slack worker, or any other process on that machine). */
 export type CardAnswerer = (
-  /** `person`: the answering session's opaque person key, recorded on an OMB
+  /** `person`: the answering session's opaque person key, recorded on an RIPO
    * Cloud home only, where it decides whether an answer came from the owner
    * (server/cloud-lending.ts). */
   | { kind: "session"; name: string; person?: string }
@@ -536,7 +536,7 @@ export interface WireMessage {
   routedBy?: { provider: "jev"; probability: number };
   /** Set on the user-role line another bot delivered into this bot's own
    * conversation (coordinate_bots, start_thread). `incident`: the line is
-   * OpenMausBot's Team incidents report about that bot's broken run in
+   * RipoBot's Team incidents report about that bot's broken run in
    * `threadId` (server/incidents.ts), not its words; `notified`: that
    * failure already buzzed the person (a run that could not start, a
    * failed routine). */

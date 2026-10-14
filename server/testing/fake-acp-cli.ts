@@ -45,7 +45,7 @@
 //                   (docs/runtime-contract.md §9).
 //                   A wake carrying a hand-off's result (the legacy "[A
 //                   delegated task just completed]" or the runtime's
-//                   "[OpenMausBot report from …]") is answered with a fixed
+//                   "[RipoBot report from …]") is answered with a fixed
 //                   line and never hands work on again.
 //                   | echo-gated (reply by echoing the full prompt, and when
 //                     FAKE_ACP_GATE_FILE is set hold the turn open until that
@@ -292,12 +292,12 @@ const dumpEnv = Object.fromEntries(
     "XAI_API_KEY",
     "GROK_AGENT",
     "BOX_TOKEN",
-    "OMB_TTS_KEY",
-    "OMB_FISH_AUDIO_API_KEY",
-    "OMB_CLOUD_READY_TOKEN",
-    "OMB_CLOUD_BOOTSTRAP",
-    "OMB_LICENSE_KEY",
-    "OMB_INSTALLATION_CREDENTIAL",
+    "RIPO_TTS_KEY",
+    "RIPO_FISH_AUDIO_API_KEY",
+    "RIPO_CLOUD_READY_TOKEN",
+    "RIPO_CLOUD_BOOTSTRAP",
+    "RIPO_LICENSE_KEY",
+    "RIPO_INSTALLATION_CREDENTIAL",
     "FACTORY_API_KEY",
     "UNSLOTH_STUDIO_AUTH_TOKEN",
     "CURSOR_API_KEY",
@@ -321,7 +321,7 @@ const dumpEnv = Object.fromEntries(
     "OPENCODE_DISABLE_PROJECT_CONFIG",
     "GEMINI_API_KEY",
     "MISTRAL_API_KEY",
-    "OMB_ANTHROPIC_API_KEY",
+    "RIPO_ANTHROPIC_API_KEY",
   ].flatMap((key) => (process.env[key] === undefined ? [] : [[key, process.env[key]]] as const)),
 );
 // pid rides along so a test can tell a respawned process (new pid, fresh
@@ -995,7 +995,7 @@ function handle(msg: any) {
       // legacy wake): the harness revived it to fold the result in.
       // Synthesize instead of driving the mode's usual hand-off flow, which
       // would loop or re-ask for approval on a turn the user did not initiate.
-      const runtimeReport = /\[OpenMausBot report from @[^\]\n]*: ([a-z_]+)/.exec(promptText);
+      const runtimeReport = /\[RipoBot report from @[^\]\n]*: ([a-z_]+)/.exec(promptText);
       const wokeFromDelegation = promptText.includes("[A delegated task just completed]")
         || promptText.includes("[A delegated task failed]")
         || runtimeReport !== null;

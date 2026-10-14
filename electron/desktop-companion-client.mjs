@@ -13,7 +13,7 @@ import { isIP } from "node:net";
 import path from "node:path";
 
 export const DESKTOP_COMPANION_FIELD = "desktopCompanionRemote";
-const DEVICE_TOKEN = /^omb_[A-Za-z0-9_-]{43}$/;
+const DEVICE_TOKEN = /^ripo_[A-Za-z0-9_-]{43}$/;
 const DEVICE_ID = /^[0-9a-f-]{36}$/i;
 const PAIRING_CODE = /^\d{6}$/;
 const MAX_ERROR_BYTES = 64 * 1024;
@@ -23,8 +23,8 @@ const MAX_ERROR_BYTES = 64 * 1024;
  * either argument makes the renderer unsafe or makes a live relay look local. */
 export function desktopCompanionRendererArguments(localOrigin, remoteAccess) {
   return [
-    `--omb-local-origin=${localOrigin}`,
-    ...(remoteAccess ? ["--openmausbot-remote-client"] : []),
+    `--ripo-local-origin=${localOrigin}`,
+    ...(remoteAccess ? ["--ripobot-remote-client"] : []),
   ];
 }
 
@@ -48,15 +48,15 @@ const cleanLabel = (value, fallback) => {
   return label || fallback;
 };
 
-/** Exactly the managed companion addresses the OpenMausBot control plane
+/** Exactly the managed companion addresses the RipoBot control plane
  * issues: `c-` and 32 lowercase hex digits under the domain of one of the
  * Cloudflare accounts it uses. Any other name in those zones (another
  * service, or a record someone else came to control) never receives a
  * pairing code. A new domain must be listed here, and shipped, before the
  * control plane hands out addresses under it. */
-const MANAGED_COMPANION_HOSTNAME = /^c-[0-9a-f]{32}\.(?:openmausbot\.com|mausbot\.si)$/;
+const MANAGED_COMPANION_HOSTNAME = /^c-[0-9a-f]{32}\.(?:ripobot\.com|ripobot\.si)$/;
 
-/** Pairing tokens may travel through a verified OpenMausBot HTTPS endpoint or
+/** Pairing tokens may travel through a verified RipoBot HTTPS endpoint or
  * an explicit Tailscale MagicDNS name. WireGuard protects cleartext HTTP on
  * the latter; accepting LAN IPs there would silently turn the long-lived
  * bearer into plaintext Wi-Fi traffic. */
@@ -139,7 +139,7 @@ export async function pairDesktopCompanion({
 }) {
   const endpoint = normalizeDesktopCompanionEndpoint(rawEndpoint);
   if (!endpoint) {
-    throw new Error("Enter the OpenMausBot HTTPS companion address or full Tailscale name ending in .ts.net");
+    throw new Error("Enter the RipoBot HTTPS companion address or full Tailscale name ending in .ts.net");
   }
   const code = String(rawCode ?? "").trim();
   if (!PAIRING_CODE.test(code)) throw new Error("Enter the six-digit code shown on the other computer");

@@ -5,7 +5,7 @@
 //
 // - this computer (the desktop app on its own computer): the phone flow in
 //   Settings → Remote access, which pairs with this computer's companion;
-// - the person's own OMB Cloud (open in this window, or a browser): that
+// - the person's own RIPO Cloud (open in this window, or a browser): that
 //   Cloud's own Remote access pairing code;
 // - any other server: its pairing code, only for a session that may make one.
 //
@@ -42,7 +42,7 @@ export function currentPhonePairingTarget(cloudHome: boolean): PhonePairingTarge
 /** Where a phone pairs from this window. `companion`: this window has the
  * desktop's phone bridge (the local app, not a remote server's page);
  * `remoteClient`: this desktop is a client of another server, whose phones
- * pair there; `cloudHome`: the server is an OMB Cloud home. */
+ * pair there; `cloudHome`: the server is an RIPO Cloud home. */
 export function phonePairingTarget(input: { companion: boolean; remoteClient: boolean; cloudHome: boolean }): PhonePairingTarget {
   if (input.cloudHome) return "cloud";
   return input.companion && !input.remoteClient ? "computer" : "server";

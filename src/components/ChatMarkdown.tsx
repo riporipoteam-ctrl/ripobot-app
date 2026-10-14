@@ -262,7 +262,7 @@ export function chatUrlTransform(value: string): string {
   // scheme must survive the allow-list so the anchor component sees it
   if (looksLikeThreadRefUrl(value)) return value;
   // Markdown-to-HTML percent-encodes a destination's backslashes, so
-  // C:\Users\Maus\report.md arrives as C:%5CUsers%5CMaus%5Creport.md and no
+  // C:\Users\Ripo\report.md arrives as C:%5CUsers%5CRipo%5Creport.md and no
   // longer looked like a drive path: the link rendered dead and the image as
   // unavailable. Restore the separators; other escapes stay for the server's
   // single decode.
@@ -579,7 +579,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
           theme: scheme === "light" ? "default" : "dark",
           fontFamily: MERMAID_FONT,
         });
-        return module.default.render(`omb-mermaid-${mermaidRenderId}`, code);
+        return module.default.render(`ripo-mermaid-${mermaidRenderId}`, code);
       })
       .then((out) => {
         if (!alive) return;
@@ -733,7 +733,7 @@ export function markdownImageName(src: string, alt?: string): string {
   const supplied = alt?.trim();
   if (supplied) return supplied;
   try {
-    const path = decodeURIComponent(new URL(src, "https://openmausbot.invalid").pathname);
+    const path = decodeURIComponent(new URL(src, "https://ripobot.invalid").pathname);
     const name = path.split(/[\\/]/).filter(Boolean).at(-1)?.trim();
     if (name) return name;
   } catch {
@@ -1160,8 +1160,8 @@ const MARKDOWN_COMPONENTS: Components = {
 };
 
 // A thread link only ever comes from a "#Title" run or a canonical
-// openmausbot://thread/ link, whatever case or escaping its scheme uses.
-const MAY_LINK_THREAD = /#|openmausbot/i;
+// ripobot://thread/ link, whatever case or escaping its scheme uses.
+const MAY_LINK_THREAD = /#|ripobot/i;
 const NO_THREAD_REFS: ThreadRefsValue = { threads: [] };
 
 /** Render message Markdown with math, protected code, scoped attachments, and mentions. */

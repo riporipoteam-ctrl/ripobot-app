@@ -107,7 +107,7 @@ describe("Settings → Logins", () => {
   });
 
   it("connects 1Password with a masked token it then forgets, lists its logins read-only, and disconnects", async () => {
-    const on = { connected: true, vaults: ["Shared with OMB"], items: 1 };
+    const on = { connected: true, vaults: ["Shared with RIPO"], items: 1 };
     fixture.api
       .mockResolvedValueOnce({ logins: [], onePassword: OFF })
       .mockResolvedValueOnce({ onePassword: on })
@@ -122,7 +122,7 @@ describe("Settings → Logins", () => {
     await click("Connect 1Password");
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(fixture.api).toHaveBeenNthCalledWith(2, "/api/logins/1password", { method: "POST", body: JSON.stringify({ token: "ops_fake-typed-token" }) });
-    expect(host.querySelector("[data-onepassword]")!.textContent).toContain("Connected to Shared with OMB · 1 logins with a website");
+    expect(host.querySelector("[data-onepassword]")!.textContent).toContain("Connected to Shared with RIPO · 1 logins with a website");
     expect(host.innerHTML).not.toContain("ops_fake-typed-token");
     const row = host.querySelector('[data-login-row="vault.example.com"]')!;
     expect(row.textContent).toContain("From 1Password · All bots");

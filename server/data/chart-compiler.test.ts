@@ -375,7 +375,7 @@ describe("compileChart: identifiers and the source", () => {
   });
 
   it("reads from a table, a qualified table, a quoted table or a subquery", () => {
-    expect(compile({ type: "bar", x: "region" }, "omb_results.q_3").sql).toContain("src AS (SELECT * FROM omb_results.q_3)");
+    expect(compile({ type: "bar", x: "region" }, "ripo_results.q_3").sql).toContain("src AS (SELECT * FROM ripo_results.q_3)");
     expect(compile({ type: "bar", x: "region" }, '"my table"').sql).toContain('src AS (SELECT * FROM "my table")');
     expect(compile({ type: "bar", x: "region" }, "(SELECT * FROM sales WHERE qty > 1)").sql).toContain("src AS (SELECT * FROM (SELECT * FROM sales WHERE qty > 1))");
   });

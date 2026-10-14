@@ -1,11 +1,11 @@
 // A stdio facade for HTTP/SSE MCP servers: how every engine except Claude
-// Code reaches them. Its upstream handshake is OMB's own (RemoteMcpClient,
+// Code reaches them. Its upstream handshake is RIPO's own (RemoteMcpClient,
 // the one Settings → Test uses), never the engine's: an engine's client adds
 // capability fields a strict server refuses. Configuration stays in private
 // environment data; stdout contains only protocol frames.
 //
 // A driver whose engine cannot search tools on its own also sets
-// OMB_REMOTE_MCP_DIRECTORY. Then a big catalog is searched instead of listed
+// RIPO_REMOTE_MCP_DIRECTORY. Then a big catalog is searched instead of listed
 // (mcp-directory.ts): tools/list answers search_tools, describe_tool and
 // call_tool, the upstream catalog is read once per process and again after
 // the server says it changed, and a small catalog still passes through. The
@@ -56,13 +56,13 @@ function fail(message: string): never {
 }
 
 /** What the engine is told when the server refuses its credentials (HTTP
- * 401). This proxy cannot tell an OpenMausBot sign-in from a header the
+ * 401). This proxy cannot tell an RipoBot sign-in from a header the
  * person typed (both arrive as headers), so the words cover both: a sign-in
  * token that ran out during a long turn is refreshed when the next message
  * starts, while a revoked sign-in or a wrong key needs the person. Our own
  * words, nothing remote. */
 const CREDENTIALS_REFUSED = "This MCP server refused its credentials (HTTP 401). If it uses a sign-in, send the message again: "
-  + "OpenMausBot refreshes sign-ins when a message starts. If it still fails, open Plugins → MCP servers and sign in to it again, "
+  + "RipoBot refreshes sign-ins when a message starts. If it still fails, open Plugins → MCP servers and sign in to it again, "
   + "or check its header values.";
 
 /** A refusal of our own: its words carry nothing remote, so they are relayed. */
@@ -74,7 +74,7 @@ class Refusal extends Error {
   }
 }
 
-const SETTINGS = ["OMB_REMOTE_MCP_SERVER", "OMB_REMOTE_MCP_DIRECTORY"];
+const SETTINGS = ["RIPO_REMOTE_MCP_SERVER", "RIPO_REMOTE_MCP_DIRECTORY"];
 /** Codex hands every MCP child one shared environment, so a mount there
  * names its own private record (`--config-env NAME`) holding the same
  * settings. Either way they leave this process's environment once read. */
@@ -99,7 +99,7 @@ function privateSettings(): Record<string, string | undefined> {
 
 const settings = privateSettings();
 let spec;
-try { spec = remoteMcpSpec(JSON.parse(settings.OMB_REMOTE_MCP_SERVER ?? "")); } catch { /* invalid private config */ }
+try { spec = remoteMcpSpec(JSON.parse(settings.RIPO_REMOTE_MCP_SERVER ?? "")); } catch { /* invalid private config */ }
 if (!spec) fail("invalid remote MCP configuration");
 
 /** The directory's settings: which server this is (the name tool selections
@@ -117,7 +117,7 @@ function directorySettings(raw: string | undefined): { server: string; scope: To
   } catch { /* reported below */ }
   return fail("invalid tool directory configuration");
 }
-const directory = directorySettings(settings.OMB_REMOTE_MCP_DIRECTORY);
+const directory = directorySettings(settings.RIPO_REMOTE_MCP_DIRECTORY);
 
 /** Characters of a server's own error message the engine may read. */
 const REMOTE_ERROR_CHARS = 1_000;
@@ -152,7 +152,7 @@ function remoteErrorText(detail: string): string {
 }
 const allowed = (name: string) => !directory?.scope || allowsTool(directory.scope, { kind: "mcp", server: directory.server, name });
 
-// ── the directory (only with OMB_REMOTE_MCP_DIRECTORY) ──
+// ── the directory (only with RIPO_REMOTE_MCP_DIRECTORY) ──
 
 /** The bot's part of the upstream catalog, and whether it is searched. */
 interface Catalog { tools: ToolDirectory; searched: boolean }
@@ -277,7 +277,7 @@ async function callTool(params: unknown, signal: AbortSignal): Promise<unknown> 
 
 async function directed(message: Json, signal: AbortSignal): Promise<unknown> {
   if (message.method === "initialize") {
-    const result = await client.initialize("OpenMausBot tool proxy", signal);
+    const result = await client.initialize("RipoBot tool proxy", signal);
     if (!isRecord(result)) return result;
     const info = isRecord(result.serverInfo) ? result.serverInfo : {};
     const title = typeof info.title === "string" ? info.title : typeof info.name === "string" ? info.name : undefined;
@@ -327,7 +327,7 @@ async function handle(message: Json): Promise<void> {
     const result = directory
       ? await directed(message, signal)
       : message.method === "initialize"
-        ? await client.initialize("OpenMausBot tool proxy", signal)
+        ? await client.initialize("RipoBot tool proxy", signal)
         : await client.request(message.method, message.params, signal);
     if (message.method === "initialize") initialized = true;
     send({ jsonrpc: "2.0", id: message.id, result });

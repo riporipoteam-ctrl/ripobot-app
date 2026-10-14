@@ -133,7 +133,7 @@ if (process.argv[2] === "exec") {
   });
   const textMode = process.env.FAKE_CODEX_TEXT_MODE ?? "ok";
   if (process.env.FAKE_CODEX_TEXT_LOG) {
-    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(?:HOME|CODEX_HOME|OPENAI_API_KEY|OPENMAUSBOT_.*)$/.test(key)));
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(?:HOME|CODEX_HOME|OPENAI_API_KEY|RIPOBOT_.*)$/.test(key)));
     appendFileSync(process.env.FAKE_CODEX_TEXT_LOG, `${JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd(), prompt, env })}\n`);
   }
   const event = (value: unknown) => process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -852,7 +852,7 @@ process.stdin.on("data", (chunk) => {
             ].join(" ")
           : "ls -la";
         notify("item/started", { item: { id: "i1", type: "commandExecution", command } });
-        notify("item/started", { item: { id: "w1", type: "webSearch", query: "OpenMausBot" } });
+        notify("item/started", { item: { id: "w1", type: "webSearch", query: "RipoBot" } });
         const reviewOnce = process.env.FAKE_CODEX_REVIEW_ONCE_FILE;
         if (process.env.FAKE_CODEX_REVIEW_EVENTS && (!reviewOnce || !existsSync(reviewOnce))) {
           if (reviewOnce) writeFileSync(reviewOnce, "1");

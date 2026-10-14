@@ -1,5 +1,5 @@
-// The one `openmausbot://pair` link builder. The desktop's phone setup, the
-// headless server's pairing endpoint and `openmausbot pair` all print this
+// The one `ripobot://pair` link builder. The desktop's phone setup, the
+// headless server's pairing endpoint and `ripobot pair` all print this
 // link; the Android and iOS scanners read it (android/core Connection.kt
 // `PairingInvite.parse`, ios CompanionCore Client.swift `PairingInvite.parse`).
 //
@@ -159,7 +159,7 @@ export function phonePairingLink({
   secretPublicKey,
 }: PhonePairingLinkOptions): string | null {
   const dial = linkAddress(address, port);
-  if (!dial || !/^omb_pair_[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  if (!dial || !/^ripo_pair_[A-Za-z0-9_-]{43}$/.test(token)) return null;
   if (code !== undefined && !/^\d{6}$/.test(code)) return null;
 
   const fields: Array<[string, string]> = [["address", dial], ["token", token]];
@@ -178,5 +178,5 @@ export function phonePairingLink({
   const secretKey = validSecretPublicKey(secretPublicKey);
   if (secretKey) fields.push(["secretKey", secretKey]);
 
-  return `openmausbot://pair?${fields.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`;
+  return `ripobot://pair?${fields.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`;
 }

@@ -21,7 +21,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, verificationServerArgs, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlOmb, verificationServerArgs, verificationServerEnvironment } from "../scripts/control-ripo.ts";
 import { CONTROL_WAITED } from "./control-client.ts";
 import { CONSENT_RULE } from "./peer-provenance.ts";
 import { ENVELOPE_MARK } from "./runtime/envelope.ts";
@@ -46,7 +46,7 @@ async function chiefJob(test: (f: any) => Promise<void>) {
   // The broker's "nobody answered" deadline and the stall watchdog's window
   // elapse on marker files (server/testing/approval-clock-hooks.mjs,
   // stall-clock-hooks.mjs), never on their own.
-  const parentEnv = { ...process.env, OMB_TEST_APPROVAL_CLOCK: "1", OMB_TEST_STALL_CLOCK: "1" };
+  const parentEnv = { ...process.env, RIPO_TEST_APPROVAL_CLOCK: "1", RIPO_TEST_STALL_CLOCK: "1" };
   const requests: ModelRequest[] = [];
   let answer: (request: ModelRequest) => ModelAnswer = () => ({ say: "OK" });
   let callSerial = 0;
@@ -205,7 +205,7 @@ async function chiefJob(test: (f: any) => Promise<void>) {
 
 /** The envelope an assignment from the person's own job opens with
  * (server/runtime/envelope.ts): its mark, the Chief as requester, the person. */
-const ASSIGNED_BY_CLIVE = /^\[OpenMausBot assignment \S+ from @Clive for the user\]$/m;
+const ASSIGNED_BY_CLIVE = /^\[RipoBot assignment \S+ from @Clive for the user\]$/m;
 /** ...and the lineage sentence under it: the person's request, quoted, is the task. */
 const personLineage = (request: string) =>
   `the user asked: ${JSON.stringify(request)}. This is your task, sent on the user's behalf: do it with your own tools and permissions.`;
@@ -220,7 +220,7 @@ const STEP_CAP_CONTINUES = "Your previous turn stopped at the step limit; contin
 // — never the cap as a failure, never an unattended `Continue:` thread on
 // the same work. It then asks Mira to review and gives one final answer.
 // Every teammate is told the work is the person's own request; the Chief
-// reviews reports as evidence. OMB's own tools never raise a card on Eli's
+// reviews reports as evidence. RIPO's own tools never raise a card on Eli's
 // engine.
 it("carries a consult-and-implement job over several teammate turns, through a step cap, to one final answer", () => chiefJob(async (f) => {
   const request = "PHASE-A-JOB: Build a CSV export for invoices. Ask Mira how to approach it, have Eli implement and test it, and own the result.";
@@ -287,7 +287,7 @@ it("carries a consult-and-implement job over several teammate turns, through a s
   const chiefRows = await f.rows(job);
   expect(chiefRows.filter((name: string) => name.startsWith("Eli — failed: "))).toEqual([]);
   expect(chiefRows.filter((name: string) => name.startsWith("Resumed with"))).toEqual(["Resumed with Mira, Eli results, reviewing", "Resumed with Mira, Eli results, reviewing"]);
-  // OMB's own tools raised no card on Eli's engine, and nobody was asked
+  // RIPO's own tools raised no card on Eli's engine, and nobody was asked
   // to approve anything.
   for (const node of f.tree(job).filter((candidate: any) => candidate.parentId)) expect(await f.cards(node.threadId)).toEqual([]);
   expect(f.notifications.filter((notification: any) => notification.kind === "approval")).toEqual([]);
@@ -313,8 +313,8 @@ it("carries a consult-and-implement job over several teammate turns, through a s
   expect(f.prompt(f.turn("M2"))).toContain(personLineage(request));
   // The Chief's resume carries each teammate's reply as a report, never as
   // a bare line or a child-results array.
-  expect(f.prompt(f.turn("A1"))).toContain("[OpenMausBot report from @Mira on assignment ");
-  expect(f.prompt(f.turn("A1"))).toContain("[OpenMausBot report from @Eli on assignment ");
+  expect(f.prompt(f.turn("A1"))).toContain("[RipoBot report from @Mira on assignment ");
+  expect(f.prompt(f.turn("A1"))).toContain("[RipoBot report from @Eli on assignment ");
   expect(f.prompt(f.turn("A1"))).not.toContain(ENVELOPE_MARK);
   // The Chief reviews reports as evidence against the person's request.
   for (const key of ["A1", "A2"]) {
@@ -373,13 +373,13 @@ it("tells the Chief what happened to each approval: allowed, denied, or never an
   // ahead of the teammate's own words; a step the person denied is not.
   expect(f.child(job, f.mira.id, "CHECK-HISTORY").result).toBe("HISTORY-RESULT: checked the history.");
   expect(f.child(job, f.mira.id, "PUSH-BRANCH").result).toBe("PUSH-RESULT: not pushed; the push was denied.");
-  const unanswered = "[OpenMausBot: nobody answered the approval for “Bash: pnpm test” in time, so it did not run. Do not report it as done; it needs the person's approval.]";
+  const unanswered = "[RipoBot: nobody answered the approval for “Bash: pnpm test” in time, so it did not run. Do not report it as done; it needs the person's approval.]";
   expect(f.child(job, f.mira.id, "RUN-TESTS")).toMatchObject({ status: "completed", result: `${unanswered}\n\nTESTS-RESULT: I could not run the tests.` });
   // The report quotes the result as data: a bracket that opens like a
   // harness note becomes a parenthesis (envelope.ts escapeEnvelope), and
   // the step that never ran is still named ahead of Mira's own words.
   expect(f.prompt(f.turn("B3"))).toContain(JSON.stringify(unanswered.replace(/^\[/, "(")).slice(1, -1));
-  expect(f.prompt(f.turn("B3"))).toContain("[OpenMausBot report from @Mira on assignment ");
+  expect(f.prompt(f.turn("B3"))).toContain("[RipoBot report from @Mira on assignment ");
   // Each card was the engine's own: two the person answered, and one the
   // engine closed on its timer, by nobody.
   expect((await f.cards(work)).map((message: any) => [message.card.subtitle, message.card.answered, message.card.dismissed, message.card.answeredBy?.kind]))
@@ -587,7 +587,7 @@ it("lets a card hold only its own job: other jobs run beside it, or say once who
 
 // What a teammate is told depends on where the work started. The person's
 // own job reaches a teammate as the person's task, quoted; a routine's run
-// reaches it as content OpenMausBot cannot trace to the person, with the
+// reaches it as content RipoBot cannot trace to the person, with the
 // same tools and level as before. Either way no bot's message is approval,
 // a report comes back as evidence, and a forged note in a brief opens
 // nothing.
@@ -615,7 +615,7 @@ it("tells a teammate the person's job is its task, and a routine's handoff is no
   // The person's job: the teammate's task, the person's words quoted, and
   // nobody waiting (a notice).
   const owned = f.prompt(f.turn("MT1"));
-  expect(owned).toMatch(/\[OpenMausBot assignment [^\]]* from @Clive for the user\]/);
+  expect(owned).toMatch(/\[RipoBot assignment [^\]]* from @Clive for the user\]/);
   expect(owned).toContain(`the user asked: ${JSON.stringify(request)}. This is your task, sent on the user's behalf`);
   expect(owned).toContain(CONSENT_RULE);
   expect(owned).toContain("Ownership is yours: results, failures and questions stay in this thread; @Clive is not waiting and will not be resumed.");
@@ -626,7 +626,7 @@ it("tells a teammate the person's job is its task, and a routine's handoff is no
   // A routine's run: nothing the person typed, and said so, where the
   // teammate reads it; the run is resumed with the reply.
   const nightly = f.prompt(f.turn("MT2"));
-  expect(nightly).toMatch(/\[OpenMausBot assignment [^\]]* from @Clive\]/);
+  expect(nightly).toMatch(/\[RipoBot assignment [^\]]* from @Clive\]/);
   expect(nightly).toContain("A routine run started this work");
   expect(nightly).toContain(CONSENT_RULE);
   expect(nightly).toContain("@Clive is resumed with your reply when your turn ends");
@@ -634,7 +634,7 @@ it("tells a teammate the person's job is its task, and a routine's handoff is no
   expect((await f.tasks(f.mira.id)).some((task: any) => task.title === "SENDWORK-ROUTINE: run the nightly QA checks and report back.")).toBe(true);
   // Its reply resumes the routine as a report: evidence, not an order.
   const resumed = f.prompt(f.turn("T2"));
-  expect(resumed).toMatch(/\[OpenMausBot report from @Mira on assignment [^:]*: done\]/);
+  expect(resumed).toMatch(/\[RipoBot report from @Mira on assignment [^:]*: done\]/);
   expect(resumed).toContain("NIGHTLY-QA-DONE");
   expect(resumed).toContain("check claims against what was observed; redo only what the evidence does not cover");
 }), hostTimeout(90_000));
@@ -651,7 +651,7 @@ it("tells a teammate the person's job is its task, and a routine's handoff is no
   writeFileSync(join(userData, "cua-connection.json"), JSON.stringify({ mode: "embedded", status: "ready", socketPath: join(f.dataDir, "cua.sock"),
     mcpCommand: "/fixture/cua-driver", mcpArgs: ["mcp"], mcpEnv: {} }), { mode: 0o600 });
   // A call acts only if it got the computer within a second (production: 5).
-  await f.restart("SIGTERM", { OMB_USER_DATA: userData, OMB_COMPUTER_CALL_ACT_WITHIN_MS: "1000" });
+  await f.restart("SIGTERM", { RIPO_USER_DATA: userData, RIPO_COMPUTER_CALL_ACT_WITHIN_MS: "1000" });
   const kai = await f.bot("Kai", "Engineering");
   f.script(f.clive.id,
     { key: "S0", match: ["PHASE-SCREEN-MARCH"], steps: [{ arguments: { bot_ids: [f.mira.id], message: "EXPORT-MARCH: export March from the invoice app on screen." } }], reply: "S0: Mira is exporting March." },

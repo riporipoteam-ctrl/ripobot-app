@@ -28,7 +28,7 @@ import { showToolCallsEnabled } from "@/lib/feature-flags";
 import { CompactionChip, DigestChip } from "./DigestChip";
 import { roomActivityVisible } from "@/lib/room-activity";
 import { StatusActivityRow } from "@/components/StatusActivityRow";
-import { MAUS_COLOR_NAMES, normalizeState, type MausColor } from "@/lib/mascot";
+import { RIPO_COLOR_NAMES, normalizeState, type RipoColor } from "@/lib/mascot";
 import { botTextShowsSpeaker, laterTextOwns, runShowsSpeaker } from "@/lib/room-speaker";
 import { defaultResponderName, effectiveDefaultResponder, groupResponseHint, jevRoomRoutingOn } from "@/lib/group-routing";
 import { ChatMarkdown } from "./ChatMarkdown";
@@ -151,8 +151,8 @@ export function RoomToolChip({ message, roomId }: { message: Message; roomId?: s
   );
 }
 
-function isPaletteColor(color: string): color is MausColor {
-  return (MAUS_COLOR_NAMES as readonly string[]).includes(color);
+function isPaletteColor(color: string): color is RipoColor {
+  return (RIPO_COLOR_NAMES as readonly string[]).includes(color);
 }
 
 /** 16px profile avatar + name, shown once per sender cluster. The name uses
@@ -1335,7 +1335,7 @@ export function GroupView({ group }: { group: Group }) {
   // room gets the place icon instead of the plain dot, matching the 1:1
   // composer's PlaceChip live indicator.
   const contextWarnings = roomContextWarnings(group, members);
-  const memberMauses = members.map((b) => {
+  const memberRipos = members.map((b) => {
     const busy = group.busyBotId === b.id;
     const contextWarning = contextWarnings.find((warning) => warning.bot.id === b.id);
     const busyElsewhere = !busy && speakersElsewhere.has(b.id);
@@ -1456,7 +1456,7 @@ export function GroupView({ group }: { group: Group }) {
           {!remoteClient && !setupPending && !group.dm && <RoomWorkingFolderChip group={group} onToggle={() => setFolderOpen((open) => !open)} />}
           {!remoteClient && !setupPending && !group.dm && <DefaultResponderSelect group={group} members={members} />}
           {group.dm || remoteClient ? (
-            memberMauses
+            memberRipos
           ) : (
             // The roster lives where you already look to see who is in the
             // room; a dashed + says the row is editable without shouting.
@@ -1472,7 +1472,7 @@ export function GroupView({ group }: { group: Group }) {
               }
               className="flex items-center gap-1.5 rounded-full py-0.5 pl-1 pr-1.5 hover:bg-raised/60"
             >
-              {memberMauses}
+              {memberRipos}
               <span className="flex size-[18px] items-center justify-center rounded-full border border-dashed border-hairline/70 text-ink-secondary">
                 <Plus size={11} />
               </span>

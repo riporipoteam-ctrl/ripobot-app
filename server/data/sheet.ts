@@ -1,6 +1,6 @@
 // The sheet: the ordered cards a bot's Data tab shows, persisted as
 // sheet.json beside data.duckdb in the bot folder. Cards keep their SQL and
-// their chart spec, never their rows: rows live in DuckDB (omb_results) and
+// their chart spec, never their rows: rows live in DuckDB (ripo_results) and
 // the panel pages them, so the file stays small enough to send whole on
 // every change. One store per bot; the tools and the panel routes share it.
 import { mkdirSync, readFileSync, rmSync } from "node:fs";

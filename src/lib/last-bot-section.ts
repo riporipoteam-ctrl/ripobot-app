@@ -3,7 +3,7 @@
 // keeps the pointer during a session and this lib carries it across launches.
 import type { BotSettingsSection } from "@/state/store";
 
-export const LAST_BOT_SECTION_KEY = "openmausbot.lastBotSection.v1";
+export const LAST_BOT_SECTION_KEY = "ripobot.lastBotSection.v1";
 
 /** Every section id the rail can show; the test cross-checks this list
  * against BOT_SECTIONS so the two cannot drift. */
