@@ -1,0 +1,35 @@
+# One-shot publisher for the reviewed Windows browser-engine vendor binary.
+#
+# server/browser-engine-release.ts pins the win32-x64 engine to the
+# `browser-engine-v0.36.0-ripo.1` release asset (upstream 0.37.0 still lacks
+# the Windows cold-start fix). The binary is built and reviewed by the
+# `browser-vendor-windows` workflow; this workflow only attaches the
+# byte-verified binary to the release so `pnpm package:win` can download it.
+# Run by hand via workflow_dispatch; it never rebuilds anything.
+name: Publish vendor browser asset
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Attach vendor binary to browser-engine release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download the reviewed vendor binary
+        run: |
+          curl -sSL --max-time 300 -o agent-browser-win32-x64-0.36.0-ripo.1.exe \
+            "https://github.com/milind-soni/OpenMausBot/releases/download/browser-engine-v0.36.0-omb.1/agent-browser-win32-x64-0.36.0-omb.1.exe"
+          echo "33bee834f6a6072ec8688b0914726e0262874d758f69f27e8baf7eaac6b5ed15  agent-browser-win32-x64-0.36.0-ripo.1.exe" | sha256sum -c
+          test "$(stat -c%s agent-browser-win32-x64-0.36.0-ripo.1.exe)" = "13806080"
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload browser-engine-v0.36.0-ripo.1 \
+            agent-browser-win32-x64-0.36.0-ripo.1.exe --clobber
+          gh release view browser-engine-v0.36.0-ripo.1 --json assets --jq '.assets[].name'
