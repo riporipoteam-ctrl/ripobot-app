@@ -115,6 +115,7 @@ function App() {
     accessCodeRequired: false,
     accessCodeSetupRequired: false,
     huggingFaceReady: false,
+    cloudflareAiReady: false,
     backupReady: true
   });
   const [accessCode, setAccessCode] = useState(() => {
@@ -622,7 +623,7 @@ function HomePage({ agents, tasks, workflows, onOpenChat, onCreateAgent, onStart
           <p><strong>You stay in control.</strong> RipoBot drafts answers for you. External apps and actions still need a real connection and your approval.</p>
         </div>
 
-        <div className="rail-model"><span className="model-orb"><Zap size={13} /></span><span><strong>{modelConfig.huggingFaceReady ? 'Hugging Face connected' : 'Backup route enabled'}</strong><small>{modelConfig.primaryModel.split('/').pop()}</small></span><button className="bare-icon" aria-label="Model details" onClick={onOpenSettings}><ArrowUpRight size={15} /></button></div>
+        <div className="rail-model"><span className="model-orb"><Zap size={13} /></span><span><strong>{modelConfig.huggingFaceReady ? 'Hugging Face connected' : modelConfig.cloudflareAiReady ? 'Llama 3.1 AI ready' : 'Backup route enabled'}</strong><small>{modelConfig.primaryModel.split('/').pop()}</small></span><button className="bare-icon" aria-label="Model details" onClick={onOpenSettings}><ArrowUpRight size={15} /></button></div>
       </aside>
     </div>
   );
@@ -876,8 +877,8 @@ function SettingsPage({ modelConfig, accessCode, onAccessCodeChange, appearance,
             </div>
             <div className="model-settings-row">
               <span className="model-settings-orb"><Zap size={18} /></span>
-              <div className="model-settings-copy"><strong>{modelConfig.primaryModel}</strong><small>Hugging Face Router · {modelConfig.huggingFaceReady ? 'Connected' : modelConfig.accessCodeRequired ? 'Enter the workspace access code' : modelConfig.accessCodeSetupRequired ? 'Access code setup required' : 'Token not configured'}</small></div>
-              <span className={'connection-badge ' + (modelConfig.huggingFaceReady ? 'connection-on' : 'connection-backup')}><i />{modelConfig.huggingFaceReady ? 'Primary ready' : modelConfig.accessCodeRequired ? 'Primary locked' : 'Backup route'}</span>
+              <div className="model-settings-copy"><strong>{modelConfig.primaryModel}</strong><small>Hugging Face Router · {modelConfig.huggingFaceReady ? 'Connected' : modelConfig.accessCodeRequired ? 'Enter the workspace access code' : modelConfig.accessCodeSetupRequired ? 'Access code setup required' : 'Token not configured'}{!modelConfig.huggingFaceReady && modelConfig.cloudflareAiReady ? ' · Cloudflare Llama 3.1 fallback ready' : ''}</small></div>
+              <span className={'connection-badge ' + (modelConfig.huggingFaceReady ? 'connection-on' : 'connection-backup')}><i />{modelConfig.huggingFaceReady ? 'Primary ready' : modelConfig.accessCodeRequired ? 'Primary locked' : modelConfig.cloudflareAiReady ? 'Llama backup ready' : 'Backup route'}</span>
             </div>
             {modelConfig.accessCodeRequired && <div className="access-code-row"><label>Workspace access code<input type="password" autoComplete="current-password" value={accessCode} onChange={(event) => onAccessCodeChange(event.target.value)} placeholder="Enter the code set by the workspace owner" /></label><button className="button button-secondary" onClick={onRefresh}>Check access</button><small>This code stays in this browser session. It is not the Hugging Face token.</small></div>}
             {modelConfig.accessCodeSetupRequired && <div className="model-setup-note"><ShieldCheck size={15} /><span>Add a private <code>RIPO_ACCESS_CODE</code> on the server to protect the shared Hugging Face token.</span></div>}

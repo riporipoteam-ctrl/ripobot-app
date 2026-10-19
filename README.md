@@ -28,7 +28,7 @@ Set `HF_TOKEN` and a private `RIPO_ACCESS_CODE` on the server before the public 
 
 The site uses the GitHub Actions workflow in `.github/workflows/deploy-pages.yml` to build `dist/` and publish the app to GitHub Pages. Push to `main` to publish the UI.
 
-The Worker entry point and Wrangler config are in `cloudflare/`. Deploy the API with `cd cloudflare && npx wrangler deploy`. The web app calls `https://ripobot-api.ripo-ripoteam.workers.dev`; update that default in `src/App.jsx` if the Worker name or account subdomain changes. Add `HF_TOKEN` and `RIPO_ACCESS_CODE` as Worker secrets in Cloudflare to enable the Discord bot's Hugging Face route. The access code is entered in Settings and held only for the current browser session. Never commit the Hugging Face token or place it in client-side code.
+The Worker entry point and Wrangler config are in `cloudflare/`. Its route order is Hugging Face (when its secrets are configured), Cloudflare Workers AI using Llama 3.1 8B, then Pollinations. Workers AI includes 10,000 Neurons per day at no charge; over that, Cloudflare Workers Paid pricing applies. Deploy the API with `cd cloudflare && npx wrangler deploy`. The web app calls `https://ripobot-api.ripo-ripoteam.workers.dev`; update that default in `src/App.jsx` if the Worker name or account subdomain changes. Add `HF_TOKEN` and `RIPO_ACCESS_CODE` as Worker secrets in Cloudflare to enable the Discord bot's Hugging Face route. The access code is entered in Settings and held only for the current browser session. Never commit the Hugging Face token or place it in client-side code.
 
 ## Current scope
 

@@ -92,6 +92,18 @@ async function callHuggingFace(messages, env) {
   return reply ? { reply, provider: 'huggingface', model } : null;
 }
 
+async function callWorkersAI(messages, env) {
+  if (!env.AI) return null;
+  const model = '@cf/meta/llama-3.1-8b-instruct-fp8';
+  const result = await env.AI.run(model, {
+    messages,
+    max_tokens: 700,
+    temperature: 0.7
+  });
+  const reply = typeof result?.response === 'string' ? result.response.trim() : '';
+  return reply ? { reply, provider: 'cloudflare-ai', model } : null;
+}
+
 async function callBackup(messages) {
   const response = await fetch('https://text.pollinations.ai/openai', {
     method: 'POST',
@@ -143,6 +155,12 @@ async function handleChat(request, env) {
     // Follow the Discord bot's fallback behavior when Hugging Face is unavailable.
   }
   try {
+    const compatibleModel = await callWorkersAI(requestMessages, env);
+    if (compatibleModel) return json(request, 200, compatibleModel);
+  } catch (error) {
+    console.warn('Cloudflare AI request failed:', error?.message || 'unknown error');
+  }
+  try {
     const backup = await callBackup(requestMessages);
     if (backup) return json(request, 200, backup);
   } catch {
@@ -175,6 +193,7 @@ export default {
         accessCodeRequired: Boolean(env.HF_TOKEN && env.RIPO_ACCESS_CODE),
         accessCodeSetupRequired: Boolean(env.HF_TOKEN && !env.RIPO_ACCESS_CODE),
         huggingFaceReady: hasPrimaryAccess(request, env),
+        cloudflareAiReady: Boolean(env.AI),
         backupReady: true
       });
     }
