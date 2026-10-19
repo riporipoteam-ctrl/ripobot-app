@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node server/dev.mjs",
-    "build": "vite build && node scripts/sync-pages-root.mjs",
+    "build": "vite build",
     "start": "node server/index.mjs",
     "preview": "vite preview --host 0.0.0.0"
   },
