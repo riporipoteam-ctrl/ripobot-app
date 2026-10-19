@@ -44,11 +44,11 @@ const API_BASE = import.meta.env.DEV
   : (import.meta.env.VITE_API_BASE_URL || 'https://ripobot-api.ripo-ripoteam.workers.dev');
 
 const NAV_ITEMS = [
-  { id: 'home', label: 'Overview', icon: House },
-  { id: 'agents', label: 'AI team', icon: UsersRound },
+  { id: 'home', label: 'Activity', icon: Activity },
+  { id: 'agents', label: 'All bots', icon: Bot },
   { id: 'tasks', label: 'Tasks', icon: ListTodo },
   { id: 'workflows', label: 'Workflows', icon: Workflow },
-  { id: 'integrations', label: 'Integrations', icon: Puzzle }
+  { id: 'integrations', label: 'Connections', icon: Puzzle }
 ];
 
 function useStoredState(key, initialValue) {
@@ -75,14 +75,15 @@ function useStoredState(key, initialValue) {
 function Avatar({ agent, size = 'regular' }) {
   if (agent?.image) {
     return (
-      <span className={'avatar avatar-image avatar-' + (agent.color || 'sky') + ' avatar-' + size}>
+      <span className={'avatar avatar-image avatar-' + (agent.color || 'sky') + ' avatar-' + size + (agent.state === 'working' ? ' avatar-working' : '')} aria-hidden="true">
         <img src="/assets/ripobot-mascot.png" alt="" />
       </span>
     );
   }
   return (
-    <span className={'avatar avatar-' + (agent?.color || 'sky') + ' avatar-' + size} aria-hidden="true">
-      {agent?.name?.slice(0, 1) || 'R'}
+    <span className={'avatar avatar-' + (agent?.color || 'sky') + ' avatar-' + size + (agent?.state === 'working' ? ' avatar-working' : '')} aria-hidden="true">
+      <span className="avatar-antenna" />
+      <span className="avatar-face"><i /><i /><b /></span>
     </span>
   );
 }
@@ -99,7 +100,7 @@ function StatusPill({ status }) {
 }
 
 function App() {
-  const [page, setPage] = useState('home');
+  const [page, setPage] = useState('chat');
   const [agents, setAgents] = useStoredState('ripobot.agents', DEFAULT_AGENTS);
   const [tasks, setTasks] = useStoredState('ripobot.tasks', DEFAULT_TASKS);
   const [workflows, setWorkflows] = useStoredState('ripobot.workflows', DEFAULT_WORKFLOWS);
@@ -131,6 +132,10 @@ function App() {
 
   const activeAgent = agents.find((agent) => agent.id === activeAgentId) || agents[0] || DEFAULT_AGENTS[0];
   const messagesForAgent = messages[activeAgent?.id] || [];
+
+  useEffect(() => {
+    setTasks((current) => current.filter((task) => !task.sample));
+  }, []);
 
   function refreshModelConfig(code = accessCode) {
     const headers = code ? { 'X-RipoBot-Access-Code': code } : {};
@@ -312,11 +317,11 @@ function App() {
   }
 
   const titleByPage = {
-    home: 'Overview',
-    agents: 'AI team',
+    home: 'Activity',
+    agents: 'All bots',
     tasks: 'Tasks',
     workflows: 'Workflows',
-    integrations: 'Integrations',
+    integrations: 'Connections',
     settings: 'Settings',
     chat: activeAgent?.name || 'Chat'
   };
@@ -336,43 +341,42 @@ function App() {
           <ChevronDown size={15} className="muted-icon" />
         </button>
 
-        <div className="sidebar-section-label">WORKSPACE</div>
+        <div className="sidebar-section-label team-label">
+          <span>Your bots</span>
+          <span className="team-actions">
+            <button className="bare-icon" aria-label="Browse all bots" onClick={() => navigate('agents')}><ArrowUpRight size={14} /></button>
+            <button className="bare-icon" aria-label="Create a bot" onClick={() => setModal({ type: 'agent' })}><Plus size={15} /></button>
+          </span>
+        </div>
+        <div className="sidebar-agents">
+          {agents.slice(0, 8).map((agent) => (
+            <button key={agent.id} className={'sidebar-agent ' + (page === 'chat' && activeAgentId === agent.id ? 'sidebar-agent-active' : '')} onClick={() => openChat(agent.id)}>
+              <Avatar agent={{ ...agent, state: busyAgents[agent.id] ? 'working' : 'idle' }} size="small" />
+              <span className="sidebar-agent-copy"><strong>{agent.name}</strong><small>{agent.title}</small></span>
+              <span className={'agent-presence ' + (busyAgents[agent.id] ? 'presence-working' : '')} title={busyAgents[agent.id] ? 'Working on a reply' : 'Ready to chat'}><i /></span>
+            </button>
+          ))}
+          {agents.length > 8 && <button className="sidebar-agent-more" onClick={() => navigate('agents')}>+ {agents.length - 8} more</button>}
+          <button className="sidebar-add-agent" onClick={() => setModal({ type: 'agent' })}><Plus size={14} />Create a bot</button>
+        </div>
+
+        <div className="sidebar-section-label workspace-label-heading">Your workspace</div>
         <nav className="side-nav" aria-label="Workspace navigation">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
-            const selected = page === item.id || (page === 'chat' && item.id === 'agents');
+            const selected = page === item.id;
             return (
               <button key={item.id} className={'nav-item ' + (selected ? 'nav-item-active' : '')} onClick={() => navigate(item.id)}>
-                <Icon size={18} strokeWidth={selected ? 2.25 : 1.8} />
+                <Icon size={17} strokeWidth={selected ? 2.25 : 1.8} />
                 <span>{item.label}</span>
-                {item.id === 'tasks' && tasks.some((task) => task.status === 'review' && !task.sample) && <i className="nav-count">{tasks.filter((task) => task.status === 'review' && !task.sample).length}</i>}
+                {item.id === 'tasks' && tasks.some((task) => task.status === 'review') && <i className="nav-count">{tasks.filter((task) => task.status === 'review').length}</i>}
               </button>
             );
           })}
         </nav>
 
-        <div className="sidebar-section-label team-label">
-          YOUR TEAM
-          <button className="bare-icon" aria-label="Create an agent" onClick={() => setModal({ type: 'agent' })}><Plus size={15} /></button>
-        </div>
-        <div className="sidebar-agents">
-          {agents.slice(0, 5).map((agent) => (
-            <button key={agent.id} className={'sidebar-agent ' + (page === 'chat' && activeAgentId === agent.id ? 'sidebar-agent-active' : '')} onClick={() => openChat(agent.id)}>
-              <Avatar agent={agent} size="small" />
-              <span>{agent.name}</span>
-              <i className="agent-live-dot" />
-            </button>
-          ))}
-          {agents.length > 5 && <button className="sidebar-agent-more" onClick={() => navigate('agents')}>+ {agents.length - 5} more</button>}
-        </div>
-
         <div className="sidebar-spacer" />
-        <div className="sidebar-tip">
-          <span className="tip-icon"><Sparkles size={17} /></span>
-          <div><strong>Build your next agent</strong><small>Give every idea a specialist.</small></div>
-          <button aria-label="Create an agent" onClick={() => setModal({ type: 'agent' })}><ArrowRight size={15} /></button>
-        </div>
-        <button className="nav-item sidebar-settings" onClick={() => navigate('settings')}><Settings size={18} /><span>Settings</span></button>
+        <button className="nav-item sidebar-settings" onClick={() => navigate('settings')}><Settings size={17} /><span>Settings</span></button>
         <div className="sidebar-profile">
           <span className="profile-avatar">R</span>
           <span className="profile-label"><strong>Ripo Team</strong><small>Workspace owner</small></span>
@@ -383,10 +387,15 @@ function App() {
       {mobileNavOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
 
       <div className="main-area">
-        <header className="topbar">
+        <header className={'topbar ' + (page === 'chat' ? 'topbar-chat' : '')}>
           <div className="topbar-left">
             <button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button>
-            <div className="breadcrumb"><span>Ripo Team</span><ChevronRight size={14} /><strong>{titleByPage[page]}</strong></div>
+            {page === 'chat' ? (
+              <div className="topbar-agent">
+                <Avatar agent={{ ...activeAgent, state: busyAgents[activeAgent.id] ? 'working' : 'idle' }} size="regular" />
+                <span><strong>{activeAgent.name}</strong><small>{activeAgent.title} <i /> {busyAgents[activeAgent.id] ? 'Working on a reply' : 'Ready to chat'}</small></span>
+              </div>
+            ) : <div className="breadcrumb"><span>Ripo Team</span><ChevronRight size={14} /><strong>{titleByPage[page]}</strong></div>}
           </div>
           <div className="topbar-actions">
             <form className="global-search" onSubmit={searchSubmit}>
@@ -397,12 +406,13 @@ function App() {
             <span className={'model-status ' + (modelConfig.huggingFaceReady ? 'model-live' : 'model-backup')} title={modelConfig.huggingFaceReady ? 'Hugging Face primary is configured' : 'Hugging Face token is not configured; backup route is available'}>
               <i />{modelConfig.huggingFaceReady ? 'Llama 3.1' : 'AI ready'}
             </span>
-            <button className="icon-button notification-button" aria-label="Activity notifications" onClick={() => navigate('tasks')}><Bell size={18} /><i /></button>
+            {page === 'chat' && <button className="icon-button" aria-label="Bot details" onClick={() => navigate('agents')}><MoreHorizontal size={19} /></button>}
+            {page !== 'chat' && <button className="icon-button notification-button" aria-label="Activity notifications" onClick={() => navigate('tasks')}><Bell size={18} /><i /></button>}
             <button className="topbar-avatar" aria-label="Open settings" onClick={() => navigate('settings')}>R</button>
           </div>
         </header>
 
-        <main className="page-content">
+        <main className={'page-content ' + (page === 'chat' ? 'page-content-chat' : '')}>
           {page === 'home' && (
             <HomePage
               agents={agents}
@@ -435,6 +445,7 @@ function App() {
               tasks={tasks.filter((task) => task.agentId === activeAgent.id)}
               onSend={(text) => sendMessage(activeAgent.id, text)}
               onOpenWorkflows={() => navigate('workflows')}
+              onOpenTasks={() => navigate('tasks')}
               onOpenAgent={() => navigate('agents')}
               onOpenSettings={() => navigate('settings')}
             />
@@ -489,13 +500,18 @@ function App() {
 }
 
 function MobileNav({ page, onNavigate }) {
-  const items = [NAV_ITEMS[0], NAV_ITEMS[1], NAV_ITEMS[2], NAV_ITEMS[4]];
+  const items = [
+    { id: 'chat', label: 'Chat', icon: MessageCircle },
+    { id: 'agents', label: 'Bots', icon: Bot },
+    NAV_ITEMS[2],
+    NAV_ITEMS[3]
+  ];
   return (
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
       {items.map((item) => {
         const Icon = item.icon;
-        const selected = page === item.id || (page === 'chat' && item.id === 'agents');
-        return <button key={item.id} className={selected ? 'mobile-nav-active' : ''} onClick={() => onNavigate(item.id)}><Icon size={19} /><span>{item.label === 'Overview' ? 'Home' : item.label === 'Integrations' ? 'Apps' : item.label}</span></button>;
+        const selected = page === item.id;
+        return <button key={item.id} className={selected ? 'mobile-nav-active' : ''} onClick={() => onNavigate(item.id)}><Icon size={19} /><span>{item.label}</span></button>;
       })}
     </nav>
   );
@@ -515,116 +531,76 @@ function PageTitle({ eyebrow, title, description, action }) {
 }
 
 function HomePage({ agents, tasks, workflows, onOpenChat, onCreateAgent, onStartTask, onOpenTasks, onOpenWorkflows, onOpenSettings, modelConfig }) {
-  const [prompt, setPrompt] = useState('');
-  const [selectedAgent, setSelectedAgent] = useState('ripo');
-  const activeTasks = tasks.filter((task) => task.status === 'working' && !task.sample).length;
-  const reviewTasks = tasks.filter((task) => task.status === 'review' && !task.sample).length;
   const today = new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
-
-  function submitPrompt(event) {
-    event.preventDefault();
-    if (!prompt.trim()) return;
-    onStartTask(prompt, selectedAgent);
-    setPrompt('');
-  }
+  const visibleTasks = tasks.filter((task) => !task.sample);
 
   return (
-    <div className="home-layout page-enter">
-      <section className="home-primary">
-        <div className="home-greeting">
-          <div>
-            <div className="eyebrow">{today.toUpperCase()} <span className="eyebrow-dot" /> RIPO TEAM WORKSPACE</div>
-            <h1>Good to see you, <span>Ripo Team</span></h1>
-            <p>Give your AI team a goal. They’ll help you move it forward.</p>
-          </div>
-          <button className="button button-primary" onClick={() => onStartTask('Help me decide what to focus on next. Ask a couple of quick questions, then suggest a clear first step.', 'ripo')}><Sparkles size={16} />Talk to Ripo</button>
+    <div className="activity-home page-enter">
+      <header className="activity-home-heading">
+        <div>
+          <div className="eyebrow">{today} <span className="eyebrow-dot" /> RIPO TEAM</div>
+          <h1>Welcome back.</h1>
+          <p>Your bots, recent work, and saved workflows in one place.</p>
         </div>
+        <button className="button button-primary" onClick={() => onOpenChat('ripo')}><MessageCircle size={15} />Talk to Ripo</button>
+      </header>
 
-        <section className="handoff-card">
-          <div className="handoff-main">
-            <span className="handoff-kicker"><span className="kicker-star"><Sparkles size={13} /></span>YOUR TEAM IS READY</span>
-            <h2>Make room for<br /><em>the work that matters.</em></h2>
-            <p>Share the outcome you want. Pick a teammate, or let Ripo help you find the right one.</p>
-            <form className="handoff-composer" onSubmit={submitPrompt}>
-              <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="What would you like your team to take on?" aria-label="Describe work for your AI team" rows={2} />
-              <div className="composer-controls">
-                <label className="agent-select-wrap"><Avatar agent={agents.find((agent) => agent.id === selectedAgent)} size="tiny" /><select aria-label="Choose an agent" value={selectedAgent} onChange={(event) => setSelectedAgent(event.target.value)}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><ChevronDown size={13} /></label>
-                <span className="composer-hint"><ShieldCheck size={13} /> You review every answer</span>
-                <button className="send-task-button" aria-label="Start task" disabled={!prompt.trim()}><ArrowRight size={18} /></button>
-              </div>
-            </form>
-            <div className="prompt-suggestions">
-              <span>Try</span>
-              <button onClick={() => setPrompt('Help me plan a launch for a new feature. Start with the key questions you need answered.')}>Plan a launch</button>
-              <button onClick={() => setPrompt('Give me a friendly weekly update format for our Discord community.')}>Write a community update</button>
+      <div className="activity-home-grid">
+        <section className="activity-feed">
+          <div className="activity-feed-heading">
+            <div><span className="section-label">YOUR WORKSPACE</span><h2>Recent activity</h2></div>
+            <button className="text-button" onClick={onOpenTasks}>All tasks <ArrowRight size={14} /></button>
+          </div>
+          {visibleTasks.length ? (
+            <div className="activity-feed-list">
+              {visibleTasks.map((task) => {
+                const agent = agents.find((item) => item.id === task.agentId) || agents[0];
+                return (
+                  <button className="activity-feed-row" key={task.id} onClick={() => onOpenChat(task.agentId)}>
+                    <Avatar agent={agent} size="regular" />
+                    <span className="activity-feed-copy"><span><strong>{task.title}</strong><small>{agent?.name || 'Ripo'} · {formatAge(task.updatedAt || task.createdAt)}</small></span><StatusPill status={task.status} /></span>
+                    <ChevronRight size={16} />
+                  </button>
+                );
+              })}
             </div>
-          </div>
-          <div className="handoff-art">
-            <div className="art-glow" />
-            <img src="/assets/ripobot-mascot.png" alt="RipoBot mascot" />
-            <div className="floating-task-card">
-              <span className="floating-task-icon"><Activity size={14} /></span>
-              <span><strong>{activeTasks > 0 ? activeTasks + ' task' + (activeTasks > 1 ? 's' : '') + ' in motion' : 'Ready when you are'}</strong><small>{reviewTasks > 0 ? reviewTasks + ' answer waiting for review' : 'Your team is standing by'}</small></span>
-              <i className="live-ring" />
+          ) : (
+            <div className="activity-feed-empty">
+              <span className="empty-orbit"><img src="/assets/ripobot-icon-192.png" alt="" /></span>
+              <h3>A quiet day so far.</h3>
+              <p>Start a conversation with one of your bots. Your tasks and review items will show up here.</p>
+              <button className="button button-secondary" onClick={() => onOpenChat('ripo')}>Start with Ripo <ArrowRight size={14} /></button>
             </div>
-          </div>
+          )}
         </section>
 
-        <section className="section-block team-block">
-          <div className="section-heading">
-            <div><span className="section-label">THE PEOPLE BEHIND THE PROMPTS</span><h2>Your AI team</h2></div>
-            <button className="text-button" onClick={() => onCreateAgent()}><Plus size={16} />New agent</button>
-          </div>
-          <div className="agent-roster">
-            {agents.slice(0, 4).map((agent, index) => <AgentTile key={agent.id} agent={agent} index={index} onClick={() => onOpenChat(agent.id)} />)}
-            {agents.length < 4 && <button className="agent-add-tile" onClick={onCreateAgent}><span><Plus size={19} /></span><strong>Build a specialist</strong><small>Give an agent its own focus</small></button>}
-          </div>
-        </section>
-
-        <section className="section-block recent-block">
-          <div className="section-heading">
-            <div><span className="section-label">KEEPING THINGS MOVING</span><h2>Recent work</h2></div>
-            <button className="text-button" onClick={onOpenTasks}>All tasks <ArrowRight size={15} /></button>
-          </div>
-          <TaskListCompact tasks={tasks.slice(0, 3)} agents={agents} onOpenChat={onOpenChat} />
-        </section>
-      </section>
-
-      <aside className="home-rail">
-        <div className="rail-card activity-card">
-          <div className="rail-heading"><div><span className="section-label">A LITTLE MOMENTUM</span><h3>Activity</h3></div><span className="activity-count">{tasks.length}</span></div>
-          {tasks.some((task) => task.sample) && <span className="sample-activity-note">Example activity</span>}
-          <div className="activity-timeline">
-            {tasks.slice(0, 3).map((task) => {
-              const agent = agents.find((item) => item.id === task.agentId) || agents[0];
-              return (
-                <button className="activity-row" key={task.id} onClick={() => onOpenChat(task.agentId)}>
-                  <span className={'timeline-mark timeline-' + (task.status || 'done')}><span /></span>
-                  <span className="activity-row-copy"><span className="activity-row-top"><strong>{agent?.name || 'Ripo'}</strong><small>{formatAge(task.updatedAt || task.createdAt)}</small></span><span className="activity-row-title">{task.title}</span><small className="activity-row-status">{statusLabel(task.status)}{task.sample ? ' · example' : ''}</small></span>
+        <aside className="activity-home-rail">
+          <section className="activity-roster">
+            <div className="activity-feed-heading">
+              <div><span className="section-label">READY TO CHAT</span><h2>Your bots</h2></div>
+              <button className="bare-icon" aria-label="Create a bot" onClick={onCreateAgent}><Plus size={17} /></button>
+            </div>
+            <div className="activity-bot-list">
+              {agents.slice(0, 6).map((agent) => (
+                <button key={agent.id} className="activity-bot-row" onClick={() => onOpenChat(agent.id)}>
+                  <Avatar agent={agent} size="regular" />
+                  <span><strong>{agent.name}</strong><small>{agent.title}</small></span>
+                  <ArrowUpRight size={14} />
                 </button>
-              );
-            })}
-            {tasks.length === 0 && <div className="rail-empty"><Inbox size={18} /><span>New work will show up here.</span></div>}
-          </div>
-          <button className="rail-link" onClick={onOpenTasks}>Open activity <ArrowRight size={14} /></button>
-        </div>
+              ))}
+            </div>
+            <button className="rail-link" onClick={() => onCreateAgent()}>Make a new bot <ArrowRight size={14} /></button>
+          </section>
 
-        <div className="rail-card workflow-card">
-          <div className="rail-heading"><div><span className="section-label">GOOD WORK, ON REPEAT</span><h3>Workflow library</h3></div><span className="workflow-symbol"><Workflow size={16} /></span></div>
-          <p>Keep your best prompts close and use them whenever you need them.</p>
-          <div className="workflow-preview-list">
-            {workflows.slice(0, 2).map((workflow) => <button key={workflow.id} className="workflow-preview" onClick={onOpenWorkflows}><span className={'workflow-dot workflow-dot-' + workflow.accent} /><span>{workflow.title}</span><ChevronRight size={14} /></button>)}
-          </div>
-          <button className="rail-link" onClick={onOpenWorkflows}>Browse workflows <ArrowRight size={14} /></button>
-        </div>
-
-        <div className="rail-note">
-          <span className="note-shield"><ShieldCheck size={17} /></span>
-          <p><strong>You stay in control.</strong> RipoBot drafts answers for you. External apps and actions still need a real connection and your approval.</p>
-        </div>
-
-        <div className="rail-model"><span className="model-orb"><Zap size={13} /></span><span><strong>{modelConfig.huggingFaceReady ? 'Hugging Face connected' : modelConfig.cloudflareAiReady ? 'Llama 3.1 AI ready' : 'Backup route enabled'}</strong><small>{modelConfig.primaryModel.split('/').pop()}</small></span><button className="bare-icon" aria-label="Model details" onClick={onOpenSettings}><ArrowUpRight size={15} /></button></div>
-      </aside>
+          <section className="activity-workflows">
+            <div className="activity-feed-heading"><div><span className="section-label">REUSABLE PROMPTS</span><h2>Workflows</h2></div><button className="bare-icon" aria-label="Browse workflows" onClick={onOpenWorkflows}><ArrowUpRight size={14} /></button></div>
+            {workflows.slice(0, 3).map((workflow) => <button className="activity-workflow-row" key={workflow.id} onClick={onOpenWorkflows}><span className={'workflow-dot workflow-dot-' + workflow.accent} /><span>{workflow.title}</span><ChevronRight size={14} /></button>)}
+            <button className="rail-link" onClick={onOpenWorkflows}>Browse workflows <ArrowRight size={14} /></button>
+          </section>
+          <p className="activity-safety"><ShieldCheck size={15} /> RipoBot drafts in chat. External actions need a connected app.</p>
+          <div className="activity-model"><span className="model-orb"><Zap size={13} /></span><span><strong>{modelConfig.huggingFaceReady ? 'Hugging Face connected' : modelConfig.cloudflareAiReady ? 'Llama 3.1 ready' : 'Backup route enabled'}</strong><small>{modelConfig.primaryModel.split('/').pop()}</small></span><button className="bare-icon" aria-label="Model settings" onClick={onOpenSettings}><ArrowUpRight size={14} /></button></div>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -665,19 +641,27 @@ function AgentsPage({ agents, search, onSearch, onCreate, onOpenChat }) {
   return (
     <div className="content-page page-enter">
       <PageTitle
-        eyebrow="YOUR SPECIALISTS, ALL TOGETHER"
-        title="Meet your AI team"
-        description="Give each agent a clear role, a useful point of view, and a place in the work."
-        action={<button className="button button-primary" onClick={onCreate}><Plus size={16} />Create an agent</button>}
+        eyebrow="BOT ROSTER"
+        title="Your bots"
+        description="Give each bot a clear role, a useful point of view, and a place in the work."
+        action={<button className="button button-primary" onClick={onCreate}><Plus size={16} />Create a bot</button>}
       />
       <div className="agent-page-toolbar">
-        <div className="agent-page-tabs"><button className="filter-tab filter-tab-active">All agents <span>{agents.length}</span></button><button className="filter-tab" onClick={() => onSearch('')}>Your team</button></div>
+        <div className="agent-page-tabs"><button className="filter-tab filter-tab-active">All bots <span>{agents.length}</span></button><button className="filter-tab" onClick={() => onSearch('')}>Clear search</button></div>
         <label className="inline-search"><Search size={16} /><input aria-label="Filter agents" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Find an agent" /></label>
       </div>
       {filtered.length ? (
-        <div className="agent-directory">
-          {filtered.map((agent, index) => <AgentTile key={agent.id} agent={agent} index={index} onClick={() => onOpenChat(agent.id)} />)}
-          <button className="agent-create-tile" onClick={onCreate}><span className="create-tile-icon"><Plus size={20} /></span><strong>Make an agent for the work ahead</strong><small>Describe the role, the way it thinks, and what a good answer looks like.</small><span className="create-tile-link">Build your next specialist <ArrowRight size={15} /></span></button>
+        <div className="bot-directory">
+          {filtered.map((agent) => (
+            <div className="bot-directory-row" key={agent.id}>
+              <button className="bot-directory-main" onClick={() => onOpenChat(agent.id)}>
+                <Avatar agent={agent} size="medium" />
+                <span className="bot-directory-copy"><span><strong>{agent.name}</strong><small>{agent.title}</small></span><p>{agent.description}</p></span>
+              </button>
+              <button className="bot-directory-open" onClick={() => onOpenChat(agent.id)}>Message <ArrowRight size={14} /></button>
+            </div>
+          ))}
+          <button className="bot-directory-create" onClick={onCreate}><span><Plus size={17} /></span><span><strong>Create a bot</strong><small>Give a new teammate a clear specialty and point of view.</small></span><ArrowRight size={15} /></button>
         </div>
       ) : <div className="empty-state"><span className="empty-state-icon"><Search size={22} /></span><h3>No agents found</h3><p>Try a different name or area of focus.</p><button className="button button-secondary" onClick={() => onSearch('')}>Clear search</button></div>}
       <div className="helper-strip"><span><Sparkles size={17} /></span><p><strong>Keep their jobs clear.</strong> A good agent owns a kind of work, not every kind of work.</p><button className="text-button" onClick={onCreate}>Create a specialist <ArrowRight size={14} /></button></div>
@@ -685,13 +669,25 @@ function AgentsPage({ agents, search, onSearch, onCreate, onOpenChat }) {
   );
 }
 
-function ChatPage({ agent, messages, busy, modelConfig, tasks, onSend, onOpenWorkflows, onOpenAgent, onOpenSettings }) {
+function ChatPage({ agent, messages, busy, modelConfig, tasks, onSend, onOpenWorkflows, onOpenTasks, onOpenAgent, onOpenSettings }) {
   const [draft, setDraft] = useState('');
   const conversationRef = useRef(null);
+  const textareaRef = useRef(null);
+  const displayMessages = messages.filter((message) => message.time !== 'Welcome');
+  const isWelcome = displayMessages.length === 0;
+  const promptSuggestions = agent.id === 'scout'
+    ? ['Compare two options for me', 'Turn this question into a research brief', 'Find the assumptions I should check']
+    : agent.id === 'pixel'
+      ? ['Give this idea a sharper voice', 'Draft a launch announcement', 'Explore three creative directions']
+      : agent.id === 'bolt'
+        ? ['Break this project into first steps', 'Explain a technical tradeoff', 'Help me plan a clean handoff']
+        : agent.id === 'pip'
+          ? ['Write a warm community update', 'Help welcome new members', 'Make this message more inviting']
+          : ['Help me plan a launch', 'Turn rough notes into a brief', 'Think through my next move'];
   useEffect(() => {
     const pane = conversationRef.current;
     if (pane) pane.scrollTop = pane.scrollHeight;
-  }, [messages, busy, agent.id]);
+  }, [displayMessages.length, busy, agent.id]);
 
   function submit(event) {
     event.preventDefault();
@@ -707,38 +703,53 @@ function ChatPage({ agent, messages, busy, modelConfig, tasks, onSend, onOpenWor
     }
   }
 
+  function choosePrompt(prompt) {
+    setDraft(prompt);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
   return (
     <div className="chat-layout page-enter">
       <section className="conversation-panel">
-        <div className="conversation-header">
-          <div className="conversation-agent"><Avatar agent={agent} size="medium" /><span><strong>{agent.name}</strong><small>{agent.title} <i /> Here to help</small></span></div>
-          <div className="conversation-actions"><span className="secure-label"><ShieldCheck size={14} />Your workspace</span><button className="icon-button" aria-label="Agent options" onClick={onOpenAgent}><MoreHorizontal size={19} /></button></div>
-        </div>
-
         <div className="conversation-messages" ref={conversationRef} aria-live="polite">
-          <div className="conversation-date"><span />TODAY<span /></div>
-          {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} agent={agent} />
-          ))}
-          {busy && <div className="message-row"><Avatar agent={agent} size="small" /><div className="thinking-bubble"><span className="thinking-dots"><i /><i /><i /></span><span>{agent.name} is thinking</span></div></div>}
+          {isWelcome ? (
+            <div className="welcome-screen">
+              <div className="welcome-character"><span className="welcome-halo" /><Avatar agent={{ ...agent, state: busy ? 'working' : 'idle' }} size="hero" /></div>
+              <div className="welcome-copy">
+                <span className="welcome-kicker">{agent.title}</span>
+                <h1>{agent.id === 'ripo' ? 'What should we get moving on?' : 'What are we working on?'}</h1>
+                <p>{agent.description}</p>
+              </div>
+              <div className="welcome-prompts" aria-label="Prompt ideas">
+                {promptSuggestions.map((prompt) => <button key={prompt} onClick={() => choosePrompt(prompt)}>{prompt}<ArrowUpRight size={14} /></button>)}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="conversation-date"><span />TODAY<span /></div>
+              {displayMessages.map((message) => <MessageBubble key={message.id} message={message} agent={agent} />)}
+              {busy && <div className="message-row message-thinking-row"><Avatar agent={{ ...agent, state: 'working' }} size="small" /><div className="thinking-bubble"><span>{agent.name} is drafting</span><span className="thinking-dots"><i /><i /><i /></span></div></div>}
+            </>
+          )}
         </div>
 
         <form className="chat-composer" onSubmit={submit}>
-          <textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleKey} placeholder={'Message ' + agent.name + '…'} aria-label={'Message ' + agent.name} rows={1} />
+          <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleKey} placeholder={'Message ' + agent.name + '…'} aria-label={'Message ' + agent.name} rows={1} />
           <div className="chat-composer-tools">
-            <span className="composer-info"><Sparkles size={13} />Ask, plan, draft, or think it through</span>
+            <span className="composer-info"><Sparkles size={13} />Your message goes to {agent.name}</span>
             <div><span className="enter-hint">Enter to send</span><button className="send-message-button" type="submit" aria-label="Send message" disabled={!draft.trim() || busy}><Send size={16} /></button></div>
           </div>
         </form>
-        <div className="chat-disclaimer">Messages go to RipoBot’s configured model provider. Check important details before using them.</div>
+        <div className="chat-disclaimer">RipoBot can make mistakes. Check important details before using them.</div>
       </section>
 
       <aside className="agent-inspector">
-        <div className="inspector-header"><span>ABOUT THIS AGENT</span><button className="bare-icon" aria-label="Close details" onClick={onOpenAgent}><ArrowUpRight size={15} /></button></div>
-        <div className="inspector-profile"><Avatar agent={agent} size="large" /><h2>{agent.name}</h2><span className="inspector-role">{agent.title}</span><p>{agent.description}</p></div>
+        <div className="inspector-header"><span>RECENT WORK</span><button className="bare-icon" aria-label="Open all tasks" onClick={onOpenTasks}><ArrowUpRight size={15} /></button></div>
+        <div className="inspector-section inspector-work-section"><div className="inspector-section-title"><span>Tasks with {agent.name}</span><span>{tasks.filter((task) => !task.sample).length}</span></div>{tasks.filter((task) => !task.sample).slice(0, 4).map((task) => <div className="inspector-task" key={task.id}><span className={'inspector-task-dot task-dot-' + task.status} /><span className="inspector-task-copy"><strong>{task.title}</strong><small>{statusLabel(task.status)} · {formatAge(task.updatedAt || task.createdAt)}</small></span></div>)}{tasks.filter((task) => !task.sample).length === 0 && <div className="inspector-muted">New tasks you start in chat will appear here.</div>}</div>
         <div className="inspector-divider" />
-        <div className="inspector-section"><div className="inspector-section-title"><span>Model</span><button onClick={onOpenSettings}>Details <ArrowUpRight size={12} /></button></div><div className="model-info-card"><span className="model-info-icon"><Zap size={15} /></span><span><strong>{modelConfig.primaryModel.split('/').pop()}</strong><small>{modelConfig.huggingFaceReady ? 'Hugging Face router' : 'Backup route enabled'}</small></span></div></div>
-        <div className="inspector-section"><div className="inspector-section-title"><span>Recent tasks</span><span>{tasks.length}</span></div>{tasks.slice(0, 3).map((task) => <div className="inspector-task" key={task.id}><span className="inspector-task-dot" /><span>{task.title}</span></div>)}{tasks.length === 0 && <div className="inspector-muted">New work with {agent.name} will show up here.</div>}</div>
+        <div className="inspector-profile inspector-profile-compact"><Avatar agent={agent} size="medium" /><span><strong>{agent.name}</strong><small>{agent.title}</small></span><button className="bare-icon" aria-label="View bot roster" onClick={onOpenAgent}><ArrowUpRight size={14} /></button></div>
+        <p className="inspector-description">{agent.description}</p>
+        <div className="inspector-section"><div className="inspector-section-title"><span>Model</span><button onClick={onOpenSettings}>Details <ArrowUpRight size={12} /></button></div><div className="model-info-card"><span className="model-info-icon"><Zap size={15} /></span><span><strong>{modelConfig.primaryModel.split('/').pop()}</strong><small>{modelConfig.huggingFaceReady ? 'Hugging Face router' : modelConfig.cloudflareAiReady ? 'Llama backup route' : 'Backup route enabled'}</small></span></div></div>
         <div className="inspector-bottom-card"><span><ShieldCheck size={16} /></span><p><strong>You stay in control</strong><small>This version drafts and plans in chat. It won’t take external actions.</small></p></div>
         <button className="inspector-workflow-link" onClick={onOpenWorkflows}><Workflow size={15} />Browse reusable workflows<ArrowRight size={14} /></button>
       </aside>

@@ -47,30 +47,13 @@ export const DEFAULT_MESSAGES = {
     {
       id: 'welcome-ripo',
       role: 'assistant',
-      content: 'Hey, I’m Ripo. Tell me what you’re trying to get done and I’ll help you shape the next step. Want me to bring Scout or Pixel into the conversation?',
+      content: 'Hey, I’m Ripo. Tell me what you’re trying to get done and I’ll help you find a clear next step.',
       time: 'Welcome'
     }
   ]
 };
 
-export const DEFAULT_TASKS = [
-  {
-    id: 'sample-review',
-    title: 'Turn the latest server update into a short announcement',
-    agentId: 'pixel',
-    status: 'review',
-    createdAt: Date.now() - 1000 * 60 * 18,
-    sample: true
-  },
-  {
-    id: 'sample-brief',
-    title: 'Outline what to include in a first agent guide',
-    agentId: 'scout',
-    status: 'done',
-    createdAt: Date.now() - 1000 * 60 * 60 * 4,
-    sample: true
-  }
-];
+export const DEFAULT_TASKS = [];
 
 export const DEFAULT_WORKFLOWS = [
   {
