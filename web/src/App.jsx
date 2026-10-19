@@ -39,6 +39,10 @@ import {
 } from 'lucide-react';
 import { DEFAULT_AGENTS, DEFAULT_MESSAGES, DEFAULT_TASKS, DEFAULT_WORKFLOWS, INTEGRATIONS } from './data.js';
 
+const API_BASE = import.meta.env.DEV
+  ? ''
+  : (import.meta.env.VITE_API_BASE_URL || 'https://ripobot-api.ripo-ripoteam.workers.dev');
+
 const NAV_ITEMS = [
   { id: 'home', label: 'Overview', icon: House },
   { id: 'agents', label: 'AI team', icon: UsersRound },
@@ -129,7 +133,7 @@ function App() {
 
   function refreshModelConfig(code = accessCode) {
     const headers = code ? { 'X-RipoBot-Access-Code': code } : {};
-    return fetch('/api/config', { headers })
+    return fetch(`${API_BASE}/api/config`, { headers })
       .then((response) => response.ok ? response.json() : null)
       .then((config) => {
         if (config) setModelConfig(config);
@@ -195,7 +199,7 @@ function App() {
     setBusyAgents((current) => ({ ...current, [agentId]: true }));
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -26,7 +26,9 @@ Set `HF_TOKEN` and a private `RIPO_ACCESS_CODE` on the server before the public 
 
 ## Deploy
 
-The root `render.yaml` describes the web service and serves the built app and API from one Node process. Set `HF_TOKEN` and `RIPO_ACCESS_CODE` as secret environment variables in the hosting dashboard. Do not commit either value or add the Hugging Face token to client-side code.
+The site uses GitHub Pages for its static web app and a Cloudflare Worker for its chat API. `npm run build` creates the production build and syncs it into the repository root, which is the GitHub Pages document root. Push the built root files to `main` to publish the UI.
+
+The Worker entry point and Wrangler config are in `cloudflare/`. Deploy the API with `cd cloudflare && npx wrangler deploy`. The web app calls `https://ripobot-api.ripo-ripoteam.workers.dev`; update that default in `web/src/App.jsx` if the Worker name or account subdomain changes. Add `HF_TOKEN` and `RIPO_ACCESS_CODE` as Worker secrets in Cloudflare to enable the Discord bot's Hugging Face route. The access code is entered in Settings and held only for the current browser session. Never commit the Hugging Face token or place it in client-side code.
 
 ## Current scope
 
