@@ -95,6 +95,14 @@ final class APIClient {
         return try await request(ChatResponse.self, path: "/api/chat", method: "POST", body: body)
     }
 
+    func agentMailbox(workspaceId: String?) async throws -> AgentMailboxResponse {
+        var path = "/api/agent-mailbox"
+        if let workspaceId {
+            path += "?workspaceId=\(workspaceId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? workspaceId)"
+        }
+        return try await request(AgentMailboxResponse.self, path: path)
+    }
+
     func listFiles(workspaceId: String?) async throws -> FileListResponse {
         var path = "/api/files"
         if let workspaceId {
