@@ -64,7 +64,7 @@ import {
   TriangleAlert
 } from 'lucide-react';
 import { AVATAR_PRESETS, DEFAULT_CONVERSATIONS, QUICK_STARTS, STARTER_AGENTS } from './data.js';
-import { avatarVisual } from './avatar-visual.js';
+import { avatarVisual, AVATAR_COLORS, AVATAR_SHAPES } from './avatar-visual.js';
 import { preferredRecorderMime, stopVoiceSession, voiceRateForAgent } from './voice-utils.js';
 
 const API_BASE = import.meta.env.DEV
@@ -327,35 +327,83 @@ function Onboarding({ profile, onDone }) {
 function AgentEditor({ initialAgent, onSave, onClose }) {
   const editing = Boolean(initialAgent);
   const [form, setForm] = useState(initialAgent || {
-    name: '', role: '', description: '', instructions: '', avatar: 'nova', avatarSeed: uid('avatar'), canRenameSelf: true
+    name: '',
+    role: '',
+    description: '',
+    instructions: '',
+    avatar: 'nova',
+    avatarSeed: uid('avatar'),
+    avatarShape: Math.floor(Math.random() * AVATAR_SHAPES.length),
+    avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+    avatarMotion: Math.floor(Math.random() * 8),
+    canRenameSelf: true
   });
+
   function randomizeAvatar() {
-    const seed = uid('avatar');
-    const colors = ['#7b5cf2','#168cf7','#11c58c','#ff7a18','#f42f8f','#ff4b55','#11b9b0','#9b6b3f','#8461ff','#27b568','#ef3f49','#f3a72f'];
-    setForm({ ...form, avatarSeed: seed, avatarColor: colors[Math.floor(Math.random() * colors.length)], avatarShape: Math.floor(Math.random() * 12), avatarMotion: Math.floor(Math.random() * 6) });
+    setForm((current) => ({
+      ...current,
+      avatarSeed: uid('avatar'),
+      avatarShape: Math.floor(Math.random() * AVATAR_SHAPES.length),
+      avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+      avatarMotion: Math.floor(Math.random() * 8)
+    }));
   }
+
   return (
-    <Modal title={editing ? 'Edit agent' : 'Create agent'} onClose={onClose}>
-      <div className="agent-editor">
-        <div className="avatar-builder">
-          <div className="avatar-preview-large"><Avatar agent={{ ...form, id: form.avatarSeed || 'preview' }} size="xl" /></div>
-          <div><strong>Bot avatar</strong><p>Every bot gets its own shape, color, eyes, timing, and motion pattern.</p><button className="secondary-button" type="button" onClick={randomizeAvatar}><RefreshCw size={15} /> Randomize avatar</button></div>
+    <Modal title={editing ? 'Edit Bot' : 'Create New Bot'} onClose={onClose}>
+      <div className="agent-editor-v5">
+        <div className="agent-editor-preview-v5">
+          <Avatar agent={{ ...form, id: form.avatarSeed || 'preview' }} size="xl" />
+          <button type="button" onClick={randomizeAvatar}><RefreshCw size={14}/>Randomize</button>
         </div>
-        <div className="avatar-picker compact-avatar-picker">
-          {AVATAR_PRESETS.slice(0, 6).map((preset) => (
-            <button key={preset.id} onClick={() => setForm({ ...form, avatar: preset.id, avatarSeed: uid('avatar') })} className={cls('avatar-choice', form.avatar === preset.id && 'selected')} aria-label={preset.label}>
-              <Avatar agent={{ ...form, avatar: preset.id, id: `${form.avatarSeed || 'preview'}-${preset.id}` }} size="lg" />
-            </button>
-          ))}
+
+        <label className="agent-name-v5">
+          <span>Bot name</span>
+          <input value={form.name} onChange={(event)=>setForm({...form,name:event.target.value})} placeholder="Personal Shopper"/>
+        </label>
+        <label className="agent-name-v5">
+          <span>Role</span>
+          <input value={form.role} onChange={(event)=>setForm({...form,role:event.target.value})} placeholder="Chief of Staff"/>
+        </label>
+
+        <div className="agent-shape-section-v5">
+          <span>Shape</span>
+          <div className="agent-shape-grid-v5">
+            {AVATAR_SHAPES.map((shape,index)=><button
+              key={shape}
+              type="button"
+              className={cls(Number(form.avatarShape)===index&&'selected')}
+              onClick={()=>setForm({...form,avatarShape:index,avatarSeed:form.avatarSeed||uid('avatar')})}
+              aria-label={shape}
+            ><Avatar agent={{...form,avatarShape:index,avatarColor:form.avatarColor||'#ff7a18',avatarMotion:index%8,avatarSeed:`shape-preview-${index}`}} size="sm"/></button>)}
+          </div>
         </div>
-        <div className="form-grid two-columns">
-          <label><span>Name</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Scout" /></label>
-          <label><span>Role</span><input value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} placeholder="Research agent" /></label>
+
+        <div className="agent-color-section-v5">
+          <span>Color</span>
+          <div className="agent-color-grid-v5">
+            {AVATAR_COLORS.map((color)=><button
+              key={color}
+              type="button"
+              className={cls(form.avatarColor===color&&'selected')}
+              onClick={()=>setForm({...form,avatarColor:color})}
+              aria-label={color}
+            ><i style={{background:color}}/></button>)}
+          </div>
         </div>
-        <label><span>Short description</span><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="What this agent is best at" /></label>
-        <label><span>Instructions</span><textarea rows={6} value={form.instructions} onChange={(event) => setForm({ ...form, instructions: event.target.value })} placeholder="How should this agent behave and what should it focus on?" /></label>
-        <label className="toggle-row"><div><strong>Let this agent rename itself</strong><span>It can suggest and adopt a better name when the role changes.</span></div><button className={cls('switch', form.canRenameSelf && 'on')} onClick={() => setForm({ ...form, canRenameSelf: !form.canRenameSelf })}><i /></button></label>
-        <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={!form.name.trim()} onClick={() => onSave({ ...form, name: form.name.trim(), role: form.role.trim() || 'AI agent', description: form.description.trim() })}>{editing ? 'Save changes' : 'Create agent'}</button></div>
+
+        <details className="agent-advanced-v5">
+          <summary>Advanced bot instructions</summary>
+          <label><span>Short description</span><input value={form.description} onChange={(event)=>setForm({...form,description:event.target.value})} placeholder="What this bot is best at"/></label>
+          <label><span>Instructions</span><textarea rows={5} value={form.instructions} onChange={(event)=>setForm({...form,instructions:event.target.value})} placeholder="How should this bot work?"/></label>
+          <label className="toggle-row"><div><strong>Let this bot rename itself</strong><span>Useful when its role changes substantially.</span></div><button type="button" className={cls('switch',form.canRenameSelf&&'on')} onClick={()=>setForm({...form,canRenameSelf:!form.canRenameSelf})}><i/></button></label>
+        </details>
+
+        <button
+          className="agent-create-v5"
+          disabled={!form.name.trim()}
+          onClick={()=>onSave({...form,name:form.name.trim(),role:form.role.trim()||'AI agent',description:form.description.trim()})}
+        >{editing?'Save Changes':'Create'}</button>
       </div>
     </Modal>
   );
