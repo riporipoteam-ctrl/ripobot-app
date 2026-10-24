@@ -1,4 +1,4 @@
-const CACHE = 'ripobot-shell-v4-20261024';
+const CACHE = 'ripobot-shell-v5-20261024-2237';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
