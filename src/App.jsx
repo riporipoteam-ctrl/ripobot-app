@@ -704,7 +704,7 @@ function SettingsView({
         </div>
         {activeWorkspace && <div className="workspace-stats-card">
           <div className="workspace-stat"><strong>{activeWorkspace.botCount || 0}</strong><span>Bots</span></div>
-          <div className="workspace-stat"><strong>{(account?.usage?.weekly?.used || 0).toLocaleString()}</strong><span>AI tokens this week</span></div>
+          <div className="workspace-stat"><strong>{(activeWorkspace.weeklyTokens || 0).toLocaleString()}</strong><span>AI tokens this week</span></div>
           <div className="workspace-stat"><strong>{Math.round((activeWorkspace.storage?.used || 0)/1024/1024)} MB</strong><span>Cloud storage</span></div>
           <div className="workspace-stat"><strong>{media.length}</strong><span>Media items</span></div>
         </div>}
