@@ -64,7 +64,7 @@ import {
   TriangleAlert
 } from 'lucide-react';
 import { AVATAR_PRESETS, DEFAULT_CONVERSATIONS, QUICK_STARTS, STARTER_AGENTS } from './data.js';
-import { avatarVisual, AVATAR_COLORS, AVATAR_SHAPES } from './avatar-visual.js';
+import { avatarVisual, AVATAR_COLORS, AVATAR_SHAPES, diversifyLegacyAgents } from './avatar-visual.js';
 import { preferredRecorderMime, stopVoiceSession, voiceRateForAgent } from './voice-utils.js';
 
 const API_BASE = import.meta.env.DEV
@@ -402,7 +402,7 @@ function AgentEditor({ initialAgent, onSave, onClose }) {
         <button
           className="agent-create-v5"
           disabled={!form.name.trim()}
-          onClick={()=>onSave({...form,name:form.name.trim(),role:form.role.trim()||'AI agent',description:form.description.trim()})}
+          onClick={()=>onSave({...form,avatarVisualVersion:5,name:form.name.trim(),role:form.role.trim()||'AI agent',description:form.description.trim()})}
         >{editing?'Save Changes':'Create'}</button>
       </div>
     </Modal>
@@ -1272,7 +1272,7 @@ export default function App() {
     if (!workspaceId || !storedToken()) return;
     try {
       const state = await api(`/api/state?workspaceId=${encodeURIComponent(workspaceId)}`);
-      const nextAgents = state?.agents?.length ? state.agents : [STARTER_AGENTS[0]];
+      const nextAgents = diversifyLegacyAgents(state?.agents?.length ? state.agents : [STARTER_AGENTS[0]]);
       setAgents(nextAgents);
       setConversations(state?.conversations && Object.keys(state.conversations).length ? state.conversations : { ripo: DEFAULT_CONVERSATIONS.ripo });
       setTeams(Array.isArray(state?.teams) ? state.teams : []);
@@ -1367,8 +1367,9 @@ export default function App() {
       role: data.mainRole || agent.role,
       description: data.mainRole ? `Your main ${data.mainRole}. Plans work, delegates, searches, uses tools, and keeps the team moving.` : agent.description,
       ...(data.mainAvatar || {}),
-      avatarSeed: data.mainAvatar?.avatarSeed || agent.avatarSeed || uid('avatar')
-    } : { ...agent, avatarSeed: agent.avatarSeed || uid('avatar') });
+      avatarSeed: data.mainAvatar?.avatarSeed || agent.avatarSeed || uid('avatar'),
+      avatarVisualVersion: 5
+    } : { ...agent, avatarSeed: agent.avatarSeed || uid('avatar'), avatarVisualVersion: 5 });
     setAgents(starterAgents);
     const nextProfile = { ...(profile || {}), name: data.displayName, goal: data.goal };
     setProfile(nextProfile); writeLocal(LOCAL_KEYS.profile, nextProfile);
@@ -1425,7 +1426,7 @@ export default function App() {
   }
 
   function createAgent(form) {
-    const next = { ...form, id: uid('agent'), avatarSeed: form.avatarSeed || uid('avatar'), state: 'ready', isPrimary: false };
+    const next = { ...form, id: uid('agent'), avatarSeed: form.avatarSeed || uid('avatar'), avatarVisualVersion: 5, state: 'ready', isPrimary: false };
     setAgents((current) => [...current, next]);
     setConversations((current) => ({ ...current, [next.id]: [{ id: uid('welcome'), role: 'assistant', content: `I’m ${next.name}. ${next.description || 'Tell me what you want me to handle.'}`, createdAt: new Date().toISOString(), agentId: next.id }] }));
     setModal(null); openAgent(next.id); setToast(`${next.name} joined your team`);
@@ -1515,6 +1516,7 @@ export default function App() {
             instructions: String(action.instructions || 'Help with the assigned specialty.').trim().slice(0, 1800),
             avatar: AVATAR_PRESETS.some((preset) => preset.id === action.avatar) ? action.avatar : 'nova',
             avatarSeed: uid('avatar'),
+            avatarVisualVersion: 5,
             state: 'ready',
             canRenameSelf: true,
             isPrimary: false
