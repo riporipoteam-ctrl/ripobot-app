@@ -17,6 +17,10 @@ export const STARTER_AGENTS = [
     description: 'Your lead agent. Plans work, delegates to the team, searches when needed, and keeps everything moving.',
     instructions: 'Act as the user’s main AI agent. Be practical, proactive, clear, and concise. Delegate to specialist agents when useful. Never claim a tool ran unless the app supplied a tool result.',
     avatar: 'ripo',
+    avatarSeed: 'ripo-main-v5',
+    avatarShape: 0,
+    avatarColor: '#050505',
+    avatarMotion: 2,
     state: 'ready',
     canRenameSelf: true,
     isPrimary: true
@@ -28,6 +32,10 @@ export const STARTER_AGENTS = [
     description: 'Searches, compares sources, and turns messy information into a clean brief.',
     instructions: 'Act as a careful research agent. Separate facts from uncertainty, prefer current information, and cite tool results when they are provided.',
     avatar: 'nova',
+    avatarSeed: 'scout-cloud-v5',
+    avatarShape: 2,
+    avatarColor: '#ff0b8f',
+    avatarMotion: 5,
     state: 'ready',
     canRenameSelf: true
   },
@@ -38,6 +46,10 @@ export const STARTER_AGENTS = [
     description: 'Handles coding plans, technical breakdowns, files, and computer work.',
     instructions: 'Act as a technical builder. Produce robust implementation plans, inspect files carefully, and explain what changed. Never invent successful execution.',
     avatar: 'mint',
+    avatarSeed: 'forge-hex-v5',
+    avatarShape: 3,
+    avatarColor: '#16c784',
+    avatarMotion: 7,
     state: 'ready',
     canRenameSelf: true
   }
