@@ -401,7 +401,7 @@ function Onboarding({ profile, onDone }) {
 
   function randomize() {
     const colors=['#111111','#7b5cf2','#168cf7','#11c58c','#ff7a18','#f42f8f','#ef3f49','#11b9b0'];
-    setAvatarConfig({avatarSeed:uid('avatar'),avatarColor:colors[Math.floor(Math.random()*colors.length)],avatarShape:Math.floor(Math.random()*AVATAR_SHAPES.length),avatarMotion:Math.floor(Math.random()*8)});
+    setAvatarConfig({avatarSeed:uid('avatar'),avatarColor:colors[Math.floor(Math.random()*colors.length)],avatarShape:Math.floor(Math.random()*AVATAR_SHAPES.length),avatarMotion:Math.floor(Math.random()*12)});
   }
   function finish() { onDone({displayName:displayName.trim()||'Ripo Bot user',goal:'everything',starter,mainRole:role.trim()||'Chief of Staff',mainAvatar:avatarConfig}); }
 
@@ -426,7 +426,7 @@ function AgentEditor({ initialAgent, onSave, onClose }) {
     avatarSeed: uid('avatar'),
     avatarShape: Math.floor(Math.random() * AVATAR_SHAPES.length),
     avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
-    avatarMotion: Math.floor(Math.random() * 8),
+    avatarMotion: Math.floor(Math.random() * 12),
     canRenameSelf: true
   });
 
@@ -436,7 +436,7 @@ function AgentEditor({ initialAgent, onSave, onClose }) {
       avatarSeed: uid('avatar'),
       avatarShape: Math.floor(Math.random() * AVATAR_SHAPES.length),
       avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
-      avatarMotion: Math.floor(Math.random() * 8)
+      avatarMotion: Math.floor(Math.random() * 12)
     }));
   }
 
@@ -466,7 +466,7 @@ function AgentEditor({ initialAgent, onSave, onClose }) {
               className={cls(Number(form.avatarShape)===index&&'selected')}
               onClick={()=>setForm({...form,avatarShape:index,avatarSeed:form.avatarSeed||uid('avatar')})}
               aria-label={shape}
-            ><Avatar agent={{...form,avatarShape:index,avatarColor:form.avatarColor||'#ff7a18',avatarMotion:index%8,avatarSeed:`shape-preview-${index}`}} size="sm"/></button>)}
+            ><Avatar agent={{...form,avatarShape:index,avatarColor:form.avatarColor||'#ff7a18',avatarMotion:index%12,avatarSeed:`shape-preview-${index}`}} size="sm"/></button>)}
           </div>
         </div>
 
@@ -493,7 +493,7 @@ function AgentEditor({ initialAgent, onSave, onClose }) {
         <button
           className="agent-create-v5"
           disabled={!form.name.trim()}
-          onClick={()=>onSave({...form,avatarVisualVersion:5,name:form.name.trim(),role:form.role.trim()||'AI agent',description:form.description.trim()})}
+          onClick={()=>onSave({...form,avatarVisualVersion:8,name:form.name.trim(),role:form.role.trim()||'AI agent',description:form.description.trim()})}
         >{editing?'Save Changes':'Create'}</button>
       </div>
     </Modal>
@@ -1744,8 +1744,8 @@ export default function App() {
       description: data.mainRole ? `Your main ${data.mainRole}. Plans work, delegates, searches, uses tools, and keeps the team moving.` : agent.description,
       ...(data.mainAvatar || {}),
       avatarSeed: data.mainAvatar?.avatarSeed || agent.avatarSeed || uid('avatar'),
-      avatarVisualVersion: 5
-    } : { ...agent, avatarSeed: agent.avatarSeed || uid('avatar'), avatarVisualVersion: 5 });
+      avatarVisualVersion: 8
+    } : { ...agent, avatarSeed: agent.avatarSeed || uid('avatar'), avatarVisualVersion: 8 });
     setAgents(starterAgents);
     const nextProfile = { ...(profile || {}), name: data.displayName, goal: data.goal };
     setProfile(nextProfile); writeLocal(LOCAL_KEYS.profile, nextProfile);
@@ -1802,7 +1802,7 @@ export default function App() {
   }
 
   function createAgent(form) {
-    const next = { ...form, id: uid('agent'), avatarSeed: form.avatarSeed || uid('avatar'), avatarVisualVersion: 5, state: 'ready', isPrimary: false };
+    const next = { ...form, id: uid('agent'), avatarSeed: form.avatarSeed || uid('avatar'), avatarVisualVersion: 8, state: 'ready', isPrimary: false };
     setAgents((current) => [...current, next]);
     setConversations((current) => ({ ...current, [next.id]: [{ id: uid('welcome'), role: 'assistant', content: `I’m ${next.name}. ${next.description || 'Tell me what you want me to handle.'}`, createdAt: new Date().toISOString(), agentId: next.id }] }));
     setModal(null); openAgent(next.id); setToast(`${next.name} joined your team`);
@@ -1901,7 +1901,7 @@ export default function App() {
             instructions: String(action.instructions || 'Help with the assigned specialty.').trim().slice(0, 1800),
             avatar: AVATAR_PRESETS.some((preset) => preset.id === action.avatar) ? action.avatar : 'nova',
             avatarSeed: uid('avatar'),
-            avatarVisualVersion: 5,
+            avatarVisualVersion: 8,
             state: 'ready',
             canRenameSelf: true,
             isPrimary: false
