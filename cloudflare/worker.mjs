@@ -762,7 +762,7 @@ async function fetchText(url) {
   } catch { return null; }
 }
 
-async function searchWeb(query) {
+async function searchWeb(query, env = null) {
   const q = String(query || '').trim().slice(0, 500);
   if (!q) return [];
   const results = [];
@@ -800,6 +800,28 @@ async function searchWeb(query) {
       const data = JSON.parse(wiki);
       const titles = data?.[1] || [], descriptions = data?.[2] || [], urls = data?.[3] || [];
       for (let i = 0; i < titles.length && i < 4; i += 1) results.push({ title: titles[i], url: urls[i], snippet: descriptions[i] || '' });
+    } catch {}
+  }
+  if (!results.length && env?.BROWSER) {
+    try {
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+      const rendered = await browserQuickText(env, 'markdown', searchUrl);
+      const markdown = String(rendered.text || '');
+      const linkRe = /\[([^\]]{2,180})\]\((https?:\/\/[^)\s]+)\)/g;
+      let link;
+      while ((link = linkRe.exec(markdown)) && results.length < 5) {
+        const title = stripTags(link[1]);
+        const url = link[2].replace(/&amp;/g, '&');
+        if (!title || /google\.com\/(search|preferences|accounts)/i.test(url)) continue;
+        if (!results.some((item) => item.url === url)) results.push({ title, url, snippet: 'Found through rendered web search.' });
+      }
+      if (!results.length && markdown.trim()) {
+        results.push({
+          title: `Rendered web search for "${q}"`,
+          url: searchUrl,
+          snippet: stripTags(markdown.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')).slice(0, 1400)
+        });
+      }
     } catch {}
   }
   return results;
@@ -886,7 +908,7 @@ async function runToolActions(request, env, user, actions, workspaceId) {
     if (action.type === 'web_search') {
       const query = String(action.query || '').trim();
       if (query) {
-        const results = await searchWeb(query);
+        const results = await searchWeb(query, env);
         toolResults.push({ type: 'web_search', query, results });
       }
     } else if (action.type === 'browser_open') {
@@ -951,7 +973,7 @@ async function handleChat(request, env) {
   const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content || '';
   const workspace = await resolveWorkspace(env, auth.user, body.workspaceId);
   let sources = [];
-  if (shouldAutoSearch(lastUser)) sources = await searchWeb(lastUser);
+  if (shouldAutoSearch(lastUser)) sources = await searchWeb(lastUser, env);
 
   const capabilities = [
     'You have tools and should use them automatically when useful. Do not ask the user to turn search or computer mode on.',
@@ -1017,7 +1039,7 @@ async function handleChat(request, env) {
 
   if (!sources.length) {
     const searchTool = toolActions.find((action) => action.type === 'web_search');
-    if (searchTool?.query) sources = await searchWeb(searchTool.query);
+    if (searchTool?.query) sources = await searchWeb(searchTool.query, env);
   }
 
   const tokens = estimateTokens(messages, parsed.reply);
@@ -1035,7 +1057,7 @@ async function handleChat(request, env) {
   });
 }
 
-async function handleSearch(request) {
+async function handleSearch(request, env) {
   const body = await readJsonBody(request);
   const results = await searchWeb(body.query);
   return json(request, 200, { results });
@@ -1174,7 +1196,7 @@ async function handleComputerExec(request, env) {
     const rows = await env.DB.prepare('SELECT id, name, size FROM files WHERE user_id = ?1 ORDER BY created_at DESC LIMIT 50').bind(auth.user.id).all();
     stdout = (rows.results || []).map((f) => `${f.id}  ${f.name}  ${Math.max(1, Math.round(Number(f.size || 0)/1024))}KB`).join('\n') || 'No uploaded cloud files.';
   } else if (name === 'search') {
-    if (!arg) stderr = 'search: add a query'; else { const results = await searchWeb(arg); stdout = results.map((r, i) => `${i+1}. ${r.title}\n${r.url}\n${r.snippet || ''}`).join('\n\n') || 'No results.'; }
+    if (!arg) stderr = 'search: add a query'; else { const results = await searchWeb(arg, env); stdout = results.map((r, i) => `${i+1}. ${r.title}\n${r.url}\n${r.snippet || ''}`).join('\n\n') || 'No results.'; }
   } else if (name === 'open' || name === 'browser') {
     try {
       const rendered = await browserQuickText(env, 'markdown', arg);
@@ -1253,7 +1275,7 @@ export default {
       if (url.pathname === '/api/files' && request.method === 'POST') return handleFileUpload(request, env);
       if (url.pathname.startsWith('/api/files/') && request.method === 'GET') return handleFileGet(request, env, decodeURIComponent(url.pathname.slice('/api/files/'.length)));
       if (url.pathname.startsWith('/api/files/') && request.method === 'DELETE') return handleFileDelete(request, env, decodeURIComponent(url.pathname.slice('/api/files/'.length)));
-      if (url.pathname === '/api/search' && request.method === 'POST') return handleSearch(request);
+      if (url.pathname === '/api/search' && request.method === 'POST') return handleSearch(request, env);
       if (url.pathname === '/api/chat' && request.method === 'POST') return handleChat(request, env);
       if (url.pathname === '/api/computer/status' && request.method === 'GET') return json(request, 200, { configured: Boolean(env.DB), provider: 'Ripo Computer Lite', linux: true, browser: Boolean(env.BROWSER), browserProvider: env.BROWSER ? 'Cloudflare Browser Run Free' : 'Search fallback', browserFreeLimit: '10 minutes/day', persistent: Boolean(env.DB), note: 'Zero-cost Linux-style workspace with persistent files and real rendered browsing on the Browser Run free allowance.' });
       if (url.pathname === '/api/computer/exec' && request.method === 'POST') return handleComputerExec(request, env);
