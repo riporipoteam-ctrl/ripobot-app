@@ -201,7 +201,16 @@ async function ensureSchema(env) {
       user_id TEXT NOT NULL,
       FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-    )`)
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS workspace_usage_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      tokens INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_workspace_usage ON workspace_usage_events(user_id, workspace_id, created_at)`)
   ]);
   return true;
 }
@@ -364,8 +373,10 @@ async function usageSnapshot(env, user, meta) {
   const now = Date.now();
   const plan = effectivePlan(meta);
   const limits = PLAN_LIMITS[plan];
-  const threeHourStart = now - 3 * 60 * 60 * 1000;
-  const weekStart = now - 7 * 24 * 60 * 60 * 1000;
+  const threeHourMs = 3 * 60 * 60 * 1000;
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const threeHourStart = Math.floor(now / threeHourMs) * threeHourMs;
+  const weekStart = Math.floor(now / weekMs) * weekMs;
   const row = await env.DB.prepare(`SELECT
     COALESCE(SUM(CASE WHEN created_at >= ?2 THEN tokens ELSE 0 END), 0) AS three_hour,
     COALESCE(SUM(CASE WHEN created_at >= ?3 THEN tokens ELSE 0 END), 0) AS weekly
@@ -377,15 +388,20 @@ async function usageSnapshot(env, user, meta) {
   const remainingPct = (used, limit) => limit == null ? null : Math.max(0, Math.min(100, Math.round((1 - used / limit) * 100)));
   return {
     plan,
-    threeHour: threeLimit == null ? null : { used: threeUsed, limit: threeLimit, remainingPercent: remainingPct(threeUsed, threeLimit), resetsAt: threeHourStart + 3 * 60 * 60 * 1000 },
-    weekly: { used: weekUsed, limit: weeklyLimit, remainingPercent: remainingPct(weekUsed, weeklyLimit), resetsAt: weekStart + 7 * 24 * 60 * 60 * 1000 }
+    threeHour: threeLimit == null ? null : { used: threeUsed, limit: threeLimit, remainingPercent: remainingPct(threeUsed, threeLimit), resetsAt: threeHourStart + threeHourMs },
+    weekly: { used: weekUsed, limit: weeklyLimit, remainingPercent: remainingPct(weekUsed, weeklyLimit), resetsAt: weekStart + weekMs }
   };
 }
 
-async function recordUsage(env, user, tokens) {
+async function recordUsage(env, user, tokens, workspaceId) {
   const now = Date.now();
-  await env.DB.prepare('INSERT INTO usage_events (id, user_id, tokens, kind, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
-    .bind(crypto.randomUUID(), user.id, Math.max(1, Number(tokens || 1)), 'chat', now).run();
+  const safeTokens = Math.max(1, Number(tokens || 1));
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO usage_events (id, user_id, tokens, kind, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
+      .bind(crypto.randomUUID(), user.id, safeTokens, 'chat', now),
+    env.DB.prepare('INSERT INTO workspace_usage_events (id, user_id, workspace_id, tokens, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
+      .bind(crypto.randomUUID(), user.id, workspaceId || '', safeTokens, now)
+  ]);
   const dayStart = new Date(now); dayStart.setUTCHours(0, 0, 0, 0);
   const earned = await env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM coin_events WHERE user_id = ?1 AND reason = 'chat' AND created_at >= ?2")
     .bind(user.id, dayStart.getTime()).first();
@@ -520,7 +536,9 @@ async function handleWorkspacesList(request, env) {
     let botCount = 0;
     try { botCount = JSON.parse(stateRow?.state_json || '{}')?.agents?.length || 0; } catch {}
     const storage = await storageSnapshot(env, auth.user, meta, workspace.id);
-    workspaces.push({ id: workspace.id, name: workspace.name, createdAt: workspace.created_at, updatedAt: workspace.updated_at, botCount, storage });
+    const weekStart = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000)) * (7 * 24 * 60 * 60 * 1000);
+    const tokenRow = await env.DB.prepare('SELECT COALESCE(SUM(tokens),0) AS total FROM workspace_usage_events WHERE user_id = ?1 AND workspace_id = ?2 AND created_at >= ?3').bind(auth.user.id, workspace.id, weekStart).first();
+    workspaces.push({ id: workspace.id, name: workspace.name, createdAt: workspace.created_at, updatedAt: workspace.updated_at, botCount, weeklyTokens: Number(tokenRow?.total || 0), storage });
   }
   return json(request, 200, { workspaces, limit: PLAN_LIMITS[effectivePlan(meta)].workspaceLimit });
 }
@@ -967,6 +985,17 @@ async function handleChat(request, env) {
   let parsed = extractActions(result.reply);
   const immediateActions = parsed.actions.filter((action) => ['create_agent','create_team','rename_agent','message_agent'].includes(action.type));
   const toolActions = parsed.actions.filter((action) => ['web_search','browser_open','computer_exec','generate_image'].includes(action.type));
+  if (!toolActions.some((action) => action.type === 'generate_image') && /\b(generate|create|make|draw)\b[\s\S]{0,60}\b(image|picture|photo|art|logo|wallpaper)\b/i.test(lastUser)) {
+    toolActions.push({ type: 'generate_image', prompt: lastUser });
+  }
+  const urlMatch = /https?:\/\/[^\s)\]}]+/i.exec(lastUser);
+  if (urlMatch && /\b(open|browse|visit|read|check)\b/i.test(lastUser) && !toolActions.some((action) => action.type === 'browser_open')) {
+    toolActions.push({ type: 'browser_open', url: urlMatch[0] });
+  }
+  const commandMatch = /\b(?:run|execute)\s+(?:the\s+)?(?:command\s+)?[`"']?([a-z][^\n`"']{0,100})/i.exec(lastUser);
+  if (commandMatch && /\b(computer|terminal|command|shell|run|execute)\b/i.test(lastUser) && !toolActions.some((action) => action.type === 'computer_exec')) {
+    toolActions.push({ type: 'computer_exec', command: commandMatch[1].trim() });
+  }
   let generatedFiles = [];
 
   if (toolActions.length) {
@@ -990,7 +1019,7 @@ async function handleChat(request, env) {
   }
 
   const tokens = estimateTokens(messages, parsed.reply);
-  await recordUsage(env, auth.user, tokens);
+  await recordUsage(env, auth.user, tokens, workspace.id);
   const freshMeta = await ensureUserMeta(env, auth.user);
   const usage = await usageSnapshot(env, auth.user, freshMeta);
   return json(request, 200, {
