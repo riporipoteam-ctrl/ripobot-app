@@ -80,3 +80,16 @@ test('V6 computer uses Browser Run live sessions instead of fake preview-only ch
   assert.match(app, /liveViewUrl/);
   assert.match(app, /computer-live-frame/);
 });
+
+
+test('V6 document attachments use Workers AI Markdown Conversion instead of metadata-only fallback', () => {
+  const worker = fs.readFileSync(new URL('../cloudflare/worker.mjs', import.meta.url), 'utf8');
+  assert.match(worker, /env\.AI\.toMarkdown/);
+  assert.match(worker, /DOCUMENT ATTACHMENT/);
+});
+
+test('V6 image editing has a vision reconstruction fallback for oversized reference images', () => {
+  const worker = fs.readFileSync(new URL('../cloudflare/worker.mjs', import.meta.url), 'utf8');
+  assert.match(worker, /vision-reconstruction/);
+  assert.match(worker, /describeImageAttachment/);
+});
