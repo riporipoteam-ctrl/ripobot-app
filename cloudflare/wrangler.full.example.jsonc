@@ -1,0 +1,22 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "ripobot-api",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-24",
+  "workers_dev": true,
+  "ai": { "binding": "AI" },
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ripobot-app",
+      "database_id": "eb6ed46d-5272-4fda-9f28-30a140042c7f"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "FILES",
+      "id": "f2ab29f7c3584de890e61fb2f37cfaab"
+    }
+  ]
+}

@@ -1,1033 +1,889 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity,
-  ArrowRight,
-  ArrowUpRight,
-  Bell,
+  ArrowLeft,
+  ArrowUp,
   Bot,
-  CalendarClock,
   Check,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
-  CircleHelp,
-  Clock3,
+  Circle,
+  Cloud,
   Command,
-  ExternalLink,
+  Computer,
+  Copy,
+  Download,
+  File,
   FileText,
-  FolderKanban,
+  Folder,
   Globe2,
-  House,
-  Inbox,
-  ListTodo,
+  HardDrive,
+  Image,
+  LoaderCircle,
+  LogOut,
   Menu,
-  MessageCircle,
+  MessageSquare,
   MoreHorizontal,
-  Pause,
-  Play,
+  Paperclip,
+  Pencil,
   Plus,
-  Puzzle,
   Search,
-  Send,
   Settings,
   ShieldCheck,
   Sparkles,
-  UsersRound,
-  Workflow,
+  Square,
+  SquareTerminal,
+  Trash2,
+  Upload,
+  UserRound,
+  Users,
   X,
   Zap
 } from 'lucide-react';
-import { DEFAULT_AGENTS, DEFAULT_MESSAGES, DEFAULT_TASKS, DEFAULT_WORKFLOWS, INTEGRATIONS } from './data.js';
+import { AVATAR_PRESETS, DEFAULT_CONVERSATIONS, QUICK_STARTS, STARTER_AGENTS } from './data.js';
 
 const API_BASE = import.meta.env.DEV
   ? ''
   : (import.meta.env.VITE_API_BASE_URL || 'https://ripobot-api.ripo-ripoteam.workers.dev');
 
-const NAV_ITEMS = [
-  { id: 'home', label: 'Activity', icon: Activity },
-  { id: 'agents', label: 'All bots', icon: Bot },
-  { id: 'tasks', label: 'Tasks', icon: ListTodo },
-  { id: 'workflows', label: 'Workflows', icon: Workflow },
-  { id: 'integrations', label: 'Connections', icon: Puzzle }
-];
+const LOCAL_KEYS = {
+  session: 'ripobot.session.v2',
+  profile: 'ripobot.profile.v2',
+  agents: 'ripobot.agents.v2',
+  conversations: 'ripobot.conversations.v2',
+  teams: 'ripobot.teams.v2',
+  files: 'ripobot.files.v2',
+  onboarded: 'ripobot.onboarded.v2'
+};
 
-function useStoredState(key, initialValue) {
-  const [value, setValue] = useState(() => {
-    try {
-      const saved = window.localStorage.getItem(key);
-      return saved ? JSON.parse(saved) : initialValue;
-    } catch {
-      return initialValue;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // The app keeps working when browser storage is unavailable.
-    }
-  }, [key, value]);
-
-  return [value, setValue];
+function readLocal(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
-function Avatar({ agent, size = 'regular' }) {
-  if (agent?.image) {
-    return (
-      <span className={'avatar avatar-image avatar-' + (agent.color || 'sky') + ' avatar-' + size + (agent.state === 'working' ? ' avatar-working' : '')} aria-hidden="true">
-        <img src="/assets/ripobot-mascot.png" alt="" />
-      </span>
-    );
+function writeLocal(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // The app stays usable if browser storage is blocked.
   }
+}
+
+function storedToken() {
+  try {
+    const session = JSON.parse(localStorage.getItem(LOCAL_KEYS.session) || 'null');
+    return session?.token || '';
+  } catch { return ''; }
+}
+
+async function api(path, options = {}) {
+  const token = storedToken();
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
+    ...options,
+    headers: {
+      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {})
+    }
+  });
+  const type = response.headers.get('content-type') || '';
+  const data = type.includes('application/json') ? await response.json().catch(() => ({})) : await response.text();
+  if (!response.ok) {
+    const error = new Error(data?.error || data || `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function uid(prefix = 'id') {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function cls(...parts) {
+  return parts.filter(Boolean).join(' ');
+}
+
+function formatTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
+}
+
+function Avatar({ agent, size = 'md', active = false }) {
+  const preset = AVATAR_PRESETS.find((item) => item.id === agent?.avatar) || AVATAR_PRESETS[0];
+  const state = agent?.state || 'ready';
   return (
-    <span className={'avatar avatar-' + (agent?.color || 'sky') + ' avatar-' + size + (agent?.state === 'working' ? ' avatar-working' : '')} aria-hidden="true">
-      <span className="avatar-antenna" />
-      <span className="avatar-face"><i /><i /><b /></span>
+    <span className={cls('agent-avatar', `avatar-${size}`, `tone-${preset.tone}`, `state-${state}`, active && 'is-active')} aria-hidden="true">
+      <span className="avatar-halo" />
+      <span className="avatar-core">
+        {preset.id === 'ripo' ? <img src="/assets/ripobot-mascot.png" alt="" /> : <span className="avatar-glyph">{preset.glyph}</span>}
+      </span>
+      <span className="avatar-status-dot" />
     </span>
   );
 }
 
-function StatusPill({ status }) {
-  const meta = {
-    working: { label: 'Working', className: 'status-working' },
-    review: { label: 'Ready to review', className: 'status-review' },
-    done: { label: 'Completed', className: 'status-done' },
-    attention: { label: 'Needs attention', className: 'status-attention' },
-    scheduled: { label: 'Scheduled', className: 'status-scheduled' }
-  }[status] || { label: 'Ready', className: 'status-ready' };
-  return <span className={'status-pill ' + meta.className}><i />{meta.label}</span>;
-}
-
-function App() {
-  const [page, setPage] = useState('chat');
-  const [agents, setAgents] = useStoredState('ripobot.agents', DEFAULT_AGENTS);
-  const [tasks, setTasks] = useStoredState('ripobot.tasks', DEFAULT_TASKS);
-  const [workflows, setWorkflows] = useStoredState('ripobot.workflows', DEFAULT_WORKFLOWS);
-  const [messages, setMessages] = useStoredState('ripobot.messages', DEFAULT_MESSAGES);
-  const [activeAgentId, setActiveAgentId] = useState('ripo');
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [modal, setModal] = useState(null);
-  const [toast, setToast] = useState('');
-  const [agentSearch, setAgentSearch] = useState('');
-  const [modelConfig, setModelConfig] = useState({
-    primaryModel: 'meta-llama/Llama-3.1-8B-Instruct',
-    primaryConfigured: false,
-    accessCodeRequired: false,
-    accessCodeSetupRequired: false,
-    huggingFaceReady: false,
-    cloudflareAiReady: false,
-    backupReady: true
-  });
-  const [accessCode, setAccessCode] = useState(() => {
-    try {
-      return window.sessionStorage.getItem('ripobot.accessCode') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [busyAgents, setBusyAgents] = useState({});
-  const [globalSearch, setGlobalSearch] = useState('');
-  const [appearance, setAppearance] = useStoredState('ripobot.appearance', 'light');
-
-  const activeAgent = agents.find((agent) => agent.id === activeAgentId) || agents[0] || DEFAULT_AGENTS[0];
-  const messagesForAgent = messages[activeAgent?.id] || [];
-
-  useEffect(() => {
-    setTasks((current) => current.filter((task) => !task.sample));
-  }, []);
-
-  function refreshModelConfig(code = accessCode) {
-    const headers = code ? { 'X-RipoBot-Access-Code': code } : {};
-    return fetch(`${API_BASE}/api/config`, { headers })
-      .then((response) => response.ok ? response.json() : null)
-      .then((config) => {
-        if (config) setModelConfig(config);
-        return config;
-      })
-      .catch(() => null);
-  }
-
-  function updateAccessCode(value) {
-    setAccessCode(value);
-    try {
-      if (value) window.sessionStorage.setItem('ripobot.accessCode', value);
-      else window.sessionStorage.removeItem('ripobot.accessCode');
-    } catch {
-      // The code can be entered again if this browser blocks session storage.
-    }
-  }
-
-  useEffect(() => {
-    refreshModelConfig();
-  }, []);
-
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(''), 2800);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  useEffect(() => {
-    function onKeyDown(event) {
-      if (event.key === 'Escape') {
-        setModal(null);
-        setMobileNavOpen(false);
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        document.querySelector('.global-search input')?.focus();
-      }
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  function navigate(nextPage) {
-    setPage(nextPage);
-    setMobileNavOpen(false);
-  }
-
-  function openChat(agentId) {
-    setActiveAgentId(agentId);
-    setPage('chat');
-    setMobileNavOpen(false);
-  }
-
-  async function sendMessage(agentId, text, taskId) {
-    const content = String(text || '').trim();
-    if (!content || busyAgents[agentId]) return;
-    const agent = agents.find((item) => item.id === agentId) || DEFAULT_AGENTS[0];
-    const userMessage = { id: 'u-' + Date.now(), role: 'user', content, time: new Date().toISOString() };
-    const existing = messages[agentId] || [];
-    const nextMessages = [...existing, userMessage];
-    setMessages((current) => ({ ...current, [agentId]: [...(current[agentId] || []), userMessage] }));
-    setBusyAgents((current) => ({ ...current, [agentId]: true }));
-
-    try {
-      const response = await fetch(`${API_BASE}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(accessCode ? { 'X-RipoBot-Access-Code': accessCode } : {})
-        },
-        body: JSON.stringify({
-          agentName: agent.name,
-          agentRole: agent.title,
-          agentInstructions: agent.instructions || '',
-          messages: nextMessages.map((message) => ({ role: message.role, content: message.content }))
-        })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'The AI model could not be reached.');
-      const assistantMessage = {
-        id: 'a-' + Date.now(),
-        role: 'assistant',
-        content: data.reply,
-        provider: data.provider,
-        model: data.model,
-        time: new Date().toISOString()
-      };
-      setMessages((current) => ({ ...current, [agentId]: [...(current[agentId] || []), assistantMessage] }));
-      if (taskId) {
-        setTasks((current) => current.map((task) => task.id === taskId ? {
-          ...task,
-          status: 'review',
-          result: data.reply,
-          provider: data.provider,
-          updatedAt: Date.now()
-        } : task));
-      }
-    } catch (error) {
-      const assistantMessage = {
-        id: 'err-' + Date.now(),
-        role: 'assistant',
-        content: error.message || 'I could not reach the AI model. Please try again.',
-        error: true,
-        time: new Date().toISOString()
-      };
-      setMessages((current) => ({ ...current, [agentId]: [...(current[agentId] || []), assistantMessage] }));
-      if (taskId) {
-        setTasks((current) => current.map((task) => task.id === taskId ? {
-          ...task,
-          status: 'attention',
-          result: error.message,
-          updatedAt: Date.now()
-        } : task));
-      }
-    } finally {
-      setBusyAgents((current) => ({ ...current, [agentId]: false }));
-    }
-  }
-
-  function startTask(prompt, agentId = 'ripo') {
-    const content = String(prompt || '').trim();
-    if (!content) return;
-    const taskId = 'task-' + Date.now();
-    const task = {
-      id: taskId,
-      title: content.length > 88 ? content.slice(0, 85) + '…' : content,
-      agentId,
-      status: 'working',
-      createdAt: Date.now(),
-      sample: false
-    };
-    setTasks((current) => [task, ...current.filter((item) => !item.sample)]);
-    setModal(null);
-    setActiveAgentId(agentId);
-    setPage('chat');
-    sendMessage(agentId, content, taskId);
-  }
-
-  function createAgent(details) {
-    const agent = {
-      ...details,
-      id: 'agent-' + Date.now(),
-      createdAt: Date.now()
-    };
-    setAgents((current) => [...current, agent]);
-    setMessages((current) => ({
-      ...current,
-      [agent.id]: [{
-        id: 'welcome-' + agent.id,
-        role: 'assistant',
-        content: 'I’m ' + agent.name + '. I’m ready to help with ' + agent.title.toLowerCase() + ' work. What should we start with?',
-        time: 'Welcome'
-      }]
-    }));
-    setModal(null);
-    setToast(agent.name + ' joined your AI team');
-    openChat(agent.id);
-  }
-
-  function createWorkflow(workflow) {
-    setWorkflows((current) => [workflow, ...current]);
-    setModal(null);
-    setToast('Workflow saved to your library');
-  }
-
-  function updateTask(taskId, patch) {
-    setTasks((current) => current.map((task) => task.id === taskId ? { ...task, ...patch } : task));
-  }
-
-  function searchSubmit(event) {
-    event.preventDefault();
-    navigate('agents');
-    setAgentSearch(globalSearch);
-  }
-
-  const titleByPage = {
-    home: 'Activity',
-    agents: 'All bots',
-    tasks: 'Tasks',
-    workflows: 'Workflows',
-    integrations: 'Connections',
-    settings: 'Settings',
-    chat: activeAgent?.name || 'Chat'
+function StateLabel({ state = 'ready' }) {
+  const labels = {
+    ready: 'Ready',
+    thinking: 'Thinking',
+    searching: 'Searching',
+    working: 'Working',
+    waiting: 'Waiting',
+    done: 'Done',
+    error: 'Needs attention'
   };
+  return <span className={cls('state-label', `state-${state}`)}><i />{labels[state] || 'Ready'}</span>;
+}
 
+function Modal({ title, onClose, children, wide = false }) {
   return (
-    <div className={'app-root theme-' + appearance}>
-      <aside className={'sidebar ' + (mobileNavOpen ? 'sidebar-open' : '')}>
-        <div className="brand-row">
-          <img src="/assets/ripobot-icon.png" alt="" className="brand-mark" />
-          <span className="brand-word">Ripo<span>Bot</span></span>
-          <button className="icon-button sidebar-collapse" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)}><X size={17} /></button>
-        </div>
-
-        <button className="workspace-switcher" onClick={() => setToast('You are in the Ripo Team workspace')}>
-          <span className="workspace-monogram">R</span>
-          <span className="workspace-label"><strong>Ripo Team</strong><small>Personal workspace</small></span>
-          <ChevronDown size={15} className="muted-icon" />
-        </button>
-
-        <div className="sidebar-section-label team-label">
-          <span>Your bots</span>
-          <span className="team-actions">
-            <button className="bare-icon" aria-label="Browse all bots" onClick={() => navigate('agents')}><ArrowUpRight size={14} /></button>
-            <button className="bare-icon" aria-label="Create a bot" onClick={() => setModal({ type: 'agent' })}><Plus size={15} /></button>
-          </span>
-        </div>
-        <div className="sidebar-agents">
-          {agents.slice(0, 8).map((agent) => (
-            <button key={agent.id} className={'sidebar-agent ' + (page === 'chat' && activeAgentId === agent.id ? 'sidebar-agent-active' : '')} onClick={() => openChat(agent.id)}>
-              <Avatar agent={{ ...agent, state: busyAgents[agent.id] ? 'working' : 'idle' }} size="small" />
-              <span className="sidebar-agent-copy"><strong>{agent.name}</strong><small>{agent.title}</small></span>
-              <span className={'agent-presence ' + (busyAgents[agent.id] ? 'presence-working' : '')} title={busyAgents[agent.id] ? 'Working on a reply' : 'Ready to chat'}><i /></span>
-            </button>
-          ))}
-          {agents.length > 8 && <button className="sidebar-agent-more" onClick={() => navigate('agents')}>+ {agents.length - 8} more</button>}
-          <button className="sidebar-add-agent" onClick={() => setModal({ type: 'agent' })}><Plus size={14} />Create a bot</button>
-        </div>
-
-        <div className="sidebar-section-label workspace-label-heading">Your workspace</div>
-        <nav className="side-nav" aria-label="Workspace navigation">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const selected = page === item.id;
-            return (
-              <button key={item.id} className={'nav-item ' + (selected ? 'nav-item-active' : '')} onClick={() => navigate(item.id)}>
-                <Icon size={17} strokeWidth={selected ? 2.25 : 1.8} />
-                <span>{item.label}</span>
-                {item.id === 'tasks' && tasks.some((task) => task.status === 'review') && <i className="nav-count">{tasks.filter((task) => task.status === 'review').length}</i>}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="sidebar-spacer" />
-        <button className="nav-item sidebar-settings" onClick={() => navigate('settings')}><Settings size={17} /><span>Settings</span></button>
-        <div className="sidebar-profile">
-          <span className="profile-avatar">R</span>
-          <span className="profile-label"><strong>Ripo Team</strong><small>Workspace owner</small></span>
-          <button className="bare-icon" aria-label="Open profile menu" onClick={() => setToast('Profile settings are ready to customize')}><MoreHorizontal size={18} /></button>
-        </div>
-      </aside>
-
-      {mobileNavOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
-
-      <div className="main-area">
-        <header className={'topbar ' + (page === 'chat' ? 'topbar-chat' : '')}>
-          <div className="topbar-left">
-            <button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button>
-            {page === 'chat' ? (
-              <div className="topbar-agent">
-                <Avatar agent={{ ...activeAgent, state: busyAgents[activeAgent.id] ? 'working' : 'idle' }} size="regular" />
-                <span><strong>{activeAgent.name}</strong><small>{activeAgent.title} <i /> {busyAgents[activeAgent.id] ? 'Working on a reply' : 'Ready to chat'}</small></span>
-              </div>
-            ) : <div className="breadcrumb"><span>Ripo Team</span><ChevronRight size={14} /><strong>{titleByPage[page]}</strong></div>}
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose?.()}>
+      <section className={cls('modal-card', wide && 'modal-wide')} role="dialog" aria-modal="true" aria-label={title}>
+        <header className="modal-header">
+          <div>
+            <span className="eyebrow">Ripo Bot</span>
+            <h2>{title}</h2>
           </div>
-          <div className="topbar-actions">
-            <form className="global-search" onSubmit={searchSubmit}>
-              <Search size={16} />
-              <input aria-label="Search agents" value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} onFocus={() => { if (globalSearch) navigate('agents'); }} placeholder="Search your team" />
-              <kbd><Command size={11} /> K</kbd>
-            </form>
-            <span className={'model-status ' + (modelConfig.huggingFaceReady ? 'model-live' : 'model-backup')} title={modelConfig.huggingFaceReady ? 'Hugging Face primary is configured' : 'Hugging Face token is not configured; backup route is available'}>
-              <i />{modelConfig.huggingFaceReady ? 'Llama 3.1' : 'AI ready'}
-            </span>
-            {page === 'chat' && <button className="icon-button" aria-label="Bot details" onClick={() => navigate('agents')}><MoreHorizontal size={19} /></button>}
-            {page !== 'chat' && <button className="icon-button notification-button" aria-label="Activity notifications" onClick={() => navigate('tasks')}><Bell size={18} /><i /></button>}
-            <button className="topbar-avatar" aria-label="Open settings" onClick={() => navigate('settings')}>R</button>
-          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </header>
-
-        <main className={'page-content ' + (page === 'chat' ? 'page-content-chat' : '')}>
-          {page === 'home' && (
-            <HomePage
-              agents={agents}
-              tasks={tasks}
-              workflows={workflows}
-              onOpenChat={openChat}
-              onCreateAgent={() => setModal({ type: 'agent' })}
-              onStartTask={startTask}
-              onOpenTasks={() => navigate('tasks')}
-              onOpenWorkflows={() => navigate('workflows')}
-              onOpenSettings={() => navigate('settings')}
-              modelConfig={modelConfig}
-            />
-          )}
-          {page === 'agents' && (
-            <AgentsPage
-              agents={agents}
-              search={agentSearch}
-              onSearch={setAgentSearch}
-              onCreate={() => setModal({ type: 'agent' })}
-              onOpenChat={openChat}
-            />
-          )}
-          {page === 'chat' && activeAgent && (
-            <ChatPage
-              agent={activeAgent}
-              messages={messagesForAgent}
-              busy={Boolean(busyAgents[activeAgent.id])}
-              modelConfig={modelConfig}
-              tasks={tasks.filter((task) => task.agentId === activeAgent.id)}
-              onSend={(text) => sendMessage(activeAgent.id, text)}
-              onOpenWorkflows={() => navigate('workflows')}
-              onOpenTasks={() => navigate('tasks')}
-              onOpenAgent={() => navigate('agents')}
-              onOpenSettings={() => navigate('settings')}
-            />
-          )}
-          {page === 'tasks' && (
-            <TasksPage
-              tasks={tasks}
-              agents={agents}
-              onCreate={() => setModal({ type: 'task' })}
-              onOpenChat={openChat}
-              onUpdateTask={updateTask}
-            />
-          )}
-          {page === 'workflows' && (
-            <WorkflowsPage
-              workflows={workflows}
-              agents={agents}
-              onCreate={() => setModal({ type: 'workflow' })}
-              onRun={(workflow) => startTask(workflow.prompt, workflow.agentId)}
-            />
-          )}
-          {page === 'integrations' && (
-            <IntegrationsPage onConnect={(integration) => setModal({ type: 'integration', integration })} />
-          )}
-          {page === 'settings' && (
-            <SettingsPage
-              modelConfig={modelConfig}
-              accessCode={accessCode}
-              onAccessCodeChange={updateAccessCode}
-              appearance={appearance}
-              onAppearance={setAppearance}
-              onReset={() => setModal({ type: 'reset' })}
-              onRefresh={() => refreshModelConfig()}
-            />
-          )}
-        </main>
-      </div>
-
-      <MobileNav page={page} onNavigate={navigate} />
-
-      {modal?.type === 'agent' && <AgentModal onClose={() => setModal(null)} onSave={createAgent} />}
-      {modal?.type === 'task' && <TaskModal agents={agents} onClose={() => setModal(null)} onSave={startTask} />}
-      {modal?.type === 'workflow' && <WorkflowModal agents={agents} onClose={() => setModal(null)} onSave={createWorkflow} />}
-      {modal?.type === 'integration' && <IntegrationModal integration={modal.integration} onClose={() => setModal(null)} />}
-      {modal?.type === 'reset' && <ResetModal onClose={() => setModal(null)} onReset={() => {
-        window.localStorage.clear();
-        window.location.reload();
-      }} />}
-      {toast && <div className="toast" role="status"><CheckCircle2 size={17} />{toast}</div>}
-    </div>
-  );
-}
-
-function MobileNav({ page, onNavigate }) {
-  const items = [
-    { id: 'chat', label: 'Chat', icon: MessageCircle },
-    { id: 'agents', label: 'Bots', icon: Bot },
-    NAV_ITEMS[2],
-    NAV_ITEMS[3]
-  ];
-  return (
-    <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const selected = page === item.id;
-        return <button key={item.id} className={selected ? 'mobile-nav-active' : ''} onClick={() => onNavigate(item.id)}><Icon size={19} /><span>{item.label}</span></button>;
-      })}
-    </nav>
-  );
-}
-
-function PageTitle({ eyebrow, title, description, action }) {
-  return (
-    <div className="page-title-row">
-      <div>
-        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
-      </div>
-      {action && <div className="page-title-action">{action}</div>}
-    </div>
-  );
-}
-
-function HomePage({ agents, tasks, workflows, onOpenChat, onCreateAgent, onStartTask, onOpenTasks, onOpenWorkflows, onOpenSettings, modelConfig }) {
-  const today = new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
-  const visibleTasks = tasks.filter((task) => !task.sample);
-
-  return (
-    <div className="activity-home page-enter">
-      <header className="activity-home-heading">
-        <div>
-          <div className="eyebrow">{today} <span className="eyebrow-dot" /> RIPO TEAM</div>
-          <h1>Welcome back.</h1>
-          <p>Your bots, recent work, and saved workflows in one place.</p>
-        </div>
-        <button className="button button-primary" onClick={() => onOpenChat('ripo')}><MessageCircle size={15} />Talk to Ripo</button>
-      </header>
-
-      <div className="activity-home-grid">
-        <section className="activity-feed">
-          <div className="activity-feed-heading">
-            <div><span className="section-label">YOUR WORKSPACE</span><h2>Recent activity</h2></div>
-            <button className="text-button" onClick={onOpenTasks}>All tasks <ArrowRight size={14} /></button>
-          </div>
-          {visibleTasks.length ? (
-            <div className="activity-feed-list">
-              {visibleTasks.map((task) => {
-                const agent = agents.find((item) => item.id === task.agentId) || agents[0];
-                return (
-                  <button className="activity-feed-row" key={task.id} onClick={() => onOpenChat(task.agentId)}>
-                    <Avatar agent={agent} size="regular" />
-                    <span className="activity-feed-copy"><span><strong>{task.title}</strong><small>{agent?.name || 'Ripo'} · {formatAge(task.updatedAt || task.createdAt)}</small></span><StatusPill status={task.status} /></span>
-                    <ChevronRight size={16} />
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="activity-feed-empty">
-              <span className="empty-orbit"><img src="/assets/ripobot-icon-192.png" alt="" /></span>
-              <h3>A quiet day so far.</h3>
-              <p>Start a conversation with one of your bots. Your tasks and review items will show up here.</p>
-              <button className="button button-secondary" onClick={() => onOpenChat('ripo')}>Start with Ripo <ArrowRight size={14} /></button>
-            </div>
-          )}
-        </section>
-
-        <aside className="activity-home-rail">
-          <section className="activity-roster">
-            <div className="activity-feed-heading">
-              <div><span className="section-label">READY TO CHAT</span><h2>Your bots</h2></div>
-              <button className="bare-icon" aria-label="Create a bot" onClick={onCreateAgent}><Plus size={17} /></button>
-            </div>
-            <div className="activity-bot-list">
-              {agents.slice(0, 6).map((agent) => (
-                <button key={agent.id} className="activity-bot-row" onClick={() => onOpenChat(agent.id)}>
-                  <Avatar agent={agent} size="regular" />
-                  <span><strong>{agent.name}</strong><small>{agent.title}</small></span>
-                  <ArrowUpRight size={14} />
-                </button>
-              ))}
-            </div>
-            <button className="rail-link" onClick={() => onCreateAgent()}>Make a new bot <ArrowRight size={14} /></button>
-          </section>
-
-          <section className="activity-workflows">
-            <div className="activity-feed-heading"><div><span className="section-label">REUSABLE PROMPTS</span><h2>Workflows</h2></div><button className="bare-icon" aria-label="Browse workflows" onClick={onOpenWorkflows}><ArrowUpRight size={14} /></button></div>
-            {workflows.slice(0, 3).map((workflow) => <button className="activity-workflow-row" key={workflow.id} onClick={onOpenWorkflows}><span className={'workflow-dot workflow-dot-' + workflow.accent} /><span>{workflow.title}</span><ChevronRight size={14} /></button>)}
-            <button className="rail-link" onClick={onOpenWorkflows}>Browse workflows <ArrowRight size={14} /></button>
-          </section>
-          <p className="activity-safety"><ShieldCheck size={15} /> RipoBot drafts in chat. External actions need a connected app.</p>
-          <div className="activity-model"><span className="model-orb"><Zap size={13} /></span><span><strong>{modelConfig.huggingFaceReady ? 'Hugging Face connected' : modelConfig.cloudflareAiReady ? 'Llama 3.1 ready' : 'Backup route enabled'}</strong><small>{modelConfig.primaryModel.split('/').pop()}</small></span><button className="bare-icon" aria-label="Model settings" onClick={onOpenSettings}><ArrowUpRight size={14} /></button></div>
-        </aside>
-      </div>
-    </div>
-  );
-}
-
-function AgentTile({ agent, index, onClick }) {
-  const captions = ['READY TO HELP', 'GATHERING CLARITY', 'IDEAS IN MOTION', 'BUILDING THE PLAN'];
-  return (
-    <button className={'agent-tile agent-tile-' + agent.color} style={{ '--tile-index': index }} onClick={onClick}>
-      <div className="agent-tile-top"><Avatar agent={agent} size="medium" /><span className="agent-online"><i />Ready</span><MoreHorizontal size={17} className="agent-more" /></div>
-      <div className="agent-tile-name">{agent.name}<span className="agent-tile-role">{agent.title}</span></div>
-      <p>{agent.description}</p>
-      <div className="agent-tile-bottom"><span>{captions[index % captions.length]}</span><span className="tile-open"><ArrowUpRight size={14} /></span></div>
-    </button>
-  );
-}
-
-function TaskListCompact({ tasks, agents, onOpenChat }) {
-  if (!tasks.length) return <div className="empty-row"><span className="empty-icon"><ListTodo size={18} /></span><span><strong>No tasks yet</strong><small>Hand off a first task to your team.</small></span></div>;
-  return (
-    <div className="compact-task-list">
-      {tasks.map((task) => {
-        const agent = agents.find((item) => item.id === task.agentId) || agents[0];
-        return (
-          <button key={task.id} className="compact-task-row" onClick={() => onOpenChat(task.agentId)}>
-            <Avatar agent={agent} size="tiny" />
-            <span className="compact-task-copy"><strong>{task.title}</strong><small>{agent?.name || 'Ripo'} <span>·</span> {formatAge(task.updatedAt || task.createdAt)}</small></span>
-            <StatusPill status={task.status} />
-            <ChevronRight size={16} className="task-row-chevron" />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function AgentsPage({ agents, search, onSearch, onCreate, onOpenChat }) {
-  const filtered = agents.filter((agent) => (agent.name + ' ' + agent.title + ' ' + agent.description).toLowerCase().includes(String(search || '').toLowerCase()));
-  return (
-    <div className="content-page page-enter">
-      <PageTitle
-        eyebrow="BOT ROSTER"
-        title="Your bots"
-        description="Give each bot a clear role, a useful point of view, and a place in the work."
-        action={<button className="button button-primary" onClick={onCreate}><Plus size={16} />Create a bot</button>}
-      />
-      <div className="agent-page-toolbar">
-        <div className="agent-page-tabs"><button className="filter-tab filter-tab-active">All bots <span>{agents.length}</span></button><button className="filter-tab" onClick={() => onSearch('')}>Clear search</button></div>
-        <label className="inline-search"><Search size={16} /><input aria-label="Filter agents" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Find an agent" /></label>
-      </div>
-      {filtered.length ? (
-        <div className="bot-directory">
-          {filtered.map((agent) => (
-            <div className="bot-directory-row" key={agent.id}>
-              <button className="bot-directory-main" onClick={() => onOpenChat(agent.id)}>
-                <Avatar agent={agent} size="medium" />
-                <span className="bot-directory-copy"><span><strong>{agent.name}</strong><small>{agent.title}</small></span><p>{agent.description}</p></span>
-              </button>
-              <button className="bot-directory-open" onClick={() => onOpenChat(agent.id)}>Message <ArrowRight size={14} /></button>
-            </div>
-          ))}
-          <button className="bot-directory-create" onClick={onCreate}><span><Plus size={17} /></span><span><strong>Create a bot</strong><small>Give a new teammate a clear specialty and point of view.</small></span><ArrowRight size={15} /></button>
-        </div>
-      ) : <div className="empty-state"><span className="empty-state-icon"><Search size={22} /></span><h3>No agents found</h3><p>Try a different name or area of focus.</p><button className="button button-secondary" onClick={() => onSearch('')}>Clear search</button></div>}
-      <div className="helper-strip"><span><Sparkles size={17} /></span><p><strong>Keep their jobs clear.</strong> A good agent owns a kind of work, not every kind of work.</p><button className="text-button" onClick={onCreate}>Create a specialist <ArrowRight size={14} /></button></div>
-    </div>
-  );
-}
-
-function ChatPage({ agent, messages, busy, modelConfig, tasks, onSend, onOpenWorkflows, onOpenTasks, onOpenAgent, onOpenSettings }) {
-  const [draft, setDraft] = useState('');
-  const conversationRef = useRef(null);
-  const textareaRef = useRef(null);
-  const displayMessages = messages.filter((message) => message.time !== 'Welcome');
-  const isWelcome = displayMessages.length === 0;
-  const promptSuggestions = agent.id === 'scout'
-    ? ['Compare two options for me', 'Turn this question into a research brief', 'Find the assumptions I should check']
-    : agent.id === 'pixel'
-      ? ['Give this idea a sharper voice', 'Draft a launch announcement', 'Explore three creative directions']
-      : agent.id === 'bolt'
-        ? ['Break this project into first steps', 'Explain a technical tradeoff', 'Help me plan a clean handoff']
-        : agent.id === 'pip'
-          ? ['Write a warm community update', 'Help welcome new members', 'Make this message more inviting']
-          : ['Help me plan a launch', 'Turn rough notes into a brief', 'Think through my next move'];
-  useEffect(() => {
-    const pane = conversationRef.current;
-    if (pane) pane.scrollTop = pane.scrollHeight;
-  }, [displayMessages.length, busy, agent.id]);
-
-  function submit(event) {
-    event.preventDefault();
-    if (!draft.trim() || busy) return;
-    onSend(draft);
-    setDraft('');
-  }
-
-  function handleKey(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      event.currentTarget.form?.requestSubmit();
-    }
-  }
-
-  function choosePrompt(prompt) {
-    setDraft(prompt);
-    window.requestAnimationFrame(() => textareaRef.current?.focus());
-  }
-
-  return (
-    <div className="chat-layout page-enter">
-      <section className="conversation-panel">
-        <div className="conversation-messages" ref={conversationRef} aria-live="polite">
-          {isWelcome ? (
-            <div className="welcome-screen">
-              <div className="welcome-character"><span className="welcome-halo" /><Avatar agent={{ ...agent, state: busy ? 'working' : 'idle' }} size="hero" /></div>
-              <div className="welcome-copy">
-                <span className="welcome-kicker">{agent.title}</span>
-                <h1>{agent.id === 'ripo' ? 'What should we get moving on?' : 'What are we working on?'}</h1>
-                <p>{agent.description}</p>
-              </div>
-              <div className="welcome-prompts" aria-label="Prompt ideas">
-                {promptSuggestions.map((prompt) => <button key={prompt} onClick={() => choosePrompt(prompt)}>{prompt}<ArrowUpRight size={14} /></button>)}
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="conversation-date"><span />TODAY<span /></div>
-              {displayMessages.map((message) => <MessageBubble key={message.id} message={message} agent={agent} />)}
-              {busy && <div className="message-row message-thinking-row"><Avatar agent={{ ...agent, state: 'working' }} size="small" /><div className="thinking-bubble"><span>{agent.name} is drafting</span><span className="thinking-dots"><i /><i /><i /></span></div></div>}
-            </>
-          )}
-        </div>
-
-        <form className="chat-composer" onSubmit={submit}>
-          <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleKey} placeholder={'Message ' + agent.name + '…'} aria-label={'Message ' + agent.name} rows={1} />
-          <div className="chat-composer-tools">
-            <span className="composer-info"><Sparkles size={13} />Your message goes to {agent.name}</span>
-            <div><span className="enter-hint">Enter to send</span><button className="send-message-button" type="submit" aria-label="Send message" disabled={!draft.trim() || busy}><Send size={16} /></button></div>
-          </div>
-        </form>
-        <div className="chat-disclaimer">RipoBot can make mistakes. Check important details before using them.</div>
-      </section>
-
-      <aside className="agent-inspector">
-        <div className="inspector-header"><span>RECENT WORK</span><button className="bare-icon" aria-label="Open all tasks" onClick={onOpenTasks}><ArrowUpRight size={15} /></button></div>
-        <div className="inspector-section inspector-work-section"><div className="inspector-section-title"><span>Tasks with {agent.name}</span><span>{tasks.filter((task) => !task.sample).length}</span></div>{tasks.filter((task) => !task.sample).slice(0, 4).map((task) => <div className="inspector-task" key={task.id}><span className={'inspector-task-dot task-dot-' + task.status} /><span className="inspector-task-copy"><strong>{task.title}</strong><small>{statusLabel(task.status)} · {formatAge(task.updatedAt || task.createdAt)}</small></span></div>)}{tasks.filter((task) => !task.sample).length === 0 && <div className="inspector-muted">New tasks you start in chat will appear here.</div>}</div>
-        <div className="inspector-divider" />
-        <div className="inspector-profile inspector-profile-compact"><Avatar agent={agent} size="medium" /><span><strong>{agent.name}</strong><small>{agent.title}</small></span><button className="bare-icon" aria-label="View bot roster" onClick={onOpenAgent}><ArrowUpRight size={14} /></button></div>
-        <p className="inspector-description">{agent.description}</p>
-        <div className="inspector-section"><div className="inspector-section-title"><span>Model</span><button onClick={onOpenSettings}>Details <ArrowUpRight size={12} /></button></div><div className="model-info-card"><span className="model-info-icon"><Zap size={15} /></span><span><strong>{modelConfig.primaryModel.split('/').pop()}</strong><small>{modelConfig.huggingFaceReady ? 'Hugging Face router' : modelConfig.cloudflareAiReady ? 'Llama backup route' : 'Backup route enabled'}</small></span></div></div>
-        <div className="inspector-bottom-card"><span><ShieldCheck size={16} /></span><p><strong>You stay in control</strong><small>This version drafts and plans in chat. It won’t take external actions.</small></p></div>
-        <button className="inspector-workflow-link" onClick={onOpenWorkflows}><Workflow size={15} />Browse reusable workflows<ArrowRight size={14} /></button>
-      </aside>
-    </div>
-  );
-}
-
-function MessageBubble({ message, agent }) {
-  const isUser = message.role === 'user';
-  return (
-    <div className={'message-row ' + (isUser ? 'message-user-row' : '')}>
-      {!isUser && <Avatar agent={agent} size="small" />}
-      <div className={'message-content ' + (isUser ? 'message-user' : 'message-assistant') + (message.error ? ' message-error' : '')}>
-        {!isUser && <div className="message-author"><strong>{agent.name}</strong><span>{message.time && message.time !== 'Welcome' ? formatClock(message.time) : 'Just now'}</span></div>}
-        <div className="message-text">{message.content}</div>
-        {message.provider && <div className="message-model"><span className={message.provider === 'huggingface' ? 'hf-model-mark' : 'backup-model-mark'} />{message.provider === 'huggingface' ? 'Hugging Face · Llama 3.1' : 'Pollinations backup'}</div>}
-        {isUser && <span className="user-message-time">{formatClock(message.time)}</span>}
-      </div>
-      {isUser && <span className="user-avatar-small">R</span>}
-    </div>
-  );
-}
-
-function TasksPage({ tasks, agents, onCreate, onOpenChat, onUpdateTask }) {
-  const [filter, setFilter] = useState('all');
-  const visible = tasks.filter((task) => filter === 'all' || task.status === filter);
-  const filters = [
-    { id: 'all', label: 'All work' },
-    { id: 'working', label: 'In progress' },
-    { id: 'review', label: 'Needs review' },
-    { id: 'done', label: 'Completed' }
-  ];
-  return (
-    <div className="content-page page-enter">
-      <PageTitle
-        eyebrow="YOUR WORK, IN ONE PLACE"
-        title="Task activity"
-        description="See what your team is working on and review answers when they are ready."
-        action={<button className="button button-primary" onClick={onCreate}><Plus size={16} />New task</button>}
-      />
-      <div className="task-metrics">
-        <Metric label="In progress" value={tasks.filter((task) => task.status === 'working').length} icon={Activity} color="blue" />
-        <Metric label="Needs review" value={tasks.filter((task) => task.status === 'review').length} icon={Inbox} color="coral" />
-        <Metric label="Completed" value={tasks.filter((task) => task.status === 'done').length} icon={CheckCircle2} color="mint" />
-      </div>
-      <div className="task-board-head"><div className="task-filter-tabs">{filters.map((item) => <button key={item.id} className={'filter-tab ' + (filter === item.id ? 'filter-tab-active' : '')} onClick={() => setFilter(item.id)}>{item.label}<span>{item.id === 'all' ? tasks.length : tasks.filter((task) => task.status === item.id).length}</span></button>)}</div><button className="quiet-action" onClick={() => setFilter('all')}><span><Clock3 size={14} /></span>Recently updated</button></div>
-      <div className="task-board">
-        <div className="task-board-columns"><span>WORK ITEM</span><span>AGENT</span><span>STATUS</span><span>UPDATED</span><span /></div>
-        {visible.map((task) => {
-          const agent = agents.find((item) => item.id === task.agentId) || agents[0];
-          return (
-            <div className="task-board-row" key={task.id}>
-              <button className="task-board-title" onClick={() => onOpenChat(task.agentId)}><span className={'task-file-icon task-file-' + task.status}><FileText size={16} /></span><span><strong>{task.title}</strong>{task.sample && <small className="sample-label">Example activity</small>}</span></button>
-              <button className="task-board-agent" onClick={() => onOpenChat(task.agentId)}><Avatar agent={agent} size="tiny" /><span>{agent?.name || 'Ripo'}</span></button>
-              <StatusPill status={task.status} />
-              <span className="task-board-time">{formatAge(task.updatedAt || task.createdAt)}</span>
-              <div className="task-row-actions">{task.status === 'review' && <button className="review-action" onClick={() => onOpenChat(task.agentId)}>Review</button>}{task.status !== 'done' && <button className="bare-icon" aria-label="Mark task completed" onClick={() => onUpdateTask(task.id, { status: 'done', updatedAt: Date.now() })}><Check size={16} /></button>}<button className="bare-icon" aria-label="Open task conversation" onClick={() => onOpenChat(task.agentId)}><ArrowUpRight size={15} /></button></div>
-            </div>
-          );
-        })}
-        {visible.length === 0 && <div className="task-empty"><span className="empty-state-icon"><ListTodo size={22} /></span><h3>No work in this view</h3><p>Start a task and your team's progress will appear here.</p><button className="button button-secondary" onClick={onCreate}><Plus size={15} />Start a task</button></div>}
-      </div>
-      <p className="local-note"><ShieldCheck size={14} />Task history is saved in this browser.</p>
-    </div>
-  );
-}
-
-function Metric({ label, value, icon: Icon, color }) {
-  return <div className="metric-card"><span className={'metric-icon metric-' + color}><Icon size={17} /></span><span className="metric-value">{value}</span><span className="metric-label">{label}</span></div>;
-}
-
-function WorkflowsPage({ workflows, agents, onCreate, onRun }) {
-  return (
-    <div className="content-page page-enter">
-      <PageTitle
-        eyebrow="YOUR BEST WORK, MADE REUSABLE"
-        title="Workflow library"
-        description="Save a good prompt once, then give it to the right teammate whenever you need it."
-        action={<button className="button button-primary" onClick={onCreate}><Plus size={16} />Create workflow</button>}
-      />
-      <div className="workflow-intro"><span className="workflow-intro-icon"><Workflow size={19} /></span><div><strong>Start with a repeatable prompt</strong><p>Routines here create a task and open a conversation. Automatic background schedules will need a connected scheduler.</p></div><span className="workflow-intro-tag">PROMPT LIBRARY</span></div>
-      <div className="workflow-grid">
-        {workflows.map((workflow, index) => {
-          const agent = agents.find((item) => item.id === workflow.agentId) || agents[0];
-          return (
-            <article className={'workflow-card workflow-card-' + (workflow.accent || 'blue')} key={workflow.id} style={{ '--tile-index': index }}>
-              <div className="workflow-card-head"><span className="workflow-card-icon"><Workflow size={18} /></span><span className="workflow-category">{workflow.category || 'My workflow'}</span><button className="bare-icon" aria-label="Workflow options" onClick={() => onRun(workflow)}><MoreHorizontal size={18} /></button></div>
-              <h3>{workflow.title}</h3><p>{workflow.description}</p>
-              <div className="workflow-card-prompt">“{workflow.prompt}”</div>
-              <div className="workflow-card-footer"><span className="workflow-agent"><Avatar agent={agent} size="tiny" />{agent?.name || 'Ripo'}</span><button className="run-workflow" onClick={() => onRun(workflow)}><Play size={13} fill="currentColor" />Use workflow</button></div>
-            </article>
-          );
-        })}
-        <button className="workflow-create-card" onClick={onCreate}><span className="workflow-create-icon"><Plus size={21} /></span><strong>Save a workflow your way</strong><small>Write a prompt your team can use again.</small><span className="create-tile-link">Create a workflow <ArrowRight size={15} /></span></button>
-      </div>
-    </div>
-  );
-}
-
-function IntegrationsPage({ onConnect }) {
-  return (
-    <div className="content-page page-enter">
-      <PageTitle
-        eyebrow="BRING YOUR FAVORITE TOOLS CLOSER"
-        title="Integrations"
-        description="Connect the places your team works so agents can use real context and tools."
-      />
-      <div className="integration-callout"><span><Puzzle size={18} /></span><div><strong>Connections are not enabled yet</strong><p>Each service needs an authorized sign-in and permission choice before agents can use it.</p></div><span className="callout-status">IN PREPARATION</span></div>
-      <div className="integration-grid">
-        {INTEGRATIONS.map((integration, index) => (
-          <article className="integration-card" key={integration.name} style={{ '--tile-index': index }}>
-            <div className={'integration-logo integration-logo-' + index}>{integration.name === 'Discord' ? 'D' : integration.name === 'Google Drive' ? 'G' : integration.name === 'GitHub' ? 'GH' : integration.name === 'Slack' ? 'S' : integration.name === 'Gmail' ? 'M' : <Puzzle size={19} />}</div>
-            <span className="integration-label">{integration.label}</span>
-            <h3>{integration.name}</h3><p>{integration.detail}</p>
-            <button className="integration-connect" onClick={() => onConnect(integration)}><span>Connection setup</span><ArrowUpRight size={14} /></button>
-          </article>
-        ))}
-      </div>
-      <div className="integration-security"><ShieldCheck size={16} /><span>Every connection should be explicit, scoped, and revocable from your workspace.</span><button className="text-button" onClick={() => onConnect({ name: 'Permissions', detail: 'RipoBot will request only the access needed for each provider.' })}>How permissions work <ArrowRight size={14} /></button></div>
-    </div>
-  );
-}
-
-function SettingsPage({ modelConfig, accessCode, onAccessCodeChange, appearance, onAppearance, onReset, onRefresh }) {
-  return (
-    <div className="content-page page-enter">
-      <PageTitle eyebrow="MAKE THE WORKSPACE FEEL LIKE YOURS" title="Settings" description="Manage your RipoBot workspace, appearance, and model connection." />
-      <div className="settings-layout">
-        <div className="settings-nav"><button className="settings-nav-active"><Settings size={16} />Preferences</button><button onClick={() => document.getElementById('model-settings')?.scrollIntoView({ behavior: 'smooth' })}><Zap size={16} />AI model</button><button onClick={() => document.getElementById('data-settings')?.scrollIntoView({ behavior: 'smooth' })}><ShieldCheck size={16} />Data & privacy</button></div>
-        <div className="settings-content">
-          <section className="settings-card"><div className="settings-card-heading"><div><span className="section-label">APPEARANCE</span><h2>Your workspace, your way</h2><p>Choose a calm light workspace or a deeper dark theme.</p></div></div><div className="theme-choice-row"><button className={'theme-choice theme-choice-light ' + (appearance === 'light' ? 'theme-choice-selected' : '')} onClick={() => onAppearance('light')}><span className="theme-preview"><i /><i /><i /></span><span><strong>Light</strong><small>Bright and airy</small></span>{appearance === 'light' && <CheckCircle2 size={17} />}</button><button className={'theme-choice theme-choice-dark ' + (appearance === 'dark' ? 'theme-choice-selected' : '')} onClick={() => onAppearance('dark')}><span className="theme-preview"><i /><i /><i /></span><span><strong>Dark</strong><small>Easy on the eyes</small></span>{appearance === 'dark' && <CheckCircle2 size={17} />}</button></div></section>
-          <section className="settings-card" id="model-settings">
-            <div className="settings-card-heading">
-              <div><span className="section-label">AI MODEL</span><h2>Your RipoBot model</h2><p>RipoBot uses the same primary model route as the Discord bot.</p></div>
-              <button className="quiet-action" onClick={onRefresh}><Activity size={14} />Refresh status</button>
-            </div>
-            <div className="model-settings-row">
-              <span className="model-settings-orb"><Zap size={18} /></span>
-              <div className="model-settings-copy"><strong>{modelConfig.primaryModel}</strong><small>Hugging Face Router · {modelConfig.huggingFaceReady ? 'Connected' : modelConfig.accessCodeRequired ? 'Enter the workspace access code' : modelConfig.accessCodeSetupRequired ? 'Access code setup required' : 'Token not configured'}{!modelConfig.huggingFaceReady && modelConfig.cloudflareAiReady ? ' · Cloudflare Llama 3.1 fallback ready' : ''}</small></div>
-              <span className={'connection-badge ' + (modelConfig.huggingFaceReady ? 'connection-on' : 'connection-backup')}><i />{modelConfig.huggingFaceReady ? 'Primary ready' : modelConfig.accessCodeRequired ? 'Primary locked' : modelConfig.cloudflareAiReady ? 'Llama backup ready' : 'Backup route'}</span>
-            </div>
-            {modelConfig.accessCodeRequired && <div className="access-code-row"><label>Workspace access code<input type="password" autoComplete="current-password" value={accessCode} onChange={(event) => onAccessCodeChange(event.target.value)} placeholder="Enter the code set by the workspace owner" /></label><button className="button button-secondary" onClick={onRefresh}>Check access</button><small>This code stays in this browser session. It is not the Hugging Face token.</small></div>}
-            {modelConfig.accessCodeSetupRequired && <div className="model-setup-note"><ShieldCheck size={15} /><span>Add a private <code>RIPO_ACCESS_CODE</code> on the server to protect the shared Hugging Face token.</span></div>}
-            <div className="model-footnote"><ShieldCheck size={15} /><span>Your Hugging Face token stays on the server. The app never sends it to your browser.</span></div>
-          </section>
-          <section className="settings-card" id="data-settings"><div className="settings-card-heading"><div><span className="section-label">DATA & PRIVACY</span><h2>Your conversations stay here</h2><p>Agents, messages, task history, and workflow prompts are saved in this browser.</p></div></div><div className="privacy-feature"><span className="privacy-feature-icon"><ShieldCheck size={17} /></span><div><strong>Local workspace data</strong><small>Nothing is synced to an account in this version.</small></div><span className="privacy-local-label">ON THIS DEVICE</span></div><button className="danger-link" onClick={onReset}>Clear this browser's RipoBot data <ArrowRight size={14} /></button></section>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AgentModal({ onClose, onSave }) {
-  const [name, setName] = useState('');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [color, setColor] = useState('violet');
-  const colors = ['sky', 'violet', 'coral', 'mint'];
-  function submit(event) {
-    event.preventDefault();
-    if (!name.trim() || !title.trim()) return;
-    onSave({ name: name.trim(), title: title.trim(), description: description.trim() || 'A specialist for work you want to move forward.', instructions: instructions.trim() || 'Be helpful, clear, and honest about what you can do.', color, image: false });
-  }
-  return (
-    <Modal title="Create an AI teammate" description="Give this agent a clear focus and the kind of answers you want." onClose={onClose}>
-      <form className="modal-form" onSubmit={submit}>
-        <label>Agent name<input required maxLength={32} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Community guide" autoFocus /></label>
-        <label>Specialty<input required maxLength={50} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Community manager" /></label>
-        <label>What should it help with?<textarea rows={2} maxLength={180} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="A short description your team will recognize." /></label>
-        <label>How should it think?<textarea rows={3} maxLength={700} value={instructions} onChange={(event) => setInstructions(event.target.value)} placeholder="Describe its point of view, style, and what a good answer looks like." /></label>
-        <div className="modal-color-field"><span>Agent color</span><div>{colors.map((item) => <button key={item} type="button" aria-label={'Choose ' + item + ' color'} className={'color-swatch swatch-' + item + (color === item ? ' color-swatch-selected' : '')} onClick={() => setColor(item)}>{color === item && <Check size={13} />}</button>)}</div></div>
-        <div className="modal-footer"><button type="button" className="button button-secondary" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={!name.trim() || !title.trim()}><Sparkles size={15} />Create agent</button></div>
-      </form>
-    </Modal>
-  );
-}
-
-function TaskModal({ agents, onClose, onSave }) {
-  const [prompt, setPrompt] = useState('');
-  const [agentId, setAgentId] = useState('ripo');
-  function submit(event) {
-    event.preventDefault();
-    onSave(prompt, agentId);
-  }
-  return (
-    <Modal title="Start a task" description="Choose an agent and tell them what result you need." onClose={onClose}>
-      <form className="modal-form" onSubmit={submit}>
-        <label>What should get done?<textarea required rows={4} maxLength={4000} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the result you need…" autoFocus /></label>
-        <label>Teammate<select value={agentId} onChange={(event) => setAgentId(event.target.value)}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {agent.title}</option>)}</select></label>
-        <div className="modal-note"><ShieldCheck size={15} />Your agent will draft an answer in chat for you to review.</div>
-        <div className="modal-footer"><button type="button" className="button button-secondary" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={!prompt.trim()}><ArrowRight size={15} />Start task</button></div>
-      </form>
-    </Modal>
-  );
-}
-
-function WorkflowModal({ agents, onClose, onSave }) {
-  const [title, setTitle] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [agentId, setAgentId] = useState('ripo');
-  function submit(event) {
-    event.preventDefault();
-    if (!title.trim() || !prompt.trim()) return;
-    onSave({ id: 'workflow-' + Date.now(), title: title.trim(), description: 'A reusable prompt you can hand to your team.', category: 'My workflow', prompt: prompt.trim(), agentId, accent: 'blue' });
-  }
-  return (
-    <Modal title="Create a workflow" description="Save a strong prompt so your team can use it again." onClose={onClose}>
-      <form className="modal-form" onSubmit={submit}>
-        <label>Workflow name<input required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Friday recap" autoFocus /></label>
-        <label>Instructions<textarea required rows={4} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="What should the agent do each time?" /></label>
-        <label>Default teammate<select value={agentId} onChange={(event) => setAgentId(event.target.value)}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {agent.title}</option>)}</select></label>
-        <div className="modal-note"><Workflow size={15} />Workflows create a chat task when you choose to run them.</div>
-        <div className="modal-footer"><button type="button" className="button button-secondary" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={!title.trim() || !prompt.trim()}><Check size={15} />Save workflow</button></div>
-      </form>
-    </Modal>
-  );
-}
-
-function IntegrationModal({ integration, onClose }) {
-  return (
-    <Modal title={'Connect ' + (integration?.name || 'a service')} description="Keep access clear and under your control." onClose={onClose}>
-      <div className="integration-modal-copy"><span className="integration-modal-icon"><Puzzle size={20} /></span><p><strong>{integration?.name || 'This service'} connection setup is not available yet.</strong><br />{integration?.detail || 'Provider sign-in and permission controls need to be configured before RipoBot can connect.'}</p></div>
-      <div className="permission-preview"><ShieldCheck size={16} /><span>RipoBot should ask before an agent can read or change anything in a connected account.</span></div>
-      <div className="modal-footer"><button className="button button-secondary" onClick={onClose}>Close</button></div>
-    </Modal>
-  );
-}
-
-function ResetModal({ onClose, onReset }) {
-  return (
-    <Modal title="Clear local RipoBot data?" description="This removes agents, conversations, tasks, and workflows saved in this browser." onClose={onClose}>
-      <div className="reset-warning"><span><CircleHelp size={19} /></span><p>This cannot be undone. It will not affect your Discord server or any other browser.</p></div>
-      <div className="modal-footer"><button className="button button-secondary" onClick={onClose}>Keep my data</button><button className="button button-danger" onClick={onReset}>Clear local data</button></div>
-    </Modal>
-  );
-}
-
-function Modal({ title, description, onClose, children }) {
-  useEffect(() => {
-    document.body.classList.add('modal-open');
-    return () => document.body.classList.remove('modal-open');
-  }, []);
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div className="modal-heading"><div><h2 id="modal-title">{title}</h2><p>{description}</p></div><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={18} /></button></div>
         {children}
       </section>
     </div>
   );
 }
 
-function statusLabel(status) {
-  return {
-    working: 'is working on a task',
-    review: 'has an answer to review',
-    done: 'completed a task',
-    attention: 'needs a hand',
-    scheduled: 'has a saved reminder'
-  }[status] || 'is ready';
+function AuthScreen({ onAuthenticated }) {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const payload = mode === 'register'
+        ? { name: form.name.trim(), email: form.email.trim(), password: form.password }
+        : { email: form.email.trim(), password: form.password };
+      const data = await api(`/api/auth/${mode === 'register' ? 'register' : 'login'}`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      onAuthenticated({ profile: data.user, cloud: true, token: data.token, expiresAt: data.expiresAt });
+    } catch (err) {
+      if ([404, 501, 503].includes(err.status)) {
+        setError('Cloud accounts are not provisioned on this deployment yet. You can continue in device mode below.');
+      } else {
+        setError(err.message || 'Could not sign in.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function continueLocal() {
+    const email = form.email.trim() || 'local@ripobot.app';
+    const name = form.name.trim() || email.split('@')[0] || 'Ripo Bot user';
+    onAuthenticated({ profile: { id: `local:${email}`, name, email }, cloud: false });
+  }
+
+  return (
+    <main className="auth-shell">
+      <div className="auth-orb auth-orb-a" />
+      <div className="auth-orb auth-orb-b" />
+      <section className="auth-brand-panel">
+        <div className="brand-lockup brand-lockup-large">
+          <span className="brand-mark"><Sparkles size={20} /></span>
+          <span>Ripo Bot</span>
+        </div>
+        <div className="auth-hero-copy">
+          <span className="eyebrow">Your AI team, in one workspace</span>
+          <h1>One bot when it’s simple.<br />A whole team when it isn’t.</h1>
+          <p>Give Ripo Bot a goal, create specialist agents, search the web, work with files, and hand bigger jobs to an isolated computer.</p>
+        </div>
+        <div className="auth-agent-row">
+          {STARTER_AGENTS.map((agent, index) => <Avatar key={agent.id} agent={{ ...agent, state: index === 0 ? 'thinking' : 'ready' }} size="lg" />)}
+          <div className="auth-agent-note"><strong>Persistent agents</strong><span>Each one keeps its role, files, and workspace.</span></div>
+        </div>
+      </section>
+
+      <section className="auth-form-panel">
+        <div className="auth-form-card">
+          <div className="auth-mobile-brand"><span className="brand-mark"><Sparkles size={18} /></span>Ripo Bot</div>
+          <span className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Create your workspace'}</span>
+          <h2>{mode === 'login' ? 'Sign in to Ripo Bot' : 'Start with Ripo Bot'}</h2>
+          <p className="muted">{mode === 'login' ? 'Your agents and work stay tied to your account.' : 'Create an account, then pick how you want your first agent team to work.'}</p>
+          <form onSubmit={submit} className="auth-form">
+            {mode === 'register' && (
+              <label><span>Name</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="What should Ripo Bot call you?" autoComplete="name" /></label>
+            )}
+            <label><span>Email</span><input type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="you@example.com" autoComplete="email" /></label>
+            <label><span>Password</span><input type="password" required minLength={8} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="At least 8 characters" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
+            {error && <div className="auth-error">{error}</div>}
+            <button className="primary-button auth-submit" disabled={busy}>{busy ? <LoaderCircle className="spin" size={18} /> : null}{mode === 'login' ? 'Sign in' : 'Create account'}</button>
+          </form>
+          <button className="text-button auth-switch" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>{mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}</button>
+          {error.includes('device mode') && <button className="secondary-button device-button" onClick={continueLocal}>Continue on this device</button>}
+          <div className="security-note"><ShieldCheck size={16} /><span>Model keys stay on the server. Ripo Bot never puts your Hugging Face token in browser code.</span></div>
+        </div>
+      </section>
+    </main>
+  );
 }
 
-function formatAge(value) {
-  const time = typeof value === 'number' ? value : Date.parse(value);
-  if (!Number.isFinite(time)) return 'Recently';
-  const minutes = Math.max(0, Math.floor((Date.now() - time) / 60000));
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return minutes + 'm ago';
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return hours + 'h ago';
-  return Math.floor(hours / 24) + 'd ago';
+function Onboarding({ profile, onDone }) {
+  const [step, setStep] = useState(0);
+  const [displayName, setDisplayName] = useState(profile?.name || '');
+  const [goal, setGoal] = useState('build');
+  const [starter, setStarter] = useState(['scout', 'forge']);
+
+  const goalOptions = [
+    ['build', 'Build projects', 'Code, files, planning, and technical work.'],
+    ['research', 'Research & learn', 'Search, compare, summarize, and organize.'],
+    ['create', 'Create content', 'Ideas, writing, launches, and creative work.'],
+    ['everything', 'A bit of everything', 'Keep Ripo Bot flexible from day one.']
+  ];
+
+  function finish() {
+    onDone({ displayName: displayName.trim() || 'Ripo Bot user', goal, starter });
+  }
+
+  return (
+    <main className="onboarding-shell">
+      <header className="onboarding-topbar">
+        <div className="brand-lockup"><span className="brand-mark"><Sparkles size={18} /></span><span>Ripo Bot</span></div>
+        <span className="onboarding-progress">{step + 1} / 3</span>
+      </header>
+      <section className="onboarding-stage">
+        {step === 0 && (
+          <div className="onboarding-card onboarding-intro">
+            <Avatar agent={{ ...STARTER_AGENTS[0], state: 'thinking' }} size="xl" />
+            <span className="eyebrow">Meet your main agent</span>
+            <h1>Start with Ripo Bot.</h1>
+            <p>Ripo Bot can work alone, create specialists, or bring several agents into one team conversation. You stay in control of names, roles, files, and tools.</p>
+            <label className="big-input"><span>What should Ripo Bot call you?</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Your name" autoFocus /></label>
+            <button className="primary-button onboarding-next" onClick={() => setStep(1)}>Continue <ArrowUp size={16} className="rotate-45" /></button>
+          </div>
+        )}
+        {step === 1 && (
+          <div className="onboarding-card">
+            <span className="eyebrow">Tune the workspace</span>
+            <h1>What will you use Ripo Bot for?</h1>
+            <p className="muted">This only changes starter suggestions. You can do everything later.</p>
+            <div className="goal-grid">
+              {goalOptions.map(([id, title, description]) => (
+                <button key={id} className={cls('choice-card', goal === id && 'selected')} onClick={() => setGoal(id)}>
+                  <span className="choice-check">{goal === id ? <Check size={14} /> : null}</span>
+                  <strong>{title}</strong><span>{description}</span>
+                </button>
+              ))}
+            </div>
+            <div className="onboarding-actions"><button className="secondary-button" onClick={() => setStep(0)}>Back</button><button className="primary-button" onClick={() => setStep(2)}>Continue</button></div>
+          </div>
+        )}
+        {step === 2 && (
+          <div className="onboarding-card">
+            <span className="eyebrow">Build your starter team</span>
+            <h1>Who joins Ripo Bot?</h1>
+            <p className="muted">Ripo Bot is always there. Add specialists now or create your own later.</p>
+            <div className="starter-agent-grid">
+              {STARTER_AGENTS.slice(1).map((agent) => {
+                const selected = starter.includes(agent.id);
+                return <button key={agent.id} className={cls('starter-agent-card', selected && 'selected')} onClick={() => setStarter(selected ? starter.filter((id) => id !== agent.id) : [...starter, agent.id])}>
+                  <Avatar agent={agent} size="lg" /><div><strong>{agent.name}</strong><span>{agent.role}</span><p>{agent.description}</p></div><span className="choice-check">{selected ? <Check size={14} /> : null}</span>
+                </button>;
+              })}
+            </div>
+            <div className="onboarding-actions"><button className="secondary-button" onClick={() => setStep(1)}>Back</button><button className="primary-button" onClick={finish}>Enter Ripo Bot</button></div>
+          </div>
+        )}
+      </section>
+    </main>
+  );
 }
 
-function formatClock(value) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (!Number.isFinite(date.getTime())) return 'Just now';
-  return new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' }).format(date);
+function AgentEditor({ initialAgent, onSave, onClose }) {
+  const editing = Boolean(initialAgent);
+  const [form, setForm] = useState(initialAgent || {
+    name: '', role: '', description: '', instructions: '', avatar: 'nova', canRenameSelf: true
+  });
+  return (
+    <Modal title={editing ? 'Edit agent' : 'Create agent'} onClose={onClose}>
+      <div className="agent-editor">
+        <div className="avatar-picker">
+          {AVATAR_PRESETS.map((preset) => (
+            <button key={preset.id} onClick={() => setForm({ ...form, avatar: preset.id })} className={cls('avatar-choice', form.avatar === preset.id && 'selected')} aria-label={preset.label}>
+              <Avatar agent={{ avatar: preset.id }} size="lg" />
+            </button>
+          ))}
+        </div>
+        <div className="form-grid two-columns">
+          <label><span>Name</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Scout" /></label>
+          <label><span>Role</span><input value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} placeholder="Research agent" /></label>
+        </div>
+        <label><span>Short description</span><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="What this agent is best at" /></label>
+        <label><span>Instructions</span><textarea rows={6} value={form.instructions} onChange={(event) => setForm({ ...form, instructions: event.target.value })} placeholder="How should this agent behave and what should it focus on?" /></label>
+        <label className="toggle-row"><div><strong>Let this agent rename itself</strong><span>It can suggest and adopt a better name when the role changes.</span></div><button className={cls('switch', form.canRenameSelf && 'on')} onClick={() => setForm({ ...form, canRenameSelf: !form.canRenameSelf })}><i /></button></label>
+        <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={!form.name.trim()} onClick={() => onSave({ ...form, name: form.name.trim(), role: form.role.trim() || 'AI agent', description: form.description.trim() })}>{editing ? 'Save changes' : 'Create agent'}</button></div>
+      </div>
+    </Modal>
+  );
 }
 
-export default App;
+function TeamEditor({ agents, onSave, onClose }) {
+  const [name, setName] = useState('New team');
+  const [members, setMembers] = useState(agents.slice(0, Math.min(3, agents.length)).map((agent) => agent.id));
+  return (
+    <Modal title="Create agent team" onClose={onClose}>
+      <div className="agent-editor">
+        <label><span>Team name</span><input value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <div className="team-picker-list">
+          {agents.map((agent) => {
+            const selected = members.includes(agent.id);
+            return <button key={agent.id} className={cls('team-member-choice', selected && 'selected')} onClick={() => setMembers(selected ? members.filter((id) => id !== agent.id) : [...members, agent.id])}>
+              <Avatar agent={agent} size="sm" /><div><strong>{agent.name}</strong><span>{agent.role}</span></div><span className="choice-check">{selected ? <Check size={13} /> : null}</span>
+            </button>;
+          })}
+        </div>
+        <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={!name.trim() || members.length < 2} onClick={() => onSave({ id: uid('team'), name: name.trim(), members, createdAt: Date.now() })}>Create team</button></div>
+      </div>
+    </Modal>
+  );
+}
+
+function FilesView({ files, onUpload, cloudMode }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  async function downloadCloudFile(file) {
+    try {
+      const token = storedToken();
+      const response = await fetch(`${API_BASE}/api/files/${encodeURIComponent(file.id)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!response.ok) throw new Error('File download failed.');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url; anchor.download = file.name || 'download';
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (error) {
+      alert(error.message || 'Could not download this file.');
+    }
+  }
+  async function choose(event) {
+    const selected = [...(event.target.files || [])];
+    if (!selected.length) return;
+    setBusy(true);
+    await onUpload(selected);
+    setBusy(false);
+    event.target.value = '';
+  }
+  return (
+    <section className="content-page">
+      <header className="page-heading"><div><span className="eyebrow">Workspace storage</span><h1>Files</h1><p>Upload files once and attach them to any Ripo Bot conversation.</p></div><button className="primary-button" onClick={() => inputRef.current?.click()}>{busy ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />} Upload</button></header>
+      <input ref={inputRef} type="file" multiple hidden onChange={choose} />
+      {!cloudMode && <div className="notice-card"><Cloud size={18} /><div><strong>Device storage mode</strong><span>File metadata is saved on this device when cloud storage is unavailable. Signed-in accounts use Cloudflare's free KV storage when available.</span></div></div>}
+      <div className="file-grid">
+        {files.length === 0 ? <div className="empty-state wide-empty"><Folder size={34} /><h3>No files yet</h3><p>Drop in PDFs, text files, images, code, or documents you want the agents to work with.</p><button className="secondary-button" onClick={() => inputRef.current?.click()}>Choose files</button></div> : files.map((file) => (
+          <article className="file-card" key={file.id}>
+            <span className="file-icon">{file.type?.startsWith('image/') ? <Image size={21} /> : <FileText size={21} />}</span>
+            <div className="file-info"><strong title={file.name}>{file.name}</strong><span>{Math.max(1, Math.round((file.size || 0) / 1024))} KB · {file.source === 'cloud' ? 'Cloud' : 'This device'}</span></div>
+            {file.source === 'cloud' ? <button className="icon-button" onClick={() => downloadCloudFile(file)} aria-label="Download file"><Download size={16} /></button> : null}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ComputerView() {
+  const [status, setStatus] = useState({ loading: true, configured: false, provider: 'Ripo Computer Lite' });
+  const [command, setCommand] = useState('pwd');
+  const [lines, setLines] = useState([{ type: 'system', text: 'Ripo Computer Lite · private zero-cost workspace · type help' }]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api('/api/computer/status').then((data) => setStatus({ loading: false, ...data })).catch(() => setStatus({ loading: false, configured: false, provider: 'Ripo Computer Lite' }));
+  }, []);
+
+  async function run() {
+    const value = command.trim();
+    if (!value || busy) return;
+    setLines((current) => [...current, { type: 'input', text: `$ ${value}` }]);
+    setCommand('');
+    setBusy(true);
+    try {
+      const data = await api('/api/computer/exec', { method: 'POST', body: JSON.stringify({ command: value }) });
+      if (data.stdout === '__CLEAR__') setLines([{ type: 'system', text: 'Ripo Computer Lite · terminal cleared' }]);
+      else if (data.stdout) setLines((current) => [...current, { type: 'output', text: data.stdout }]);
+      if (data.stderr) setLines((current) => [...current, { type: 'error', text: data.stderr }]);
+    } catch (err) {
+      setLines((current) => [...current, { type: 'error', text: err.status === 503 ? 'Ripo Computer storage is temporarily unavailable.' : err.message }]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="content-page computer-page">
+      <header className="page-heading"><div><span className="eyebrow">Agent computer</span><h1>Ripo Computer</h1><p>A private Linux-style workspace for persistent files, terminal commands, and web research — built to stay on the free plan.</p></div><StateLabel state={status.configured ? 'ready' : 'waiting'} /></header>
+      <div className="computer-grid">
+        <article className="computer-preview-card">
+          <div className="computer-window-bar"><span className="traffic-lights"><i /><i /><i /></span><span>Ripo Computer</span><span className="computer-provider">{status.provider || 'Ripo Computer Lite'}</span></div>
+          <div className="terminal-screen">
+            {lines.map((line, index) => <pre key={`${line.type}-${index}`} className={`terminal-${line.type}`}>{line.text}</pre>)}
+            <div className="terminal-input-row"><span>$</span><input value={command} disabled={!status.configured || busy} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && run()} placeholder={status.configured ? 'Run a command' : 'Computer unavailable'} /><button onClick={run} disabled={!status.configured || busy}><ArrowUp size={15} /></button></div>
+          </div>
+        </article>
+        <aside className="computer-side-card">
+          <div className="side-feature"><SquareTerminal size={18} /><div><strong>Linux-style terminal</strong><span>Private per-account shell commands and a persistent virtual filesystem without a paid VM.</span></div></div>
+          <div className="side-feature"><HardDrive size={18} /><div><strong>Project files</strong><span>D1 and Workers KV keep workspace state and uploads across sessions on the free plan.</span></div></div>
+          <div className="side-feature"><Globe2 size={18} /><div><strong>Web capable</strong><span>Use search in the terminal or the agent search tool for fresh web results without a paid browser VM.</span></div></div>
+          {!status.configured && <div className="computer-warning"><strong>Computer unavailable</strong><span>Sign in again or retry in a moment. No paid Sandbox subscription is required.</span></div>}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function SettingsView({ profile, cloudMode, onLogout }) {
+  return (
+    <section className="content-page settings-page">
+      <header className="page-heading"><div><span className="eyebrow">Workspace</span><h1>Settings</h1><p>Account, model, storage, and agent-runtime status.</p></div></header>
+      <div className="settings-stack">
+        <article className="settings-card"><div className="settings-icon"><UserRound size={19} /></div><div className="settings-copy"><strong>{profile?.name || 'Ripo Bot user'}</strong><span>{profile?.email || 'No email'}</span></div><span className={cls('badge', cloudMode ? 'badge-success' : 'badge-muted')}>{cloudMode ? 'Cloud account' : 'Device mode'}</span></article>
+        <article className="settings-card"><div className="settings-icon"><Sparkles size={19} /></div><div className="settings-copy"><strong>Ripo model route</strong><span>Hugging Face primary · Cloudflare AI fallback · backup provider</span></div><span className="badge badge-success">Connected</span></article>
+        <article className="settings-card"><div className="settings-icon"><HardDrive size={19} /></div><div className="settings-copy"><strong>Workspace persistence</strong><span>{cloudMode ? 'D1 account data + Workers KV free file storage.' : 'Saved in this browser until cloud storage is provisioned.'}</span></div></article>
+        <button className="danger-button" onClick={onLogout}><LogOut size={16} /> Sign out</button>
+      </div>
+    </section>
+  );
+}
+
+function ChatView({
+  agent,
+  team,
+  agents,
+  messages,
+  sending,
+  onSend,
+  onRename,
+  onEdit,
+  files,
+  onNavigateFiles
+}) {
+  const [draft, setDraft] = useState('');
+  const [searchEnabled, setSearchEnabled] = useState(true);
+  const [computerEnabled, setComputerEnabled] = useState(false);
+  const [attached, setAttached] = useState([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(agent?.name || team?.name || '');
+  const bottomRef = useRef(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, sending]);
+  useEffect(() => { setRenameValue(agent?.name || team?.name || ''); setRenaming(false); }, [agent?.id, team?.id]);
+
+  const participants = team ? team.members.map((id) => agents.find((item) => item.id === id)).filter(Boolean) : [agent].filter(Boolean);
+
+  function submit() {
+    const value = draft.trim();
+    if (!value || sending) return;
+    onSend(value, { search: searchEnabled, computer: computerEnabled, attachments: attached });
+    setDraft('');
+    setAttached([]);
+  }
+
+  function saveRename() {
+    if (!agent || !renameValue.trim()) return;
+    onRename(renameValue.trim());
+    setRenaming(false);
+  }
+
+  return (
+    <section className="chat-pane">
+      <header className="chat-header">
+        <div className="chat-identity">
+          <div className="stacked-avatars">{participants.slice(0, 3).map((item, index) => <span key={item.id} style={{ zIndex: participants.length - index }}><Avatar agent={item} size="sm" active={index === 0} /></span>)}</div>
+          <div>
+            <div className="chat-title-row">
+              {renaming && agent ? <div className="inline-rename"><input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveRename(); if (event.key === 'Escape') setRenaming(false); }} autoFocus /><button onClick={saveRename}><Check size={14} /></button></div> : <h2>{team?.name || agent?.name || 'Ripo Bot'}</h2>}
+              {agent?.isPrimary ? <span className="main-agent-chip">Main</span> : null}
+            </div>
+            <div className="chat-subtitle">{team ? `${participants.length} agents coordinating` : agent?.role}</div>
+          </div>
+        </div>
+        <div className="chat-header-actions">
+          <StateLabel state={sending ? (searchEnabled ? 'searching' : 'thinking') : (agent?.state || 'ready')} />
+          {agent && <div className="relative"><button className="icon-button" onClick={() => setMenuOpen(!menuOpen)}><MoreHorizontal size={18} /></button>{menuOpen && <div className="popover-menu"><button onClick={() => { setRenaming(true); setMenuOpen(false); }}><Pencil size={15} /> Rename</button><button onClick={() => { onEdit(); setMenuOpen(false); }}><Settings size={15} /> Edit agent</button></div>}</div>}
+        </div>
+      </header>
+
+      <div className="chat-scroll">
+        {messages.length <= 1 && !team && (
+          <div className="chat-empty-intro">
+            <Avatar agent={agent} size="xl" />
+            <span className="eyebrow">{agent?.isPrimary ? 'Main agent' : agent?.role}</span>
+            <h1>{agent?.name}</h1>
+            <p>{agent?.description}</p>
+            <div className="quick-start-grid">
+              {QUICK_STARTS.map((item) => <button key={item.title} onClick={() => setDraft(item.prompt)}><strong>{item.title}</strong><span>{item.prompt}</span></button>)}
+            </div>
+          </div>
+        )}
+        {team && messages.length === 0 && <div className="team-empty"><div className="team-orbit">{participants.map((member) => <Avatar key={member.id} agent={member} size="lg" />)}</div><span className="eyebrow">Agent team</span><h1>{team.name}</h1><p>Send one goal. Ripo Bot will pass context through the selected agents and collect their contributions in this room.</p></div>}
+        <div className="message-list">
+          {messages.map((message) => {
+            const author = message.agentId ? agents.find((item) => item.id === message.agentId) : null;
+            const isUser = message.role === 'user';
+            return <article className={cls('message-row', isUser && 'message-user-row')} key={message.id}>
+              {!isUser && <Avatar agent={author || agent || STARTER_AGENTS[0]} size="sm" />}
+              <div className={cls('message-bubble', isUser && 'message-user')}>
+                {!isUser && <div className="message-meta"><strong>{author?.name || agent?.name || 'Ripo Bot'}</strong><span>{formatTime(message.createdAt)}</span></div>}
+                <div className="message-body">{message.content}</div>
+                {message.sources?.length ? <div className="source-strip"><Globe2 size={14} /><span>{message.sources.length} web sources used</span></div> : null}
+                {message.attachments?.length ? <div className="message-attachments">{message.attachments.map((file) => <span key={file.id}><File size={13} />{file.name}</span>)}</div> : null}
+                {isUser ? <span className="message-user-time">{formatTime(message.createdAt)}</span> : null}
+              </div>
+            </article>;
+          })}
+          {sending && <article className="message-row"><Avatar agent={agent || participants[0] || STARTER_AGENTS[0]} size="sm" /><div className="message-bubble typing-bubble"><span /><span /><span /></div></article>}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      <div className="composer-wrap">
+        {attached.length > 0 && <div className="composer-files">{attached.map((file) => <span key={file.id}><File size={13} />{file.name}<button onClick={() => setAttached(attached.filter((item) => item.id !== file.id))}><X size={12} /></button></span>)}</div>}
+        <div className="composer">
+          <textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); } }} rows={1} placeholder={team ? `Message ${team.name}` : `Message ${agent?.name || 'Ripo Bot'}`} />
+          <div className="composer-toolbar">
+            <div className="composer-tools">
+              <div className="relative">
+                <button className="tool-button" onClick={() => setMenuOpen(menuOpen === 'files' ? false : 'files')}><Paperclip size={16} /><span>Attach</span></button>
+                {menuOpen === 'files' && <div className="attachment-menu">
+                  <div className="attachment-menu-head"><strong>Workspace files</strong><button onClick={onNavigateFiles}>Manage files</button></div>
+                  {files.length ? files.slice(0, 6).map((file) => <button key={file.id} onClick={() => { if (!attached.some((item) => item.id === file.id)) setAttached([...attached, file]); setMenuOpen(false); }}><FileText size={15} /><span>{file.name}</span></button>) : <div className="attachment-empty">Upload a file first.</div>}
+                </div>}
+              </div>
+              <button className={cls('tool-button', searchEnabled && 'active')} onClick={() => setSearchEnabled(!searchEnabled)}><Globe2 size={16} /><span>Search</span></button>
+              <button className={cls('tool-button', computerEnabled && 'active')} onClick={() => setComputerEnabled(!computerEnabled)}><Computer size={16} /><span>Computer</span></button>
+            </div>
+            <button className={cls('send-button', draft.trim() && 'ready')} disabled={!draft.trim() || sending} onClick={submit}>{sending ? <Square size={15} fill="currentColor" /> : <ArrowUp size={17} />}</button>
+          </div>
+        </div>
+        <div className="composer-footnote">Ripo Bot can make mistakes. Review important work and computer actions.</div>
+      </div>
+    </section>
+  );
+}
+
+export default function App() {
+  const [auth, setAuth] = useState(() => readLocal(LOCAL_KEYS.session, null));
+  const [profile, setProfile] = useState(() => readLocal(LOCAL_KEYS.profile, null));
+  const [cloudMode, setCloudMode] = useState(false);
+  const [onboarded, setOnboarded] = useState(() => readLocal(LOCAL_KEYS.onboarded, false));
+  const [agents, setAgents] = useState(() => readLocal(LOCAL_KEYS.agents, STARTER_AGENTS));
+  const [conversations, setConversations] = useState(() => readLocal(LOCAL_KEYS.conversations, DEFAULT_CONVERSATIONS));
+  const [teams, setTeams] = useState(() => readLocal(LOCAL_KEYS.teams, []));
+  const [files, setFiles] = useState(() => readLocal(LOCAL_KEYS.files, []));
+  const [view, setView] = useState('chat');
+  const [activeAgentId, setActiveAgentId] = useState('ripo');
+  const [activeTeamId, setActiveTeamId] = useState(null);
+  const [mobileNav, setMobileNav] = useState(false);
+  const [modal, setModal] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [toast, setToast] = useState('');
+  const [syncState, setSyncState] = useState('saved');
+
+  const activeAgent = agents.find((item) => item.id === activeAgentId) || agents[0];
+  const activeTeam = teams.find((item) => item.id === activeTeamId) || null;
+  const threadKey = activeTeam ? `team:${activeTeam.id}` : activeAgent?.id;
+  const messages = conversations[threadKey] || [];
+
+  useEffect(() => {
+    api('/api/auth/session').then((data) => {
+      if (data?.user) {
+        const previous = readLocal(LOCAL_KEYS.session, null);
+        const next = { profile: data.user, cloud: true, token: previous?.token || '', expiresAt: previous?.expiresAt || null };
+        setAuth(next); setProfile(data.user); setCloudMode(true);
+        writeLocal(LOCAL_KEYS.session, next); writeLocal(LOCAL_KEYS.profile, data.user);
+        return api('/api/state').then((state) => {
+          if (state?.agents?.length) setAgents(state.agents);
+          if (state?.conversations) setConversations(state.conversations);
+          if (state?.teams) setTeams(state.teams);
+          if (typeof state?.onboarded === 'boolean') setOnboarded(state.onboarded);
+          return api('/api/files').then((dataFiles) => { if (Array.isArray(dataFiles?.files)) setFiles(dataFiles.files); }).catch(() => {});
+        });
+      }
+      return null;
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => { writeLocal(LOCAL_KEYS.agents, agents); }, [agents]);
+  useEffect(() => { writeLocal(LOCAL_KEYS.conversations, conversations); }, [conversations]);
+  useEffect(() => { writeLocal(LOCAL_KEYS.teams, teams); }, [teams]);
+  useEffect(() => { writeLocal(LOCAL_KEYS.files, files); }, [files]);
+  useEffect(() => { writeLocal(LOCAL_KEYS.onboarded, onboarded); }, [onboarded]);
+
+  useEffect(() => {
+    if (!cloudMode || !auth || !onboarded) return undefined;
+    setSyncState('saving');
+    const timer = setTimeout(() => {
+      api('/api/state', {
+        method: 'PUT',
+        body: JSON.stringify({ agents, conversations, teams, onboarded })
+      }).then(() => setSyncState('saved')).catch(() => setSyncState('local'));
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [agents, conversations, teams, onboarded, cloudMode, auth]);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(''), 2400);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  function authenticated({ profile: nextProfile, cloud, token = '', expiresAt = null }) {
+    const next = { profile: nextProfile, cloud, token, expiresAt };
+    setAuth(next); setProfile(nextProfile); setCloudMode(cloud);
+    writeLocal(LOCAL_KEYS.session, next); writeLocal(LOCAL_KEYS.profile, nextProfile);
+  }
+
+  function finishOnboarding(data) {
+    const selectedIds = new Set(['ripo', ...(data.starter || [])]);
+    setAgents(STARTER_AGENTS.filter((agent) => selectedIds.has(agent.id)));
+    const nextProfile = { ...(profile || {}), name: data.displayName, goal: data.goal };
+    setProfile(nextProfile); writeLocal(LOCAL_KEYS.profile, nextProfile);
+    setOnboarded(true);
+  }
+
+  function navigate(next) {
+    setView(next); setMobileNav(false);
+    if (next !== 'chat') { setActiveTeamId(null); }
+  }
+
+  function openAgent(agentId) {
+    setActiveAgentId(agentId); setActiveTeamId(null); setView('chat'); setMobileNav(false);
+  }
+
+  function openTeam(teamId) {
+    setActiveTeamId(teamId); setView('chat'); setMobileNav(false);
+  }
+
+  function createAgent(form) {
+    const next = { ...form, id: uid('agent'), state: 'ready', isPrimary: false };
+    setAgents((current) => [...current, next]);
+    setConversations((current) => ({ ...current, [next.id]: [{ id: uid('welcome'), role: 'assistant', content: `I’m ${next.name}. ${next.description || 'Tell me what you want me to handle.'}`, createdAt: new Date().toISOString(), agentId: next.id }] }));
+    setModal(null); openAgent(next.id); setToast(`${next.name} joined your team`);
+  }
+
+  function saveAgent(form) {
+    setAgents((current) => current.map((item) => item.id === activeAgent.id ? { ...item, ...form } : item));
+    setModal(null); setToast('Agent updated');
+  }
+
+  function renameAgent(name) {
+    setAgents((current) => current.map((item) => item.id === activeAgent.id ? { ...item, name } : item));
+    setToast(`Renamed to ${name}`);
+  }
+
+  function createTeam(team) {
+    setTeams((current) => [...current, team]);
+    setConversations((current) => ({ ...current, [`team:${team.id}`]: [] }));
+    setModal(null); openTeam(team.id); setToast(`${team.name} created`);
+  }
+
+  async function uploadFiles(selected) {
+    const uploaded = [];
+    for (const file of selected) {
+      if (cloudMode) {
+        try {
+          const body = new FormData();
+          body.append('file', file);
+          const result = await api('/api/files', { method: 'POST', body });
+          if (result?.file) { uploaded.push(result.file); continue; }
+        } catch {
+          // Fall back to device metadata below.
+        }
+      }
+      uploaded.push({ id: uid('file'), name: file.name, size: file.size, type: file.type, source: 'device', createdAt: Date.now() });
+    }
+    setFiles((current) => [...uploaded, ...current]);
+    setToast(`${uploaded.length} file${uploaded.length === 1 ? '' : 's'} added`);
+  }
+
+  async function sendSingleAgent(agent, text, options, history, targetKey) {
+    const search = Boolean(options.search);
+    setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: search ? 'searching' : 'thinking' } : item));
+    const payloadMessages = history.slice(-18).map((message) => ({ role: message.role, content: message.content }));
+    const result = await api('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        agentName: agent.name,
+        agentRole: agent.role,
+        agentInstructions: agent.instructions || '',
+        messages: payloadMessages,
+        search,
+        computer: Boolean(options.computer),
+        attachments: (options.attachments || []).map((file) => ({ id: file.id, name: file.name, type: file.type })),
+        allowAgentAdmin: Boolean(agent.isPrimary),
+        allowRename: Boolean(agent.canRenameSelf)
+      })
+    });
+    if (Array.isArray(result.actions)) {
+      for (const action of result.actions) {
+        if (action.type === 'rename_agent' && action.name) {
+          const nextName = String(action.name).trim().slice(0, 80);
+          const targetName = String(action.targetName || '').trim().toLowerCase();
+          if (nextName && agent.isPrimary && targetName) {
+            setAgents((current) => current.map((item) => item.name.toLowerCase() === targetName ? { ...item, name: nextName } : item));
+          } else if (nextName && agent.canRenameSelf) {
+            setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, name: nextName } : item));
+          }
+        }
+        if (action.type === 'create_agent' && agent.isPrimary && action.name) {
+          const newAgent = {
+            id: uid('agent'),
+            name: String(action.name).trim().slice(0, 80),
+            role: String(action.role || 'Specialist agent').trim().slice(0, 120),
+            description: String(action.description || 'Created by Ripo Bot for this workspace.').trim().slice(0, 220),
+            instructions: String(action.instructions || 'Help with the assigned specialty.').trim().slice(0, 1800),
+            avatar: AVATAR_PRESETS.some((preset) => preset.id === action.avatar) ? action.avatar : 'nova',
+            state: 'ready',
+            canRenameSelf: true,
+            isPrimary: false
+          };
+          setAgents((current) => current.some((item) => item.name.toLowerCase() === newAgent.name.toLowerCase()) ? current : [...current, newAgent]);
+          setConversations((current) => current[newAgent.id] ? current : { ...current, [newAgent.id]: [] });
+          setToast(`${newAgent.name} joined your team`);
+        }
+        if (action.type === 'create_team' && agent.isPrimary && action.name && Array.isArray(action.memberNames)) {
+          const wanted = action.memberNames.map((name) => String(name).toLowerCase());
+          const memberIds = agents.filter((item) => wanted.includes(item.name.toLowerCase())).map((item) => item.id);
+          if (memberIds.length >= 2) {
+            const newTeam = { id: uid('team'), name: String(action.name).trim().slice(0, 80), members: memberIds, createdAt: Date.now() };
+            setTeams((current) => [...current, newTeam]);
+            setConversations((current) => ({ ...current, [`team:${newTeam.id}`]: current[`team:${newTeam.id}`] || [] }));
+            setToast(`${newTeam.name} created`);
+          }
+        }
+      }
+    }
+    const reply = {
+      id: uid('assistant'), role: 'assistant', content: result.reply,
+      createdAt: new Date().toISOString(), agentId: agent.id,
+      sources: result.sources || []
+    };
+    setConversations((current) => ({ ...current, [targetKey]: [...(current[targetKey] || []), reply] }));
+    setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: 'done' } : item));
+    setTimeout(() => setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: 'ready' } : item)), 1200);
+    return reply;
+  }
+
+  async function sendMessage(text, options) {
+    if (!threadKey || sending) return;
+    const userMessage = { id: uid('user'), role: 'user', content: text, createdAt: new Date().toISOString(), attachments: options.attachments || [] };
+    const initialHistory = [...messages, userMessage];
+    setConversations((current) => ({ ...current, [threadKey]: [...(current[threadKey] || []), userMessage] }));
+    setSending(true);
+    try {
+      if (activeTeam) {
+        let rolling = initialHistory;
+        const memberAgents = activeTeam.members.map((id) => agents.find((item) => item.id === id)).filter(Boolean);
+        for (const member of memberAgents) {
+          const teamPrompt = member.id === memberAgents[0]?.id
+            ? text
+            : `Continue the team task. Read the previous agents' contributions, add what your specialty can improve, and do not repeat them unnecessarily. Original task: ${text}`;
+          const teamHistory = [...rolling.slice(-12), { id: uid('handoff'), role: 'user', content: teamPrompt, createdAt: new Date().toISOString() }];
+          const reply = await sendSingleAgent(member, teamPrompt, options, teamHistory, threadKey);
+          rolling = [...rolling, reply];
+        }
+      } else {
+        await sendSingleAgent(activeAgent, text, options, initialHistory, threadKey);
+      }
+    } catch (err) {
+      const errorMessage = { id: uid('error'), role: 'assistant', content: err.message || 'Ripo Bot could not reach the model.', createdAt: new Date().toISOString(), agentId: activeAgent?.id };
+      setConversations((current) => ({ ...current, [threadKey]: [...(current[threadKey] || []), errorMessage] }));
+      if (activeAgent) setAgents((current) => current.map((item) => item.id === activeAgent.id ? { ...item, state: 'error' } : item));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function logout() {
+    if (cloudMode) api('/api/auth/logout', { method: 'POST', body: '{}' }).catch(() => {});
+    setAuth(null); setCloudMode(false); setProfile(null); setOnboarded(false);
+    Object.values(LOCAL_KEYS).forEach((key) => { try { localStorage.removeItem(key); } catch {} });
+  }
+
+  const visibleAgents = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) return agents;
+    return agents.filter((agent) => `${agent.name} ${agent.role}`.toLowerCase().includes(query));
+  }, [agents, searchText]);
+
+  if (!auth) return <AuthScreen onAuthenticated={authenticated} />;
+  if (!onboarded) return <Onboarding profile={profile || auth.profile} onDone={finishOnboarding} />;
+
+  return (
+    <div className="app-shell">
+      <aside className={cls('sidebar', mobileNav && 'mobile-open')}>
+        <div className="sidebar-top">
+          <div className="brand-lockup"><span className="brand-mark"><Sparkles size={17} /></span><span>Ripo Bot</span></div>
+          <button className="icon-button sidebar-close" onClick={() => setMobileNav(false)}><X size={18} /></button>
+        </div>
+        <button className="new-task-button" onClick={() => { openAgent('ripo'); setConversations((current) => ({ ...current, ripo: [] })); }}><Plus size={17} /><span>New task</span><kbd>⌘ N</kbd></button>
+        <div className="sidebar-search"><Search size={15} /><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search bots" /><kbd>⌘ K</kbd></div>
+
+        <nav className="sidebar-nav primary-nav">
+          <button className={cls(view === 'chat' && !activeTeamId && activeAgentId === 'ripo' && 'active')} onClick={() => openAgent('ripo')}><MessageSquare size={17} /><span>Ripo Bot</span></button>
+          <button className={cls(view === 'files' && 'active')} onClick={() => navigate('files')}><Folder size={17} /><span>Files</span><em>{files.length || ''}</em></button>
+          <button className={cls(view === 'computer' && 'active')} onClick={() => navigate('computer')}><Computer size={17} /><span>Computer</span></button>
+        </nav>
+
+        <div className="sidebar-section">
+          <div className="section-label"><span>Bots</span><button onClick={() => setModal('new-agent')} aria-label="Create agent"><Plus size={14} /></button></div>
+          <div className="agent-list">
+            {visibleAgents.map((agent) => <button key={agent.id} className={cls('agent-list-item', view === 'chat' && !activeTeamId && activeAgentId === agent.id && 'active')} onClick={() => openAgent(agent.id)}><Avatar agent={agent} size="xs" /><span><strong>{agent.name}</strong><small>{agent.state === 'ready' ? agent.role : agent.state}</small></span>{agent.state !== 'ready' ? <i className={`tiny-state state-${agent.state}`} /> : null}</button>)}
+          </div>
+        </div>
+
+        <div className="sidebar-section teams-section">
+          <div className="section-label"><span>Teams</span><button onClick={() => setModal('new-team')} aria-label="Create team"><Plus size={14} /></button></div>
+          <div className="team-list">
+            {teams.length === 0 ? <button className="create-team-hint" onClick={() => setModal('new-team')}><Users size={15} /> Create a team</button> : teams.map((team) => <button key={team.id} className={cls(view === 'chat' && activeTeamId === team.id && 'active')} onClick={() => openTeam(team.id)}><Users size={15} /><span>{team.name}</span><small>{team.members.length}</small></button>)}
+          </div>
+        </div>
+
+        <div className="sidebar-footer">
+          <button className={cls('sync-indicator', syncState === 'local' && 'local')}><Cloud size={14} /><span>{cloudMode ? (syncState === 'saving' ? 'Saving…' : syncState === 'local' ? 'Saved locally' : 'Synced') : 'Device mode'}</span></button>
+          <button className={cls('profile-button', view === 'settings' && 'active')} onClick={() => navigate('settings')}><span className="profile-avatar">{(profile?.name || 'R').slice(0, 1).toUpperCase()}</span><span><strong>{profile?.name || 'Ripo user'}</strong><small>{cloudMode ? 'Cloud workspace' : 'This device'}</small></span><Settings size={15} /></button>
+        </div>
+      </aside>
+      {mobileNav && <div className="mobile-scrim" onClick={() => setMobileNav(false)} />}
+
+      <main className="main-shell">
+        <button className="mobile-menu-button" onClick={() => setMobileNav(true)}><Menu size={19} /></button>
+        {view === 'chat' && <ChatView agent={activeAgent} team={activeTeam} agents={agents} messages={messages} sending={sending} onSend={sendMessage} onRename={renameAgent} onEdit={() => setModal('edit-agent')} files={files} onNavigateFiles={() => navigate('files')} />}
+        {view === 'files' && <FilesView files={files} onUpload={uploadFiles} cloudMode={cloudMode} />}
+        {view === 'computer' && <ComputerView />}
+        {view === 'settings' && <SettingsView profile={profile} cloudMode={cloudMode} onLogout={logout} />}
+      </main>
+
+      {modal === 'new-agent' && <AgentEditor onClose={() => setModal(null)} onSave={createAgent} />}
+      {modal === 'edit-agent' && activeAgent && <AgentEditor initialAgent={activeAgent} onClose={() => setModal(null)} onSave={saveAgent} />}
+      {modal === 'new-team' && <TeamEditor agents={agents} onClose={() => setModal(null)} onSave={createTeam} />}
+      {toast && <div className="toast"><CheckCircle2 size={16} />{toast}</div>}
+    </div>
+  );
+}

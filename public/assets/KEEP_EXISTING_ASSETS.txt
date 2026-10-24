@@ -1,0 +1,7 @@
+This upgrade references the existing files already in riporipoteam-ctrl/ripobot-app:
+- ripobot-mascot.png
+- ripobot-icon.png
+- ripobot-icon-192.png
+- ripobot-icon-512.png
+
+Keep those existing binary assets when applying this package to the repo.

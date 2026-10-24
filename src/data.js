@@ -1,95 +1,62 @@
-export const DEFAULT_AGENTS = [
+export const AVATAR_PRESETS = [
+  { id: 'ripo', label: 'Ripo', tone: 'cyan', glyph: '◈' },
+  { id: 'nova', label: 'Nova', tone: 'violet', glyph: '✦' },
+  { id: 'ember', label: 'Ember', tone: 'amber', glyph: '◆' },
+  { id: 'mint', label: 'Mint', tone: 'mint', glyph: '●' },
+  { id: 'wave', label: 'Wave', tone: 'blue', glyph: '≈' },
+  { id: 'pixel', label: 'Pixel', tone: 'rose', glyph: '▦' },
+  { id: 'orbit', label: 'Orbit', tone: 'indigo', glyph: '◎' },
+  { id: 'mono', label: 'Mono', tone: 'slate', glyph: '◇' }
+];
+
+export const STARTER_AGENTS = [
   {
     id: 'ripo',
-    name: 'Ripo',
-    title: 'Chief of staff',
-    description: 'Keeps the team organized and turns a rough idea into a clear next step.',
-    color: 'sky',
-    image: true,
-    instructions: 'Be a friendly, thoughtful chief of staff. Help turn open-ended goals into clear, useful next steps. Be concise unless more detail is requested.'
+    name: 'Ripo Bot',
+    role: 'Main agent',
+    description: 'Your lead agent. Plans work, delegates to the team, searches when needed, and keeps everything moving.',
+    instructions: 'Act as the user’s main AI agent. Be practical, proactive, clear, and concise. Delegate to specialist agents when useful. Never claim a tool ran unless the app supplied a tool result.',
+    avatar: 'ripo',
+    state: 'ready',
+    canRenameSelf: true,
+    isPrimary: true
   },
   {
     id: 'scout',
     name: 'Scout',
-    title: 'Research partner',
-    description: 'Builds useful briefs, compares ideas, and helps you get to the good questions.',
-    color: 'violet',
-    instructions: 'Act as a careful research partner. Separate what is known from what is uncertain. Do not claim you searched the web or checked a source unless a tool result is provided.'
+    role: 'Research agent',
+    description: 'Searches, compares sources, and turns messy information into a clean brief.',
+    instructions: 'Act as a careful research agent. Separate facts from uncertainty, prefer current information, and cite tool results when they are provided.',
+    avatar: 'nova',
+    state: 'ready',
+    canRenameSelf: true
   },
   {
-    id: 'pixel',
-    name: 'Pixel',
-    title: 'Creative studio',
-    description: 'Finds a fresh angle for names, stories, launches, and content.',
-    color: 'coral',
-    instructions: 'Act as a warm, imaginative creative partner. Give specific options with distinct points of view, and explain the reasoning briefly.'
-  },
-  {
-    id: 'bolt',
-    name: 'Bolt',
-    title: 'Build companion',
-    description: 'Breaks technical work into practical plans and clear handoffs.',
-    color: 'mint',
-    instructions: 'Act as a practical technical partner. Give a clear plan, call out assumptions, and never claim to have changed code or systems unless a tool result proves it.'
-  },
-  {
-    id: 'pip',
-    name: 'Pip',
-    title: 'Community companion',
-    description: 'Keeps the tone kind, welcoming, and easy for everyone to join.',
-    color: 'coral',
-    instructions: 'Be a calm, thoughtful community companion. Make people feel welcome, use simple language, and keep a warm, reassuring tone.'
+    id: 'forge',
+    name: 'Forge',
+    role: 'Build agent',
+    description: 'Handles coding plans, technical breakdowns, files, and computer work.',
+    instructions: 'Act as a technical builder. Produce robust implementation plans, inspect files carefully, and explain what changed. Never invent successful execution.',
+    avatar: 'mint',
+    state: 'ready',
+    canRenameSelf: true
   }
 ];
 
-export const DEFAULT_MESSAGES = {
+export const DEFAULT_CONVERSATIONS = {
   ripo: [
     {
       id: 'welcome-ripo',
       role: 'assistant',
-      content: 'Hey, I’m Ripo. Tell me what you’re trying to get done and I’ll help you find a clear next step.',
-      time: 'Welcome'
+      content: 'I’m Ripo Bot. Give me a goal and I can handle it myself or pull in the right agents.',
+      createdAt: new Date().toISOString()
     }
   ]
 };
 
-export const DEFAULT_TASKS = [];
-
-export const DEFAULT_WORKFLOWS = [
-  {
-    id: 'weekly-pulse',
-    title: 'Weekly community pulse',
-    category: 'Community',
-    description: 'Turn a week of updates into a clear recap and a short list of next steps.',
-    prompt: 'Draft a friendly weekly community recap. Organize it into highlights, what is coming next, and any decisions the team still needs to make.',
-    agentId: 'ripo',
-    accent: 'blue'
-  },
-  {
-    id: 'launch-kit',
-    title: 'Launch idea to kit',
-    category: 'Marketing',
-    description: 'Create a launch outline, announcement, and a few social post options.',
-    prompt: 'Help me turn a product or feature idea into a launch kit. Start with a concise positioning angle, then draft an announcement and three short social post options. Ask me for details you need.',
-    agentId: 'pixel',
-    accent: 'coral'
-  },
-  {
-    id: 'research-brief',
-    title: 'Research brief',
-    category: 'Research',
-    description: 'Frame a question, identify what needs checking, and prepare a useful brief.',
-    prompt: 'Help me build a research brief. First clarify the question, then propose what to investigate, useful comparison criteria, and a clean report structure. Do not claim to have researched sources you cannot access.',
-    agentId: 'scout',
-    accent: 'violet'
-  }
-];
-
-export const INTEGRATIONS = [
-  { name: 'Discord', detail: 'Bring your community bot and workspace together.', label: 'RipoBot home' },
-  { name: 'Google Drive', detail: 'Give agents access to the files you choose.', label: 'Files' },
-  { name: 'GitHub', detail: 'Keep project notes and coding handoffs close.', label: 'Developer tools' },
-  { name: 'Slack', detail: 'Bring an agent into a team channel.', label: 'Team chat' },
-  { name: 'Gmail', detail: 'Draft replies and organize follow-ups.', label: 'Email' },
-  { name: 'MCP servers', detail: 'Add tools through a Model Context Protocol endpoint.', label: 'Custom tools' }
+export const QUICK_STARTS = [
+  { title: 'Research something', prompt: 'Search the web and build me a short brief about ' },
+  { title: 'Build a plan', prompt: 'Turn this idea into a practical step-by-step plan: ' },
+  { title: 'Use the team', prompt: 'Create a small agent team for this task and split the work: ' },
+  { title: 'Work with files', prompt: 'Review the files I attach and tell me the important findings.' }
 ];
