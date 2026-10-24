@@ -1017,75 +1017,131 @@ function ChatView({
   onEdit,
   onOpenDetails,
   onStartCall,
-  files,
-  onNavigateFiles
+  onShowBots,
+  onUploadFiles,
+  files
 }) {
   const [draft, setDraft] = useState('');
   const [attached, setAttached] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(agent?.name || team?.name || '');
   const bottomRef = useRef(null);
+  const photoInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, sending]);
   useEffect(() => { setRenameValue(agent?.name || team?.name || ''); setRenaming(false); }, [agent?.id, team?.id]);
+
   const participants = team ? team.members.map((id) => agents.find((item) => item.id === id)).filter(Boolean) : [agent].filter(Boolean);
+  const primary = participants[0] || agent;
+  const title = team?.name || agent?.name || 'Ripo Bot';
+  const firstDatedMessage = messages.find((message) => message.createdAt);
 
   function submit() {
     const value = draft.trim();
     if (!value || sending) return;
     onSend(value, { attachments: attached });
-    setDraft(''); setAttached([]);
+    setDraft('');
+    setAttached([]);
   }
-  function saveRename() { if (!agent || !renameValue.trim()) return; onRename(renameValue.trim()); setRenaming(false); }
+
+  function saveRename() {
+    if (!agent || !renameValue.trim()) return;
+    onRename(renameValue.trim());
+    setRenaming(false);
+  }
+
+  async function pickAndUpload(event) {
+    const selected = [...(event.target.files || [])];
+    event.target.value = '';
+    if (!selected.length || uploadBusy) return;
+    setUploadBusy(true);
+    try {
+      const uploaded = await onUploadFiles(selected);
+      if (Array.isArray(uploaded) && uploaded.length) {
+        setAttached((current) => {
+          const existing = new Set(current.map((file) => file.id));
+          return [...current, ...uploaded.filter((file) => !existing.has(file.id))];
+        });
+      }
+      setMenuOpen(false);
+    } finally {
+      setUploadBusy(false);
+    }
+  }
 
   return (
-    <section className="chat-v4">
-      <header className="chat-sticky-head">
-        <div className="chat-head-spacer" />
-        <button className="sticky-bot-identity" onClick={onOpenDetails}>
-          <div className="sticky-avatar-stack">{participants.slice(0,3).map((item,index)=><span key={item.id} style={{zIndex:participants.length-index}}><Avatar agent={item} size={index===0?'md':'xs'} active={index===0}/></span>)}</div>
-          <div className="sticky-bot-name">{renaming&&agent?<div className="inline-rename"><input value={renameValue} onChange={(event)=>setRenameValue(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')saveRename();}} autoFocus/><button onClick={(event)=>{event.stopPropagation();saveRename();}}><Check size={13}/></button></div>:<strong>{team?.name||agent?.name||'Ripo Bot'}</strong>}<span>{sending?'Working…':team?`${participants.length} bots`:agent?.role}</span></div>
+    <section className="chat-v5">
+      <header className="chat-head-v5">
+        <button className="chat-back-v5" onClick={onShowBots} aria-label="Back to bots"><ArrowLeft size={20}/></button>
+        <button className="chat-bot-pill-v5" onClick={onOpenDetails}>
+          <span className="chat-pill-avatars">
+            {participants.slice(0,3).map((item,index)=><span key={item.id} style={{zIndex:participants.length-index}}><Avatar agent={item} size="xs"/></span>)}
+          </span>
+          {renaming&&agent
+            ? <span className="inline-rename"><input value={renameValue} onChange={(event)=>setRenameValue(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')saveRename();}} autoFocus/><button onClick={(event)=>{event.stopPropagation();saveRename();}}><Check size={13}/></button></span>
+            : <strong>{title}</strong>}
         </button>
-        <div className="chat-head-actions"><button className="round-action" onClick={onStartCall}><Phone size={17}/></button>{agent&&<div className="relative"><button className="round-action" onClick={()=>setMenuOpen(menuOpen==='more'?false:'more')}><MoreHorizontal size={18}/></button>{menuOpen==='more'&&<div className="popover-menu head-menu"><button onClick={()=>{setRenaming(true);setMenuOpen(false);}}><Pencil size={15}/>Rename</button><button onClick={()=>{onEdit();setMenuOpen(false);}}><Settings size={15}/>Edit bot</button><button onClick={()=>{onOpenDetails();setMenuOpen(false);}}><Computer size={15}/>Bot details</button></div>}</div>}</div>
+        <div className="chat-head-tools-v5">
+          <button className="chat-tool-v5" onClick={onOpenDetails} aria-label="Open bot computer"><Computer size={18}/></button>
+          {agent&&<div className="relative chat-more-wrap"><button className="chat-more-v5" onClick={()=>setMenuOpen(menuOpen==='more'?false:'more')} aria-label="More"><MoreHorizontal size={18}/></button>{menuOpen==='more'&&<div className="popover-menu head-menu v5-head-menu"><button onClick={()=>{setRenaming(true);setMenuOpen(false);}}><Pencil size={15}/>Rename</button><button onClick={()=>{onEdit();setMenuOpen(false);}}><Settings size={15}/>Edit bot</button><button onClick={()=>{onStartCall();setMenuOpen(false);}}><Phone size={15}/>Start call</button></div>}</div>}
+        </div>
       </header>
 
-      <div className="chat-scroll-v4">
-        {messages.length <= 1 && !team && <div className="chat-welcome-v4"><Avatar agent={agent} size="xl"/><h1>{agent?.name}</h1><p>{agent?.description}</p><div className="starter-pills">{QUICK_STARTS.slice(0,4).map((item)=><button key={item.title} onClick={()=>setDraft(item.prompt)}>{item.title}</button>)}</div></div>}
-        {team && messages.length===0 && <div className="chat-welcome-v4"><div className="team-orbit">{participants.map((member)=><Avatar key={member.id} agent={member} size="lg"/>)}</div><h1>{team.name}</h1><p>Message the group once. Bots can pass context and handoffs between each other in this thread.</p></div>}
-        <div className="message-list-v4">{messages.map((message)=>{
-          const author=message.agentId?agents.find((item)=>item.id===message.agentId):null;
-          const user=message.role==='user';
-          return <article className={cls('bubble-row-v4',user&&'user')} key={message.id}>
-            {!user && author && <Avatar agent={author} size="xs"/>}
-            <div className={cls('bubble-v4',user&&'user-bubble')}>
-              {!user&&author&&<div className="bubble-author">{author.name}</div>}
-              <div className="bubble-text">{message.content}</div>
-              {message.sources?.length?<button className="bubble-tool-note"><Globe2 size={13}/>{message.sources.length} sources</button>:null}
-              {message.attachments?.length?<div className="bubble-files">{message.attachments.map((file)=><span key={file.id}><FileText size={13}/>{file.name}</span>)}</div>:null}
-              {message.generatedFiles?.length?<div className="generated-media">{message.generatedFiles.map((file)=><SecureMedia key={file.id} file={file}/>)}</div>:null}
-            </div>
-          </article>;
-        })}
-        {sending&&<article className="bubble-row-v4"><Avatar agent={agent||participants[0]} size="xs"/><div className="bubble-v4 typing-bubble"><span/><span/><span/></div></article>}
-        <div ref={bottomRef}/>
+      <div className="chat-scroll-v5">
+        {firstDatedMessage && <div className="chat-date-v5">{new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(firstDatedMessage.createdAt))}</div>}
+        {messages.length <= 1 && !team && <div className="chat-empty-v5"><Avatar agent={agent} size="xl"/><h1>{agent?.name}</h1><p>{agent?.description}</p></div>}
+        {team && messages.length===0 && <div className="chat-empty-v5"><div className="team-orbit">{participants.map((member)=><Avatar key={member.id} agent={member} size="lg"/>)}</div><h1>{team.name}</h1><p>Message the team once and the bots coordinate inside this thread.</p></div>}
+        <div className="message-list-v5">
+          {messages.map((message)=>{
+            const user=message.role==='user';
+            return <article className={cls('bubble-row-v5',user&&'user')} key={message.id}>
+              <div className={cls('bubble-v5',user&&'user-bubble-v5')}>
+                <div className="bubble-text">{message.content}</div>
+                {message.sources?.length?<button className="bubble-tool-note"><Globe2 size={13}/>{message.sources.length} sources</button>:null}
+                {message.attachments?.length?<div className="bubble-files-v5">{message.attachments.map((file)=><span key={file.id}><FileText size={14}/><span>{file.name}</span></span>)}</div>:null}
+                {message.generatedFiles?.length?<div className="generated-media-v5">{message.generatedFiles.map((file)=><SecureMedia key={file.id} file={file}/>)}</div>:null}
+              </div>
+            </article>;
+          })}
+          {sending&&<article className="bubble-row-v5"><div className="bubble-v5 typing-bubble-v5"><span/><span/><span/></div></article>}
+          <div ref={bottomRef}/>
         </div>
       </div>
 
-      <div className="composer-v4-wrap">
-        {attached.length>0&&<div className="composer-files">{attached.map((file)=><span key={file.id}><File size={13}/>{file.name}<button onClick={()=>setAttached(attached.filter((item)=>item.id!==file.id))}><X size={12}/></button></span>)}</div>}
-        <div className="composer-v4">
-          <div className="relative"><button className="composer-plus" onClick={()=>setMenuOpen(menuOpen==='files'?false:'files')}><Plus size={20}/></button>{menuOpen==='files'&&<div className="attachment-menu v4-attachments"><div className="attachment-menu-head"><strong>Workspace files</strong><button onClick={onNavigateFiles}>Manage</button></div>{files.length?files.slice(0,8).map((file)=><button key={file.id} onClick={()=>{if(!attached.some((item)=>item.id===file.id))setAttached([...attached,file]);setMenuOpen(false);}}><FileText size={15}/><span>{file.name}</span></button>):<div className="attachment-empty">Upload a file first.</div>}</div>}</div>
-          <textarea value={draft} onChange={(event)=>setDraft(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submit();}}} rows={1} placeholder={team?`Message ${team.name}`:`Ask ${agent?.name||'Ripo Bot'}`}/>
-          <button className="composer-call" onClick={onStartCall}><Mic size={18}/></button>
-          <button className={cls('composer-send',draft.trim()&&'ready')} onClick={submit} disabled={!draft.trim()||sending}>{sending?<Square size={14} fill="currentColor"/>:<ArrowUp size={17}/>}</button>
+      <div className="composer-v5-wrap">
+        <input ref={photoInputRef} className="composer-photo-input" type="file" accept="image/*" multiple hidden onChange={pickAndUpload}/>
+        <input ref={fileInputRef} className="composer-file-input" type="file" multiple hidden onChange={pickAndUpload}/>
+        {attached.length>0&&<div className="composer-files-v5">{attached.map((file)=><span key={file.id}><File size={13}/><span>{file.name}</span><button onClick={()=>setAttached(attached.filter((item)=>item.id!==file.id))}><X size={12}/></button></span>)}</div>}
+        {menuOpen==='attach'&&<div className="attachment-menu-v5">
+          <button onClick={()=>photoInputRef.current?.click()}><span className="attach-icon-v5"><Image size={18}/></span><span><strong>Photo Library</strong><small>Choose images from your phone</small></span></button>
+          <button onClick={()=>fileInputRef.current?.click()}><span className="attach-icon-v5"><Folder size={18}/></span><span><strong>Files</strong><small>Choose documents or other files</small></span></button>
+        </div>}
+        <div className="composer-row-v5">
+          <button className="composer-plus-v5" onClick={()=>setMenuOpen(menuOpen==='attach'?false:'attach')} aria-label="Attach">
+            {uploadBusy?<LoaderCircle className="spin" size={19}/>:<Plus size={21}/>}
+          </button>
+          <div className="composer-pill-v5">
+            <textarea
+              value={draft}
+              onChange={(event)=>setDraft(event.target.value)}
+              onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submit();}}}
+              rows={1}
+              placeholder={`Ask ${title}`}
+            />
+            {draft.trim()
+              ? <button className="composer-send-v5" onClick={submit} disabled={sending}><ArrowUp size={17}/></button>
+              : <button className="composer-mic-v5" onClick={onStartCall} aria-label="Start voice call"><Mic size={17}/></button>}
+          </div>
         </div>
-        <small className="auto-tools-note">Search, browser, computer, and image tools run automatically when the bot needs them.</small>
       </div>
 
       <aside className="desktop-bot-rail">
         <section className="rail-profile" onClick={onOpenDetails}>
-          <Avatar agent={agent || participants[0]} size="lg" />
-          <div><strong>{team?.name || agent?.name || 'Ripo Bot'}</strong><span>{team ? `${participants.length} bots coordinating` : agent?.role}</span></div>
+          <Avatar agent={primary} size="lg" />
+          <div><strong>{title}</strong><span>{team ? `${participants.length} bots coordinating` : agent?.role}</span></div>
           <ChevronRight size={17} />
         </section>
         <section className="rail-block">
@@ -1099,14 +1155,9 @@ function ChatView({
           <button className="rail-link" onClick={onOpenDetails}>View computer <ChevronRight size={14}/></button>
         </section>
         <section className="rail-block">
-          <div className="rail-block-head"><span>Routines</span><Plus size={14}/></div>
-          <div className="rail-routine"><span>↻</span><div><strong>Morning briefing</strong><small>Ready to configure in chat</small></div></div>
-          <div className="rail-routine"><span>↻</span><div><strong>Weekly review</strong><small>Not scheduled</small></div></div>
-        </section>
-        <section className="rail-block">
           <div className="rail-block-head"><span>Workspace</span><span>{files.length} files</span></div>
           <div className="rail-mini-media">{files.filter((file)=>/^image\//.test(file.type||'')).slice(0,4).map((file)=><SecureMedia key={file.id} file={file}/>)}</div>
-          {!files.some((file)=>/^image\//.test(file.type||'')) && <p className="rail-empty-copy">Images generated or uploaded here will appear in this panel.</p>}
+          {!files.some((file)=>/^image\//.test(file.type||'')) && <p className="rail-empty-copy">Images generated or uploaded here appear here automatically.</p>}
         </section>
       </aside>
     </section>
