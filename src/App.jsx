@@ -37,7 +37,31 @@ import {
   UserRound,
   Users,
   X,
-  Zap
+  Zap,
+  Palette,
+  WalletCards,
+  Plug,
+  Mic,
+  Phone,
+  PhoneOff,
+  Volume2,
+  Camera,
+  Coins,
+  Gauge,
+  ChevronRight,
+  Crown,
+  Shield,
+  RefreshCw,
+  BriefcaseBusiness,
+  Images,
+  Video,
+  Mail,
+  CalendarDays,
+  Github,
+  ExternalLink,
+  UserPlus,
+  Ban,
+  TriangleAlert
 } from 'lucide-react';
 import { AVATAR_PRESETS, DEFAULT_CONVERSATIONS, QUICK_STARTS, STARTER_AGENTS } from './data.js';
 
@@ -116,15 +140,29 @@ function formatTime(value) {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
-function Avatar({ agent, size = 'md', active = false }) {
+function avatarSeed(agent, preset) {
+  const raw = String(agent?.avatarSeed || agent?.id || preset?.id || 'ripo');
+  return raw.split('').reduce((sum, char, index) => (sum + char.charCodeAt(0) * (index + 3)) % 100003, 17);
+}
+
+function Avatar({ agent, size = 'md', active = false, interactive = false, onClick }) {
   const preset = AVATAR_PRESETS.find((item) => item.id === agent?.avatar) || AVATAR_PRESETS[0];
   const state = agent?.state || 'ready';
-  const seed = String(agent?.id || preset.id || 'ripo').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const seed = avatarSeed(agent, preset);
+  const palette = ['#7b5cf2','#168cf7','#11c58c','#ff7a18','#f42f8f','#ff4b55','#11b9b0','#9b6b3f','#8461ff','#27b568','#ef3f49','#f3a72f'];
+  const color = agent?.avatarColor || palette[seed % palette.length];
+  const shape = Number.isFinite(Number(agent?.avatarShape)) ? Number(agent.avatarShape) % 12 : seed % 12;
+  const motion = Number.isFinite(Number(agent?.avatarMotion)) ? Number(agent.avatarMotion) % 6 : Math.floor(seed / 7) % 6;
+  const eyes = Math.floor(seed / 13) % 4;
+  const Tag = interactive ? 'button' : 'span';
   return (
-    <span
-      className={cls('agent-avatar', `avatar-${size}`, `tone-${preset.tone}`, `shape-${preset.id}`, `state-${state}`, active && 'is-active')}
-      style={{ '--avatar-delay': `-${(seed % 11) * 0.73}s`, '--avatar-phase': `${4 + (seed % 5)}s` }}
-      aria-hidden="true"
+    <Tag
+      type={interactive ? 'button' : undefined}
+      onClick={interactive ? onClick : undefined}
+      className={cls('agent-avatar', `avatar-${size}`, `blob-shape-${shape}`, `motion-${motion}`, `eyes-${eyes}`, `state-${state}`, active && 'is-active', interactive && 'is-clickable')}
+      style={{ '--avatar-color': color, '--avatar-delay': `-${((seed % 23) / 5).toFixed(2)}s`, '--avatar-speed': `${(4.8 + (seed % 37) / 10).toFixed(1)}s` }}
+      aria-label={interactive ? `Open ${agent?.name || 'bot'} details` : undefined}
+      aria-hidden={interactive ? undefined : 'true'}
     >
       <span className="avatar-halo" />
       <span className="avatar-core">
@@ -134,7 +172,7 @@ function Avatar({ agent, size = 'md', active = false }) {
         </span>
       </span>
       <span className="avatar-status-dot" />
-    </span>
+    </Tag>
   );
 }
 
@@ -322,15 +360,24 @@ function Onboarding({ profile, onDone }) {
 function AgentEditor({ initialAgent, onSave, onClose }) {
   const editing = Boolean(initialAgent);
   const [form, setForm] = useState(initialAgent || {
-    name: '', role: '', description: '', instructions: '', avatar: 'nova', canRenameSelf: true
+    name: '', role: '', description: '', instructions: '', avatar: 'nova', avatarSeed: uid('avatar'), canRenameSelf: true
   });
+  function randomizeAvatar() {
+    const seed = uid('avatar');
+    const colors = ['#7b5cf2','#168cf7','#11c58c','#ff7a18','#f42f8f','#ff4b55','#11b9b0','#9b6b3f','#8461ff','#27b568','#ef3f49','#f3a72f'];
+    setForm({ ...form, avatarSeed: seed, avatarColor: colors[Math.floor(Math.random() * colors.length)], avatarShape: Math.floor(Math.random() * 12), avatarMotion: Math.floor(Math.random() * 6) });
+  }
   return (
     <Modal title={editing ? 'Edit agent' : 'Create agent'} onClose={onClose}>
       <div className="agent-editor">
-        <div className="avatar-picker">
-          {AVATAR_PRESETS.map((preset) => (
-            <button key={preset.id} onClick={() => setForm({ ...form, avatar: preset.id })} className={cls('avatar-choice', form.avatar === preset.id && 'selected')} aria-label={preset.label}>
-              <Avatar agent={{ avatar: preset.id }} size="lg" />
+        <div className="avatar-builder">
+          <div className="avatar-preview-large"><Avatar agent={{ ...form, id: form.avatarSeed || 'preview' }} size="xl" /></div>
+          <div><strong>Bot avatar</strong><p>Every bot gets its own shape, color, eyes, timing, and motion pattern.</p><button className="secondary-button" type="button" onClick={randomizeAvatar}><RefreshCw size={15} /> Randomize avatar</button></div>
+        </div>
+        <div className="avatar-picker compact-avatar-picker">
+          {AVATAR_PRESETS.slice(0, 6).map((preset) => (
+            <button key={preset.id} onClick={() => setForm({ ...form, avatar: preset.id, avatarSeed: uid('avatar') })} className={cls('avatar-choice', form.avatar === preset.id && 'selected')} aria-label={preset.label}>
+              <Avatar agent={{ ...form, avatar: preset.id, id: `${form.avatarSeed || 'preview'}-${preset.id}` }} size="lg" />
             </button>
           ))}
         </div>
@@ -741,7 +788,7 @@ export default function App() {
   }
 
   function createAgent(form) {
-    const next = { ...form, id: uid('agent'), state: 'ready', isPrimary: false };
+    const next = { ...form, id: uid('agent'), avatarSeed: form.avatarSeed || uid('avatar'), state: 'ready', isPrimary: false };
     setAgents((current) => [...current, next]);
     setConversations((current) => ({ ...current, [next.id]: [{ id: uid('welcome'), role: 'assistant', content: `I’m ${next.name}. ${next.description || 'Tell me what you want me to handle.'}`, createdAt: new Date().toISOString(), agentId: next.id }] }));
     setModal(null); openAgent(next.id); setToast(`${next.name} joined your team`);
@@ -819,6 +866,7 @@ export default function App() {
             description: String(action.description || 'Created by Ripo Bot for this workspace.').trim().slice(0, 220),
             instructions: String(action.instructions || 'Help with the assigned specialty.').trim().slice(0, 1800),
             avatar: AVATAR_PRESETS.some((preset) => preset.id === action.avatar) ? action.avatar : 'nova',
+            avatarSeed: uid('avatar'),
             state: 'ready',
             canRenameSelf: true,
             isPrimary: false
