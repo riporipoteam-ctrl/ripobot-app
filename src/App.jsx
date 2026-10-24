@@ -408,7 +408,7 @@ function FilesView({ files, onUpload, cloudMode }) {
 function ComputerView() {
   const [status, setStatus] = useState({ loading: true, configured: false, provider: 'Ripo Computer Lite' });
   const [command, setCommand] = useState('pwd');
-  const [lines, setLines] = useState([{ type: 'system', text: 'Ripo Computer Lite · private zero-cost workspace · type help' }]);
+  const [lines, setLines] = useState([{ type: 'system', text: 'Ripo Computer Lite · private zero-cost workspace · type help · try open https://example.com' }]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -435,7 +435,7 @@ function ComputerView() {
 
   return (
     <section className="content-page computer-page">
-      <header className="page-heading"><div><span className="eyebrow">Agent computer</span><h1>Ripo Computer</h1><p>A private Linux-style workspace for persistent files, terminal commands, and web research — built to stay on the free plan.</p></div><StateLabel state={status.configured ? 'ready' : 'waiting'} /></header>
+      <header className="page-heading"><div><span className="eyebrow">Agent computer</span><h1>Ripo Computer</h1><p>A private Linux-style workspace with persistent files, terminal commands, search, and a real rendered browser — built to stay on the free plan.</p></div><StateLabel state={status.configured ? 'ready' : 'waiting'} /></header>
       <div className="computer-grid">
         <article className="computer-preview-card">
           <div className="computer-window-bar"><span className="traffic-lights"><i /><i /><i /></span><span>Ripo Computer</span><span className="computer-provider">{status.provider || 'Ripo Computer Lite'}</span></div>
@@ -447,7 +447,7 @@ function ComputerView() {
         <aside className="computer-side-card">
           <div className="side-feature"><SquareTerminal size={18} /><div><strong>Linux-style terminal</strong><span>Private per-account shell commands and a persistent virtual filesystem without a paid VM.</span></div></div>
           <div className="side-feature"><HardDrive size={18} /><div><strong>Project files</strong><span>D1 and Workers KV keep workspace state and uploads across sessions on the free plan.</span></div></div>
-          <div className="side-feature"><Globe2 size={18} /><div><strong>Web capable</strong><span>Use search in the terminal or the agent search tool for fresh web results without a paid browser VM.</span></div></div>
+          <div className="side-feature"><Globe2 size={18} /><div><strong>Real browser</strong><span>Use <code>open https://…</code> or <code>links https://…</code>. Cloudflare Browser Run renders JavaScript pages with a free 10-minute daily allowance.</span></div></div>
           {!status.configured && <div className="computer-warning"><strong>Computer unavailable</strong><span>Sign in again or retry in a moment. No paid Sandbox subscription is required.</span></div>}
         </aside>
       </div>
@@ -461,7 +461,7 @@ function SettingsView({ profile, cloudMode, onLogout }) {
       <header className="page-heading"><div><span className="eyebrow">Workspace</span><h1>Settings</h1><p>Account, model, storage, and agent-runtime status.</p></div></header>
       <div className="settings-stack">
         <article className="settings-card"><div className="settings-icon"><UserRound size={19} /></div><div className="settings-copy"><strong>{profile?.name || 'Ripo Bot user'}</strong><span>{profile?.email || 'No email'}</span></div><span className={cls('badge', cloudMode ? 'badge-success' : 'badge-muted')}>{cloudMode ? 'Cloud account' : 'Device mode'}</span></article>
-        <article className="settings-card"><div className="settings-icon"><Sparkles size={19} /></div><div className="settings-copy"><strong>Ripo model route</strong><span>Hugging Face primary · Cloudflare AI fallback · backup provider</span></div><span className="badge badge-success">Connected</span></article>
+        <article className="settings-card"><div className="settings-icon"><Sparkles size={19} /></div><div className="settings-copy"><strong>Ripo model route</strong><span>Cloudflare AI is live now. The Hugging Face primary route is supported and activates when its server-side token/model are configured.</span></div><span className="badge badge-success">Live</span></article>
         <article className="settings-card"><div className="settings-icon"><HardDrive size={19} /></div><div className="settings-copy"><strong>Workspace persistence</strong><span>{cloudMode ? 'D1 account data + Workers KV free file storage.' : 'Saved in this browser until cloud storage is provisioned.'}</span></div></article>
         <button className="danger-button" onClick={onLogout}><LogOut size={16} /> Sign out</button>
       </div>
