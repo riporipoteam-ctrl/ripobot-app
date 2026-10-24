@@ -211,153 +211,80 @@ function Modal({ title, onClose, children, wide = false }) {
 
 function AuthScreen({ onAuthenticated }) {
   const [mode, setMode] = useState('login');
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   async function submit(event) {
     event.preventDefault();
-    setBusy(true);
-    setError('');
+    setBusy(true); setError('');
     try {
-      const payload = mode === 'register'
-        ? { name: form.name.trim(), email: form.email.trim(), password: form.password }
-        : { email: form.email.trim(), password: form.password };
-      const data = await api(`/api/auth/${mode === 'register' ? 'register' : 'login'}`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      onAuthenticated({ profile: data.user, cloud: true, token: data.token, expiresAt: data.expiresAt, account: data });
-    } catch (err) {
-      if ([404, 501, 503].includes(err.status)) {
-        setError('Cloud accounts are not provisioned on this deployment yet. You can continue in device mode below.');
-      } else {
-        setError(err.message || 'Could not sign in.');
-      }
-    } finally {
-      setBusy(false);
-    }
+      const payload = mode === 'register' ? { name: form.name.trim(), email: form.email.trim(), password: form.password } : { email: form.email.trim(), password: form.password };
+      const data = await api(`/api/auth/${mode === 'register' ? 'register' : 'login'}`, { method:'POST', body:JSON.stringify(payload) });
+      onAuthenticated({ profile:data.user, cloud:true, token:data.token, expiresAt:data.expiresAt, account:data });
+    } catch (err) { setError(err.message || 'Could not sign in.'); }
+    finally { setBusy(false); }
   }
 
-  function continueLocal() {
-    const email = form.email.trim() || 'local@ripobot.app';
-    const name = form.name.trim() || email.split('@')[0] || 'Ripo Bot user';
-    onAuthenticated({ profile: { id: `local:${email}`, name, email }, cloud: false });
+  if (!showForm) {
+    const floaters = [
+      {id:'welcome-a',avatar:'ripo',avatarSeed:'welcome-a',avatarColor:'#11c58c'},
+      {id:'welcome-b',avatar:'nova',avatarSeed:'welcome-b',avatarColor:'#f42f8f'},
+      {id:'welcome-c',avatar:'mint',avatarSeed:'welcome-c',avatarColor:'#7b5cf2'},
+      {id:'welcome-d',avatar:'wave',avatarSeed:'welcome-d',avatarColor:'#168cf7'},
+      {id:'welcome-e',avatar:'ember',avatarSeed:'welcome-e',avatarColor:'#ff7a18'},
+      {id:'welcome-f',avatar:'mono',avatarSeed:'welcome-f',avatarColor:'#9b6b3f'},
+      {id:'welcome-g',avatar:'pixel',avatarSeed:'welcome-g',avatarColor:'#ef3f49'},
+      {id:'welcome-h',avatar:'orbit',avatarSeed:'welcome-h',avatarColor:'#11b9b0'}
+    ];
+    return <main className="welcome-v4">
+      <div className="welcome-floaters">{floaters.map((agent,index)=><span key={agent.id} className={`welcome-floater floater-${index}`}><Avatar agent={agent} size={index%3===0?'lg':'md'}/></span>)}</div>
+      <div className="welcome-center"><div className="welcome-logo"><Avatar agent={{...STARTER_AGENTS[0],avatarSeed:'welcome-main'}} size="lg"/></div><h1>Ripo Bot</h1><p>Your team of always-on bots that finish the work.</p></div>
+      <div className="welcome-bottom"><button className="welcome-login" onClick={()=>setShowForm(true)}>Log In or Sign Up</button><small>By using Ripo Bot, you agree to the workspace rules and privacy terms.</small></div>
+    </main>;
   }
 
-  return (
-    <main className="auth-shell">
-      <div className="auth-orb auth-orb-a" />
-      <div className="auth-orb auth-orb-b" />
-      <section className="auth-brand-panel">
-        <div className="brand-lockup brand-lockup-large">
-          <span className="brand-mark"><Sparkles size={20} /></span>
-          <span>Ripo Bot</span>
-        </div>
-        <div className="auth-hero-copy">
-          <span className="eyebrow">Your AI team, in one workspace</span>
-          <h1>One bot when it’s simple.<br />A whole team when it isn’t.</h1>
-          <p>Give Ripo Bot a goal, create specialist agents, search the web, work with files, and hand bigger jobs to an isolated computer.</p>
-        </div>
-        <div className="auth-agent-row">
-          {STARTER_AGENTS.map((agent, index) => <Avatar key={agent.id} agent={{ ...agent, state: index === 0 ? 'thinking' : 'ready' }} size="lg" />)}
-          <div className="auth-agent-note"><strong>Persistent agents</strong><span>Each one keeps its role, files, and workspace.</span></div>
-        </div>
-      </section>
-
-      <section className="auth-form-panel">
-        <div className="auth-form-card">
-          <div className="auth-mobile-brand"><span className="brand-mark"><Sparkles size={18} /></span>Ripo Bot</div>
-          <span className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Create your workspace'}</span>
-          <h2>{mode === 'login' ? 'Sign in to Ripo Bot' : 'Start with Ripo Bot'}</h2>
-          <p className="muted">{mode === 'login' ? 'Your agents and work stay tied to your account.' : 'Create an account, then pick how you want your first agent team to work.'}</p>
-          <form onSubmit={submit} className="auth-form">
-            {mode === 'register' && (
-              <label><span>Name</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="What should Ripo Bot call you?" autoComplete="name" /></label>
-            )}
-            <label><span>Email</span><input type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="you@example.com" autoComplete="email" /></label>
-            <label><span>Password</span><input type="password" required minLength={8} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="At least 8 characters" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
-            {error && <div className="auth-error">{error}</div>}
-            <button className="primary-button auth-submit" disabled={busy}>{busy ? <LoaderCircle className="spin" size={18} /> : null}{mode === 'login' ? 'Sign in' : 'Create account'}</button>
-          </form>
-          <button className="text-button auth-switch" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>{mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}</button>
-          {error.includes('device mode') && <button className="secondary-button device-button" onClick={continueLocal}>Continue on this device</button>}
-          <div className="security-note"><ShieldCheck size={16} /><span>Model keys stay on the server. Ripo Bot never puts your Hugging Face token in browser code.</span></div>
-        </div>
-      </section>
-    </main>
-  );
+  return <main className="auth-form-v4">
+    <button className="auth-back-v4" onClick={()=>{setShowForm(false);setError('');}}><ArrowLeft size={19}/></button>
+    <section className="auth-card-v4">
+      <Avatar agent={{...STARTER_AGENTS[0],avatarSeed:'auth-form-main'}} size="lg"/>
+      <h1>{mode==='login'?'Welcome back':'Create your Ripo Bot account'}</h1>
+      <p>{mode==='login'?'Sign in to continue with your bots and workspaces.':'Your bots, chats, files, usage, and coins stay with this account.'}</p>
+      <div className="auth-tabs-v4"><button className={cls(mode==='login'&&'active')} onClick={()=>{setMode('login');setError('');}}>Log in</button><button className={cls(mode==='register'&&'active')} onClick={()=>{setMode('register');setError('');}}>Sign up</button></div>
+      <form onSubmit={submit} className="auth-form clean-auth-form">
+        {mode==='register'&&<label><span>Name</span><input value={form.name} onChange={(event)=>setForm({...form,name:event.target.value})} placeholder="Your name" autoComplete="name" required/></label>}
+        <label><span>Email</span><input type="email" value={form.email} onChange={(event)=>setForm({...form,email:event.target.value})} placeholder="you@example.com" autoComplete="email" required/></label>
+        <label><span>Password</span><input type="password" minLength={8} value={form.password} onChange={(event)=>setForm({...form,password:event.target.value})} placeholder="At least 8 characters" autoComplete={mode==='login'?'current-password':'new-password'} required/></label>
+        {error&&<div className="auth-error">{error}</div>}
+        <button className="welcome-login" disabled={busy}>{busy?<LoaderCircle className="spin" size={18}/>:null}{mode==='login'?'Log in':'Create account'}</button>
+      </form>
+      <div className="auth-security"><ShieldCheck size={15}/><span>Credentials and model keys stay server-side.</span></div>
+    </section>
+  </main>;
 }
 
 function Onboarding({ profile, onDone }) {
   const [step, setStep] = useState(0);
   const [displayName, setDisplayName] = useState(profile?.name || '');
-  const [goal, setGoal] = useState('build');
-  const [starter, setStarter] = useState(['scout', 'forge']);
+  const [role, setRole] = useState('Chief of Staff');
+  const [starter, setStarter] = useState(['scout','forge']);
+  const [avatarConfig, setAvatarConfig] = useState({ avatarSeed:uid('avatar'), avatarColor:'#111111', avatarShape:0, avatarMotion:0 });
 
-  const goalOptions = [
-    ['build', 'Build projects', 'Code, files, planning, and technical work.'],
-    ['research', 'Research & learn', 'Search, compare, summarize, and organize.'],
-    ['create', 'Create content', 'Ideas, writing, launches, and creative work.'],
-    ['everything', 'A bit of everything', 'Keep Ripo Bot flexible from day one.']
-  ];
-
-  function finish() {
-    onDone({ displayName: displayName.trim() || 'Ripo Bot user', goal, starter });
+  function randomize() {
+    const colors=['#111111','#7b5cf2','#168cf7','#11c58c','#ff7a18','#f42f8f','#ef3f49','#11b9b0'];
+    setAvatarConfig({avatarSeed:uid('avatar'),avatarColor:colors[Math.floor(Math.random()*colors.length)],avatarShape:Math.floor(Math.random()*12),avatarMotion:Math.floor(Math.random()*6)});
   }
+  function finish() { onDone({displayName:displayName.trim()||'Ripo Bot user',goal:'everything',starter,mainRole:role.trim()||'Chief of Staff',mainAvatar:avatarConfig}); }
 
-  return (
-    <main className="onboarding-shell">
-      <header className="onboarding-topbar">
-        <div className="brand-lockup"><span className="brand-mark"><Sparkles size={18} /></span><span>Ripo Bot</span></div>
-        <span className="onboarding-progress">{step + 1} / 3</span>
-      </header>
-      <section className="onboarding-stage">
-        {step === 0 && (
-          <div className="onboarding-card onboarding-intro">
-            <Avatar agent={{ ...STARTER_AGENTS[0], state: 'thinking' }} size="xl" />
-            <span className="eyebrow">Meet your main agent</span>
-            <h1>Start with Ripo Bot.</h1>
-            <p>Ripo Bot can work alone, create specialists, or bring several agents into one team conversation. You stay in control of names, roles, files, and tools.</p>
-            <label className="big-input"><span>What should Ripo Bot call you?</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Your name" autoFocus /></label>
-            <button className="primary-button onboarding-next" onClick={() => setStep(1)}>Continue <ArrowUp size={16} className="rotate-45" /></button>
-          </div>
-        )}
-        {step === 1 && (
-          <div className="onboarding-card">
-            <span className="eyebrow">Tune the workspace</span>
-            <h1>What will you use Ripo Bot for?</h1>
-            <p className="muted">This only changes starter suggestions. You can do everything later.</p>
-            <div className="goal-grid">
-              {goalOptions.map(([id, title, description]) => (
-                <button key={id} className={cls('choice-card', goal === id && 'selected')} onClick={() => setGoal(id)}>
-                  <span className="choice-check">{goal === id ? <Check size={14} /> : null}</span>
-                  <strong>{title}</strong><span>{description}</span>
-                </button>
-              ))}
-            </div>
-            <div className="onboarding-actions"><button className="secondary-button" onClick={() => setStep(0)}>Back</button><button className="primary-button" onClick={() => setStep(2)}>Continue</button></div>
-          </div>
-        )}
-        {step === 2 && (
-          <div className="onboarding-card">
-            <span className="eyebrow">Build your starter team</span>
-            <h1>Who joins Ripo Bot?</h1>
-            <p className="muted">Ripo Bot is always there. Add specialists now or create your own later.</p>
-            <div className="starter-agent-grid">
-              {STARTER_AGENTS.slice(1).map((agent) => {
-                const selected = starter.includes(agent.id);
-                return <button key={agent.id} className={cls('starter-agent-card', selected && 'selected')} onClick={() => setStarter(selected ? starter.filter((id) => id !== agent.id) : [...starter, agent.id])}>
-                  <Avatar agent={agent} size="lg" /><div><strong>{agent.name}</strong><span>{agent.role}</span><p>{agent.description}</p></div><span className="choice-check">{selected ? <Check size={14} /> : null}</span>
-                </button>;
-              })}
-            </div>
-            <div className="onboarding-actions"><button className="secondary-button" onClick={() => setStep(1)}>Back</button><button className="primary-button" onClick={finish}>Enter Ripo Bot</button></div>
-          </div>
-        )}
-      </section>
-    </main>
-  );
+  return <main className="onboarding-v4">
+    <header className="onboarding-v4-head"><button onClick={()=>step>0&&setStep(step-1)} className={cls('onboarding-back',step===0&&'hidden')}><ArrowLeft size={18}/></button><span>{step+1} of 3</span><button className="onboarding-skip" onClick={finish}>Skip</button></header>
+    <div className="onboarding-carousel">
+      {step===0&&<section className="onboarding-slide"><div className="onboarding-art"><Avatar agent={{...STARTER_AGENTS[0],...avatarConfig,state:'thinking'}} size="xl"/></div><span className="slide-kicker">Meet your main bot</span><h1>Ripo Bot starts with you.</h1><p>It can work alone, create specialists, search, use the computer, generate images, and coordinate a team.</p><label className="onboarding-field"><span>What should Ripo Bot call you?</span><input value={displayName} onChange={(event)=>setDisplayName(event.target.value)} placeholder="Your name" autoFocus/></label><button className="welcome-login" onClick={()=>setStep(1)}>Continue</button></section>}
+      {step===1&&<section className="onboarding-slide"><div className="onboarding-art bot-role-art"><Avatar agent={{...STARTER_AGENTS[0],...avatarConfig}} size="xl"/><button onClick={randomize}><RefreshCw size={15}/>Randomize avatar</button></div><span className="slide-kicker">Give your bot a role</span><h1>What job should it own?</h1><p>This becomes the main bot’s starting role. You can rename it, change the role, or let it evolve later.</p><label className="onboarding-field"><span>Role</span><input value={role} onChange={(event)=>setRole(event.target.value)} placeholder="Chief of Staff"/></label><div className="role-suggestions">{['Chief of Staff','Personal Assistant','Project Lead','Research Lead'].map((item)=><button key={item} onClick={()=>setRole(item)}>{item}</button>)}</div><button className="welcome-login" onClick={()=>setStep(2)}>Continue</button></section>}
+      {step===2&&<section className="onboarding-slide wide-slide"><div className="onboarding-team-art"><Avatar agent={{...STARTER_AGENTS[0],...avatarConfig}} size="lg"/>{STARTER_AGENTS.slice(1).map((agent)=><Avatar key={agent.id} agent={{...agent,avatarSeed:`onboard-${agent.id}`}} size="lg"/>)}</div><span className="slide-kicker">Use many bots at once</span><h1>Choose your starter team.</h1><p>Ripo Bot is always included. Add specialists now or create completely different bots later.</p><div className="starter-list-v4">{STARTER_AGENTS.slice(1).map((agent)=>{const selected=starter.includes(agent.id);return <button key={agent.id} className={cls(selected&&'selected')} onClick={()=>setStarter(selected?starter.filter((id)=>id!==agent.id):[...starter,agent.id])}><Avatar agent={{...agent,avatarSeed:`starter-${agent.id}`}} size="md"/><span><strong>{agent.name}</strong><small>{agent.role}</small></span><i>{selected?<Check size={13}/>:null}</i></button>;})}</div><button className="welcome-login" onClick={finish}>Enter Ripo Bot</button></section>}
+    </div>
+  </main>;
 }
 
 function AgentEditor({ initialAgent, onSave, onClose }) {
