@@ -10,7 +10,19 @@ export const AVATAR_SHAPES = [
   'pebble',
   'shield',
   'triangle',
-  'blob'
+  'blob',
+  'squircle',
+  'octagon',
+  'starburst',
+  'bean',
+  'arch',
+  'kite',
+  'clover',
+  'ticket',
+  'gem',
+  'moon',
+  'puff',
+  'wave'
 ];
 
 export const AVATAR_COLORS = [
@@ -46,8 +58,8 @@ export function avatarVisual(agent = {}) {
     : seed % AVATAR_SHAPES.length;
   const explicitMotion = Number(agent.avatarMotion);
   const motion = Number.isFinite(explicitMotion)
-    ? Math.abs(Math.trunc(explicitMotion)) % 8
-    : Math.floor(seed / 17) % 8;
+    ? Math.abs(Math.trunc(explicitMotion)) % 12
+    : Math.floor(seed / 17) % 12;
   const eyeStyle = Math.floor(seed / 29) % 5;
   const eyeTilt = (Math.floor(seed / 43) % 17) - 8;
   const color = agent.avatarColor || AVATAR_COLORS[Math.floor(seed / 7) % AVATAR_COLORS.length];
@@ -87,10 +99,10 @@ export function diversifyLegacyAgents(agents = []) {
     usedShapes.add(shapeIndex);
     return {
       ...agent,
-      avatarVisualVersion: 5,
+      avatarVisualVersion: 8,
       avatarSeed: agent?.avatarSeed || agent?.id || agent?.name || `bot-${index}`,
       avatarShape: shapeIndex,
-      avatarMotion: (base.motion + index) % 8,
+      avatarMotion: (base.motion + index) % 12,
       avatarColor: agent?.avatarColor || AVATAR_COLORS[(base.seed + index * 2) % AVATAR_COLORS.length]
     };
   });
