@@ -769,16 +769,16 @@ async function describeImageAttachment(env, stored, userQuestion) {
   const image = `data:${stored.type || 'image/png'};base64,${bytesToBase64(bytes)}`;
   const prompt = String(userQuestion || 'Describe this image accurately and mention text, objects, UI, errors, and details that could matter.').slice(0, 1800);
   try {
-    const result = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
-      messages: [
-        { role: 'system', content: 'Analyze the attached image precisely. Do not invent details. Extract visible text when relevant.' },
-        { role: 'user', content: prompt }
-      ],
+    const result = await env.AI.run('@cf/moondream/moondream3.1-9B-A2B', {
+      task: 'query',
       image,
-      max_tokens: 700,
-      temperature: 0.15
+      question: `Analyze this image precisely. Do not invent details. Extract visible text, UI state, objects, errors, and anything relevant to this request: ${prompt}`,
+      reasoning: false,
+      temperature: 0.15,
+      max_tokens: 1200,
+      stream: false
     });
-    return String(result?.response || result?.result || result?.description || '').trim().slice(0, 9000);
+    return String(result?.answer || result?.caption || result?.response || result?.result || '').trim().slice(0, 9000);
   } catch (error) {
     return `[Vision analysis failed for ${stored.name}: ${error?.message || 'unavailable'}]`;
   }
