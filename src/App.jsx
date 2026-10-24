@@ -157,11 +157,17 @@ function mergeAgentMailboxIntoConversations(current, exchanges, mirrorThreadKey 
     pushUnique(exchange.targetAgentId, {
       id: `mailbox:${exchange.id}:request`,
       role: 'assistant',
-      content: `Task from ${exchange.sourceAgentName}: ${exchange.task}`,
+      content: exchange.task,
       createdAt,
       agentId: exchange.sourceAgentId,
       botMessage: true,
-      mailboxId: exchange.id
+      mailboxId: exchange.id,
+      handoffKind: 'request',
+      sourceAgentId: exchange.sourceAgentId,
+      sourceAgentName: exchange.sourceAgentName,
+      targetAgentId: exchange.targetAgentId,
+      targetAgentName: exchange.targetAgentName,
+      task: exchange.task
     });
     if (exchange.reply) {
       const targetReply = {
@@ -171,7 +177,13 @@ function mergeAgentMailboxIntoConversations(current, exchanges, mirrorThreadKey 
         createdAt,
         agentId: exchange.targetAgentId,
         botMessage: true,
-        mailboxId: exchange.id
+        mailboxId: exchange.id,
+        handoffKind: 'reply',
+        sourceAgentId: exchange.sourceAgentId,
+        sourceAgentName: exchange.sourceAgentName,
+        targetAgentId: exchange.targetAgentId,
+        targetAgentName: exchange.targetAgentName,
+        task: exchange.task
       };
       pushUnique(exchange.targetAgentId, targetReply);
       pushUnique(exchange.sourceAgentId, {
@@ -789,7 +801,8 @@ function SettingsView({
   onSelectWorkspace,
   onRefreshWorkspaces,
   files,
-  onDeleteFile
+  onDeleteFile,
+  onOpenPlugins
 }) {
   const [page, setPage] = useState('main');
   const [busy, setBusy] = useState(false);
@@ -1003,7 +1016,7 @@ function SettingsView({
           <button className="settings-nav-row" onClick={() => setPage('appearance')}><span className="settings-row-icon"><Palette size={18}/></span><span><strong>Appearance</strong><small>Light, dark, system, and accent theme</small></span><ChevronRight size={17}/></button>
           <button className="settings-nav-row" onClick={() => setPage('workspaces')}><span className="settings-row-icon"><BriefcaseBusiness size={18}/></span><span><strong>Workspaces</strong><small>{workspaces.length} workspace{workspaces.length === 1 ? '' : 's'} · bots, storage, media</small></span><ChevronRight size={17}/></button>
           <button className="settings-nav-row" onClick={() => setPage('plans')}><span className="settings-row-icon"><WalletCards size={18}/></span><span><strong>Plans</strong><small>Free, Plus, Ripo Coins, limits</small></span><ChevronRight size={17}/></button>
-          <button className="settings-nav-row" onClick={() => setPage('plugins')}><span className="settings-row-icon"><Plug size={18}/></span><span><strong>Plugins</strong><small>Built-in tools and external connections</small></span><ChevronRight size={17}/></button>
+          <button className="settings-nav-row" onClick={() => onOpenPlugins ? onOpenPlugins() : setPage('plugins')}><span className="settings-row-icon"><Plug size={18}/></span><span><strong>Plugins</strong><small>Built-in tools and external connections</small></span><ChevronRight size={17}/></button>
           {isAdmin && <button className="settings-nav-row admin-row" onClick={() => setPage('admin')}><span className="settings-row-icon"><Shield size={18}/></span><span><strong>Admin</strong><small>Manage users, plans, coins and access</small></span><ChevronRight size={17}/></button>}
         </div>
 
@@ -1342,7 +1355,11 @@ function ChatView({
               {!user&&author?<div className="bubble-author-avatar-v6"><Avatar agent={author} size="xs"/></div>:null}
               <div className="bubble-stack-v6">
                 {!user&&author?<div className="bubble-author-v6"><strong>{author.name}</strong><span>{author.role}</span></div>:null}
-                <div className={cls('bubble-v5',user&&'user-bubble-v5')}>
+                {message.botMessage&&message.mailboxId?<div className={cls('collaboration-handoff-v8',message.handoffKind==='reply'&&'reply')}>
+                  <div className="handoff-route-v8"><span>{message.sourceAgentName||'Bot'}</span><ChevronRight size={12}/><span>{message.targetAgentName||author?.name||'Bot'}</span><em>{message.handoffKind==='reply'?'Reply':'Task'}</em></div>
+                  {message.task&&message.handoffKind==='reply'?<small>Task: {message.task}</small>:null}
+                </div>:null}
+                <div className={cls('bubble-v5',user&&'user-bubble-v5',message.botMessage&&'bot-mail-bubble-v8')}>
                 <div className="bubble-text">{message.content}</div>
                 {message.sources?.length?<button className="bubble-tool-note"><Globe2 size={13}/>{message.sources.length} sources</button>:null}
                 {message.attachments?.length?<div className="bubble-files-v5">{message.attachments.map((file)=><span key={file.id}><FileText size={14}/><span>{file.name}</span></span>)}</div>:null}
@@ -1406,13 +1423,123 @@ function ChatView({
   );
 }
 
-function MobileTabBar({ view, homeOpen, onHome, onChat, onComputer, onFiles, onSettings }) {
+function AgentActivityView({ exchanges = [], agents = [], compact = false, onOpenAgent }) {
+  const recent = [...(exchanges || [])].sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0, compact ? 4 : 20);
+  if (!recent.length) {
+    return <section className={cls('agent-activity-v8', compact&&'compact')}>
+      <div className="activity-empty-v8"><Users size={20}/><div><strong>No bot handoffs yet</strong><span>When bots message each other, their tasks and replies will appear here.</span></div></div>
+    </section>;
+  }
+  return <section className={cls('agent-activity-v8', compact&&'compact')}>
+    {recent.map((exchange)=>{
+      const source=agents.find((agent)=>agent.id===exchange.sourceAgentId) || {id:exchange.sourceAgentId,name:exchange.sourceAgentName,avatarSeed:exchange.sourceAgentId};
+      const target=agents.find((agent)=>agent.id===exchange.targetAgentId) || {id:exchange.targetAgentId,name:exchange.targetAgentName,avatarSeed:exchange.targetAgentId};
+      return <article className="activity-row-v8" key={exchange.id}>
+        <button className="activity-agent-v8" onClick={()=>onOpenAgent?.(source.id)}><Avatar agent={source} size="xs"/></button>
+        <div className="activity-line-v8"><span/><ChevronRight size={12}/></div>
+        <button className="activity-agent-v8" onClick={()=>onOpenAgent?.(target.id)}><Avatar agent={target} size="xs"/></button>
+        <div className="activity-copy-v8">
+          <div><strong>{exchange.sourceAgentName}</strong><span>→</span><strong>{exchange.targetAgentName}</strong><time>{formatTime(exchange.createdAt)}</time></div>
+          <p>{exchange.task}</p>
+          {exchange.reply?<small>{exchange.reply}</small>:<small>Working…</small>}
+        </div>
+        <span className={cls('activity-status-v8',exchange.status==='completed'&&'done')}>{exchange.status==='completed'?'Done':'Working'}</span>
+      </article>;
+    })}
+  </section>;
+}
+
+function PluginStoreView({ activeWorkspaceId, onToast }) {
+  const [plugins,setPlugins]=useState([]);
+  const [query,setQuery]=useState('');
+  const [category,setCategory]=useState('All');
+  const [busy,setBusy]=useState('');
+  const [loading,setLoading]=useState(true);
+
+  const load=async()=>{
+    if(!activeWorkspaceId)return;
+    setLoading(true);
+    try{
+      const data=await api(`/api/plugins?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
+      setPlugins(data.plugins||[]);
+    }catch(error){onToast?.(error.message||'Could not load plugins.');}
+    finally{setLoading(false);}
+  };
+
+  useEffect(()=>{load();},[activeWorkspaceId]);
+
+  async function toggle(plugin){
+    if(!activeWorkspaceId||busy)return;
+    setBusy(plugin.id);
+    const endpoint=plugin.installed?'/api/plugins/uninstall':'/api/plugins/install';
+    try{
+      await api(endpoint,{method:'POST',body:JSON.stringify({workspaceId:activeWorkspaceId,pluginId:plugin.id})});
+      await load();
+      onToast?.(plugin.installed?`${plugin.name} removed`:`${plugin.name} installed — bots can use it now`);
+    }catch(error){onToast?.(error.message||'Plugin change failed.');}
+    finally{setBusy('');}
+  }
+
+  const categories=['All',...new Set(plugins.map((plugin)=>plugin.category).filter(Boolean))];
+  const filtered=plugins.filter((plugin)=>{
+    const matchesCategory=category==='All'||plugin.category===category;
+    const text=`${plugin.name} ${plugin.provider} ${plugin.description} ${plugin.category}`.toLowerCase();
+    return matchesCategory&&text.includes(query.trim().toLowerCase());
+  });
+  const installed=plugins.filter((plugin)=>plugin.installed);
+
+  return <section className="plugin-market-v8 content-page">
+    <header className="plugin-market-head-v8">
+      <div>
+        <div className="plugin-kicker-v8"><Plug size={15}/><span>Ripo Bot Plugins</span></div>
+        <h1>Give your bots more tools.</h1>
+        <p>Install public tools that work immediately — no API keys, no OAuth, no account linking.</p>
+      </div>
+      <div className="plugin-installed-count-v8"><strong>{installed.length}</strong><span>Installed</span></div>
+    </header>
+
+    <div className="plugin-feature-strip-v8">
+      <div><Sparkles size={17}/><span><strong>Zero-key</strong><small>Install and use instantly</small></span></div>
+      <div><ShieldCheck size={17}/><span><strong>Read-only public data</strong><small>No private accounts exposed</small></span></div>
+      <div><Bot size={17}/><span><strong>Bot-native</strong><small>Agents call plugins automatically</small></span></div>
+    </div>
+
+    <div className="plugin-market-toolbar-v8">
+      <label><Search size={16}/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search plugins"/></label>
+      <div className="plugin-category-tabs-v8">{categories.map((item)=><button key={item} className={cls(category===item&&'active')} onClick={()=>setCategory(item)}>{item}</button>)}</div>
+    </div>
+
+    {installed.length>0&&<section className="plugin-installed-dock-v8">
+      <div className="plugin-section-title-v8"><div><h2>Installed</h2><p>Available to every bot in this workspace.</p></div></div>
+      <div className="plugin-installed-row-v8">{installed.map((plugin)=><button key={plugin.id} onClick={()=>setQuery(plugin.name)}><span className="plugin-logo-v8" style={{'--plugin-accent':plugin.accent}}><img src={plugin.logo} alt="" onError={(e)=>{e.currentTarget.style.display='none';}}/><b>{plugin.name.slice(0,1)}</b></span><span>{plugin.name}</span><Check size={13}/></button>)}</div>
+    </section>}
+
+    <section className="plugin-catalog-v8">
+      <div className="plugin-section-title-v8"><div><h2>Explore</h2><p>Third-party public services Ripo Bot can call without credentials.</p></div><span>{filtered.length} tools</span></div>
+      {loading?<div className="plugin-loading-v8"><LoaderCircle className="spin" size={22}/>Loading plugin catalog…</div>:
+      <div className="plugin-grid-v8">{filtered.map((plugin)=><article className={cls('plugin-card-v8',plugin.installed&&'installed')} key={plugin.id}>
+        <div className="plugin-card-top-v8">
+          <span className="plugin-logo-v8 large" style={{'--plugin-accent':plugin.accent}}><img src={plugin.logo} alt="" onError={(e)=>{e.currentTarget.style.display='none';}}/><b>{plugin.name.slice(0,1)}</b></span>
+          <span className="zero-key-badge-v8"><Zap size={11}/>Zero-key</span>
+        </div>
+        <div className="plugin-card-copy-v8"><span>{plugin.category}</span><h3>{plugin.name}</h3><p>{plugin.description}</p><small>{plugin.provider}</small></div>
+        <div className="plugin-action-list-v8">{(plugin.actions||[]).slice(0,3).map((action)=><span key={action.id}>{action.label}</span>)}</div>
+        <div className="plugin-card-actions-v8">
+          <a href={plugin.homepage} target="_blank" rel="noreferrer"><ExternalLink size={14}/>Website</a>
+          <button className={cls(plugin.installed&&'installed')} onClick={()=>toggle(plugin)} disabled={busy===plugin.id}>{busy===plugin.id?<LoaderCircle className="spin" size={15}/>:plugin.installed?<><Check size={15}/>Installed</>:<><Plus size={15}/>Install</>}</button>
+        </div>
+      </article>)}</div>}
+    </section>
+  </section>;
+}
+
+function MobileTabBar({ view, homeOpen, onHome, onChat, onComputer, onPlugins, onSettings }) {
   return (
     <nav className="mobile-tab-bar-v6" aria-label="Ripo Bot navigation">
       <button className={cls(homeOpen && 'active')} onClick={onHome}><Home size={21}/><span>Home</span></button>
       <button className={cls(!homeOpen && view==='chat' && 'active')} onClick={onChat}><MessageSquare size={21}/><span>Chat</span></button>
       <button className={cls(!homeOpen && view==='computer' && 'active')} onClick={onComputer}><Computer size={21}/><span>Computer</span></button>
-      <button className={cls(!homeOpen && view==='files' && 'active')} onClick={onFiles}><Images size={21}/><span>Files</span></button>
+      <button className={cls(!homeOpen && view==='plugins' && 'active')} onClick={onPlugins}><Plug size={21}/><span>Plugins</span></button>
       <button className={cls(!homeOpen && view==='settings' && 'active')} onClick={onSettings}><Settings size={21}/><span>Settings</span></button>
     </nav>
   );
@@ -1438,6 +1565,7 @@ export default function App() {
   const [workspaces, setWorkspaces] = useState([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(() => readLocal(LOCAL_KEYS.activeWorkspace, null));
   const [archivedChats, setArchivedChats] = useState(() => readLocal(LOCAL_KEYS.archivedChats, []));
+  const [mailboxMessages, setMailboxMessages] = useState([]);
   const [modal, setModal] = useState(null);
   const [sending, setSending] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -1482,6 +1610,7 @@ export default function App() {
       setAgents(nextAgents);
       const baseConversations = state?.conversations && Object.keys(state.conversations).length ? state.conversations : { ripo: DEFAULT_CONVERSATIONS.ripo };
       const mailbox = await api(`/api/agent-mailbox?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ messages: [] }));
+      setMailboxMessages(mailbox?.messages || []);
       setConversations(mergeAgentMailboxIntoConversations(baseConversations, mailbox?.messages || []));
       setTeams(Array.isArray(state?.teams) ? state.teams : []);
       setArchivedChats(Array.isArray(state?.archivedChats) ? state.archivedChats : []);
@@ -1524,8 +1653,9 @@ export default function App() {
     let alive = true;
     const pullMailbox = async () => {
       const mailbox = await api(`/api/agent-mailbox?workspaceId=${encodeURIComponent(activeWorkspaceId)}`).catch(() => null);
-      if (alive && mailbox?.messages?.length) {
-        setConversations((current) => mergeAgentMailboxIntoConversations(current, mailbox.messages));
+      if (alive && mailbox?.messages) {
+        setMailboxMessages(mailbox.messages);
+        if (mailbox.messages.length) setConversations((current) => mergeAgentMailboxIntoConversations(current, mailbox.messages));
       }
     };
     pullMailbox();
@@ -1794,6 +1924,13 @@ export default function App() {
       });
       setToast(`${result.updatedFiles.length} file${result.updatedFiles.length===1?'':'s'} edited`);
     }
+    if (interAgentMessages.length) {
+      setMailboxMessages((current)=>{
+        const byId=new Map(current.map((item)=>[item.id,item]));
+        interAgentMessages.forEach((item)=>byId.set(item.id,item));
+        return [...byId.values()].sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
+      });
+    }
     if (interAgentMessages.length || delegatedMessages.length) {
       const names = [...new Set([
         ...interAgentMessages.map((item) => item.targetAgentName),
@@ -1905,6 +2042,7 @@ export default function App() {
               <span>{agent.role || agent.name}</span>
             </button>)}
           </div>
+          {mailboxMessages.length>0&&<div className="mobile-activity-strip-v8"><div className="mobile-activity-head-v8"><span>Bot activity</span><button onClick={()=>navigate('activity')}>View all</button></div><AgentActivityView exchanges={mailboxMessages} agents={agents} compact onOpenAgent={openAgent}/></div>}
           <div className="mobile-bot-feed">
             {visibleAgents.map((agent) => {
               const thread = conversations[agent.id] || [];
@@ -1937,6 +2075,8 @@ export default function App() {
           <button className={cls(view === 'chat' && !activeTeamId && activeAgentId === 'ripo' && 'active')} onClick={() => openAgent('ripo')}><MessageSquare size={17} /><span>Ripo Bot</span></button>
           <button className={cls(view === 'files' && 'active')} onClick={() => navigate('files')}><Folder size={17} /><span>Files</span><em>{files.length || ''}</em></button>
           <button className={cls(view === 'computer' && 'active')} onClick={() => navigate('computer')}><Computer size={17} /><span>Computer</span></button>
+          <button className={cls(view === 'plugins' && 'active')} onClick={() => navigate('plugins')}><Plug size={17}/><span>Plugins</span></button>
+          <button className={cls(view === 'activity' && 'active')} onClick={() => navigate('activity')}><Users size={17}/><span>Activity</span><em>{mailboxMessages.length||''}</em></button>
         </nav>
 
         <div className="sidebar-section">
@@ -1972,7 +2112,9 @@ export default function App() {
         {view === 'chat' && <ChatView agent={activeAgent} team={activeTeam} agents={agents} messages={messages} sending={sending} onSend={sendMessage} onRename={renameAgent} onEdit={() => setModal('edit-agent')} onOpenDetails={() => setModal('bot-details')} onStartCall={() => setModal('voice-call')} onShowBots={() => setMobileNav(true)} onUploadFiles={uploadFiles} files={files} />}
         {view === 'files' && <FilesView files={files} onUpload={uploadFiles} cloudMode={cloudMode} />}
         {view === 'computer' && <ComputerView />}
-        {view === 'settings' && <SettingsView profile={profile} cloudMode={cloudMode} theme={theme} accent={accent} onThemeChange={setTheme} onAccentChange={setAccent} onLogout={logout} onSwitchAccount={switchAccount} account={account} onRefreshAccount={refreshAccount} workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} onSelectWorkspace={selectWorkspace} onRefreshWorkspaces={() => refreshWorkspaces(activeWorkspaceId)} files={files} onDeleteFile={deleteFile} />}
+        {view === 'plugins' && <PluginStoreView activeWorkspaceId={activeWorkspaceId} onToast={setToast}/>}
+        {view === 'activity' && <section className="activity-page-v8 content-page"><header className="activity-page-head-v8"><div><h1>Bot activity</h1><p>See exactly when one bot hands work to another and what came back.</p></div><span>{mailboxMessages.length} handoffs</span></header><AgentActivityView exchanges={mailboxMessages} agents={agents} onOpenAgent={openAgent}/></section>}
+        {view === 'settings' && <SettingsView profile={profile} cloudMode={cloudMode} theme={theme} accent={accent} onThemeChange={setTheme} onAccentChange={setAccent} onLogout={logout} onSwitchAccount={switchAccount} account={account} onRefreshAccount={refreshAccount} workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} onSelectWorkspace={selectWorkspace} onRefreshWorkspaces={() => refreshWorkspaces(activeWorkspaceId)} files={files} onDeleteFile={deleteFile} onOpenPlugins={()=>navigate('plugins')} />}
       </main>
 
       <MobileTabBar
@@ -1981,7 +2123,7 @@ export default function App() {
         onHome={()=>setMobileNav(true)}
         onChat={()=>{setView('chat');setMobileNav(false);}}
         onComputer={()=>navigate('computer')}
-        onFiles={()=>navigate('files')}
+        onPlugins={()=>navigate('plugins')}
         onSettings={()=>navigate('settings')}
       />
 
