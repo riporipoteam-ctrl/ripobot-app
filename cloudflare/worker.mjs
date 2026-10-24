@@ -211,7 +211,23 @@ async function ensureSchema(env) {
       created_at INTEGER NOT NULL,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     )`),
-    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_workspace_usage ON workspace_usage_events(user_id, workspace_id, created_at)`)
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_workspace_usage ON workspace_usage_events(user_id, workspace_id, created_at)`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS agent_mailbox (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      source_agent_id TEXT NOT NULL,
+      source_agent_name TEXT NOT NULL,
+      target_agent_id TEXT NOT NULL,
+      target_agent_name TEXT NOT NULL,
+      task TEXT NOT NULL,
+      reply TEXT,
+      status TEXT NOT NULL DEFAULT 'completed',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_agent_mailbox_workspace_created ON agent_mailbox(user_id, workspace_id, created_at)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_agent_mailbox_target_created ON agent_mailbox(user_id, target_agent_id, created_at)`)
   ]);
   return true;
 }
@@ -648,6 +664,45 @@ async function handleStatePut(request, env) {
     .bind(workspace.id, auth.user.id, encoded, Date.now()).run();
   await env.DB.prepare('UPDATE workspaces SET updated_at = ?2 WHERE id = ?1').bind(workspace.id, Date.now()).run();
   return json(request, 200, { ok: true, workspaceId: workspace.id, updatedAt: Date.now() });
+}
+
+async function persistAgentExchange(env, userId, workspaceId, exchange) {
+  if (!env.DB || !exchange?.id) return exchange;
+  await env.DB.prepare(`INSERT OR REPLACE INTO agent_mailbox
+    (id, user_id, workspace_id, source_agent_id, source_agent_name, target_agent_id, target_agent_name, task, reply, status, created_at)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`)
+    .bind(
+      exchange.id,
+      userId,
+      workspaceId,
+      exchange.sourceAgentId,
+      exchange.sourceAgentName,
+      exchange.targetAgentId,
+      exchange.targetAgentName,
+      exchange.task,
+      exchange.reply || '',
+      exchange.status || 'completed',
+      Number(exchange.createdAt || Date.now())
+    ).run();
+  return exchange;
+}
+
+async function handleAgentMailbox(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const url = new URL(request.url);
+  const workspace = await resolveWorkspace(env, auth.user, url.searchParams.get('workspaceId'));
+  const after = Math.max(0, Number(url.searchParams.get('after') || 0));
+  const rows = await env.DB.prepare(`SELECT id, source_agent_id AS sourceAgentId, source_agent_name AS sourceAgentName,
+      target_agent_id AS targetAgentId, target_agent_name AS targetAgentName, task, reply, status, created_at AS createdAt
+    FROM agent_mailbox
+    WHERE user_id = ?1 AND workspace_id = ?2 AND created_at >= ?3
+    ORDER BY created_at ASC
+    LIMIT 500`)
+    .bind(auth.user.id, workspace.id, after).all();
+  return json(request, 200, {
+    workspaceId: workspace.id,
+    messages: rows.results || []
+  });
 }
 
 async function handleFilesList(request, env) {
@@ -1872,6 +1927,7 @@ export default {
       if (url.pathname.startsWith('/api/files/') && request.method === 'DELETE') return handleFileDelete(request, env, decodeURIComponent(url.pathname.slice('/api/files/'.length)));
       if (url.pathname === '/api/search' && request.method === 'POST') return handleSearch(request, env);
       if (url.pathname === '/api/chat' && request.method === 'POST') return handleChat(request, env);
+      if (url.pathname === '/api/agent-mailbox' && request.method === 'GET') return handleAgentMailbox(request, env);
       if (url.pathname === '/api/computer/status' && request.method === 'GET') return json(request, 200, { configured: Boolean(env.DB), provider: 'Ripo Computer', linux: true, browser: Boolean(env.BROWSER), liveViewReady: Boolean(env.BROWSER), browserProvider: env.BROWSER ? 'Cloudflare Browser Run Live View' : 'Unavailable', persistent: Boolean(env.DB), note: 'Persistent terminal plus a real Cloudflare Browser Run session with Live View.' });
       if (url.pathname === '/api/computer/live/start' && request.method === 'POST') return handleComputerLiveStart(request, env);
       if (url.pathname === '/api/computer/live/status' && request.method === 'GET') return handleComputerLiveStatus(request, env);
