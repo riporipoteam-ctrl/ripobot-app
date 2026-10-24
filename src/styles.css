@@ -2234,3 +2234,10 @@ html[data-resolved-theme="dark"] .activity-status-v8.done{background:#153426;col
 @media(prefers-reduced-motion:reduce){
   .avatar-shape-svg,.avatar-face-svg,.avatar-face-svg rect,.bubble-row-v5,.plugin-card-v8,.activity-row-v8{animation:none!important;transition:none!important}
 }
+
+.plugin-activity-badges-v8{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.plugin-activity-badges-v8>span{height:24px;display:flex;align-items:center;gap:4px;padding:0 7px;border-radius:999px;background:#eef7ff;color:#256a9c;font-size:8px;font-weight:700}
+.plugin-activity-badges-v8>span small{font-size:7px;font-weight:550;opacity:.7}.plugin-activity-badges-v8>span.error{background:#fff0f0;color:#b54848}
+.activity-status-v8.error{background:#fff0f0;color:#b54848}
+html[data-resolved-theme="dark"] .plugin-activity-badges-v8>span{background:#1a2c38;color:#8dccf7}
+html[data-resolved-theme="dark"] .plugin-activity-badges-v8>span.error,html[data-resolved-theme="dark"] .activity-status-v8.error{background:#3a1f1f;color:#f09898}
