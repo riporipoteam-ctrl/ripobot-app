@@ -50,10 +50,12 @@ jobs:
 
           echo "Checking Ripo Computer Lite..."
           curl -fsS "$API/api/computer/status" -H "Authorization: Bearer $TOKEN" -o /tmp/computer.json
-          node -e "const d=require('/tmp/computer.json'); if(!d.configured||d.provider!=='Ripo Computer Lite') process.exit(1)"
+          node -e "const d=require('/tmp/computer.json'); if(!d.configured||d.provider!=='Ripo Computer Lite'||!d.browser) { console.error(d); process.exit(1) }"
           curl -fsS -X POST "$API/api/computer/exec" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data '{"command":"echo smoke-ok > verify.txt"}' -o /tmp/exec1.json
           curl -fsS -X POST "$API/api/computer/exec" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data '{"command":"cat verify.txt"}' -o /tmp/exec2.json
           node -e "const d=require('/tmp/exec2.json'); if(d.stdout!=='smoke-ok') { console.error(d); process.exit(1) }"
+          curl -fsS -X POST "$API/api/computer/exec" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data '{"command":"open https://example.com"}' -o /tmp/browser.json
+          node -e "const d=require('/tmp/browser.json'); if(!d.stdout||!d.stdout.toLowerCase().includes('example domain')) { console.error(d); process.exit(1) }"
 
           echo "Checking web search..."
           curl -fsS -X POST "$API/api/search" -H "Content-Type: application/json" --data '{"query":"Cloudflare"}' -o /tmp/search.json
@@ -66,3 +68,5 @@ jobs:
           echo "RIPO BOT PRODUCTION SMOKE TEST PASSED"
 
 # rerun-after-pbkdf2-fix
+
+# final-browser-run-smoke
