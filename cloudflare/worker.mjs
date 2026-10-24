@@ -1057,6 +1057,50 @@ async function handleChat(request, env) {
   });
 }
 
+async function handleVoiceTranscribe(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  if (!env.AI) return json(request, 503, { error: 'Voice transcription is unavailable.' });
+  const form = await request.formData();
+  const audio = form.get('audio');
+  if (!(audio instanceof File)) return json(request, 400, { error: 'Attach recorded audio.' });
+  if (audio.size < 32) return json(request, 400, { error: 'The recording was empty.' });
+  if (audio.size > 8 * 1024 * 1024) return json(request, 413, { error: 'Voice recordings are limited to 8 MB.' });
+  const bytes = new Uint8Array(await audio.arrayBuffer());
+  const result = await env.AI.run('@cf/openai/whisper-large-v3-turbo', {
+    audio: Array.from(bytes),
+    task: 'transcribe',
+    vad_filter: true,
+    condition_on_previous_text: false
+  });
+  const textValue = String(result?.text || result?.transcription_info?.text || '').trim();
+  if (!textValue) return json(request, 422, { error: 'I could not hear enough speech in that recording.' });
+  return json(request, 200, { text: textValue, provider: 'workers-ai', model: '@cf/openai/whisper-large-v3-turbo' });
+}
+
+async function handleVoiceSpeak(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  if (!env.AI) return json(request, 503, { error: 'Voice synthesis is unavailable.' });
+  const body = await readJsonBody(request);
+  const textValue = String(body.text || '').trim().slice(0, 1200);
+  if (!textValue) return json(request, 400, { error: 'Add text to speak.' });
+  const lang = String(body.lang || 'en').toLowerCase().slice(0, 8) || 'en';
+  const generated = await env.AI.run('@cf/myshell-ai/melotts', { prompt: textValue, lang }, { returnRawResponse: true });
+  if (generated instanceof Response) {
+    const headers = new Headers(generated.headers);
+    const cors = corsHeaders(request);
+    Object.entries(cors).forEach(([key, value]) => headers.set(key, value));
+    headers.set('Content-Type', headers.get('Content-Type') || 'audio/mpeg');
+    headers.set('Cache-Control', 'no-store');
+    return new Response(generated.body, { status: generated.status, headers });
+  }
+  const audio = generated?.audio;
+  if (typeof audio === 'string') {
+    const bytes = base64ToBytes(audio.replace(/^data:audio\/[^;]+;base64,/, ''));
+    return new Response(bytes, { status: 200, headers: { ...corsHeaders(request), 'Content-Type': 'audio/mpeg' } });
+  }
+  return json(request, 502, { error: 'The voice model did not return audio.' });
+}
+
 async function handleSearch(request, env) {
   const body = await readJsonBody(request);
   const results = await searchWeb(body.query);
@@ -1239,7 +1283,7 @@ export default {
     }
 
     try {
-      if (url.pathname === '/api/health' && request.method === 'GET') return json(request, 200, { status: 'ok', app: 'ripobot', version: 2 });
+      if (url.pathname === '/api/health' && request.method === 'GET') return json(request, 200, { status: 'ok', app: 'ripobot', version: 5 });
       if (url.pathname === '/api/config' && request.method === 'GET') return json(request, 200, {
         primaryModel: env.HF_MODEL || DEFAULT_MODEL,
         huggingFaceConfigured: Boolean(env.HF_TOKEN),
@@ -1269,6 +1313,8 @@ export default {
       if (url.pathname === '/api/admin/users' && request.method === 'GET') return handleAdminUsers(request, env);
       if (url.pathname.startsWith('/api/admin/users/') && url.pathname.endsWith('/action') && request.method === 'POST') return handleAdminAction(request, env, decodeURIComponent(url.pathname.split('/')[4]));
       if (url.pathname === '/api/images/generate' && request.method === 'POST') return handleImageGenerate(request, env);
+      if (url.pathname === '/api/voice/transcribe' && request.method === 'POST') return handleVoiceTranscribe(request, env);
+      if (url.pathname === '/api/voice/speak' && request.method === 'POST') return handleVoiceSpeak(request, env);
       if (url.pathname === '/api/state' && request.method === 'GET') return handleStateGet(request, env);
       if (url.pathname === '/api/state' && request.method === 'PUT') return handleStatePut(request, env);
       if (url.pathname === '/api/files' && request.method === 'GET') return handleFilesList(request, env);
