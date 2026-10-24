@@ -797,7 +797,7 @@ function extractActions(text) {
   clean = clean.replace(regex, (_, raw) => {
     try {
       const parsed = JSON.parse(raw.trim());
-      if (parsed && ['create_agent', 'create_team', 'rename_agent'].includes(parsed.type)) actions.push(parsed);
+      if (parsed && ['create_agent', 'create_team', 'rename_agent', 'web_search', 'browser_open', 'computer_exec', 'generate_image', 'message_agent'].includes(parsed.type)) actions.push(parsed);
     } catch {}
     return '';
   });
@@ -809,8 +809,115 @@ function extractActions(text) {
   return { reply: clean.trim(), actions };
 }
 
+
+function base64ImageBytes(value) {
+  const raw = String(value || '').replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
+  return base64ToBytes(raw);
+}
+
+async function generateImageForUser(env, user, prompt, workspaceId) {
+  if (!env.AI || !env.FILES) throw new Error('Image generation is unavailable.');
+  const meta = await ensureUserMeta(env, user);
+  const workspace = await resolveWorkspace(env, user, workspaceId);
+  const storage = await storageSnapshot(env, user, meta);
+  const form = new FormData();
+  form.append('prompt', String(prompt || '').trim().slice(0, 1200));
+  form.append('width', '768');
+  form.append('height', '768');
+  const serialized = new Response(form);
+  const result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', {
+    multipart: { body: serialized.body, contentType: serialized.headers.get('content-type') }
+  });
+  const encoded = result?.image;
+  if (!encoded) throw new Error('The image model did not return an image.');
+  const bytes = base64ImageBytes(encoded);
+  if (storage.used + bytes.byteLength > storage.limit) throw new Error('Workspace storage is full.');
+  const id = crypto.randomUUID();
+  const key = `file:${user.id}:${id}`;
+  const name = `ripo-image-${new Date().toISOString().replace(/[:.]/g, '-')}.${'png'}`;
+  const createdAt = Date.now();
+  await env.FILES.put(key, bytes, { metadata: { type: 'image/png', name, userId: user.id, generated: 'true' } });
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO files (id, user_id, object_key, name, mime_type, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)')
+      .bind(id, user.id, key, name, 'image/png', bytes.byteLength, createdAt),
+    env.DB.prepare('INSERT OR REPLACE INTO file_workspaces (file_id, workspace_id, user_id) VALUES (?1, ?2, ?3)')
+      .bind(id, workspace.id, user.id)
+  ]);
+  return { id, name, type: 'image/png', size: bytes.byteLength, source: 'cloud', workspaceId: workspace.id, generated: true, createdAt, url: `/api/files/${id}` };
+}
+
+async function handleImageGenerate(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const body = await readJsonBody(request);
+  const prompt = String(body.prompt || '').trim();
+  if (!prompt) return json(request, 400, { error: 'Describe the image you want.' });
+  const file = await generateImageForUser(env, auth.user, prompt, body.workspaceId);
+  return json(request, 201, { file, model: '@cf/black-forest-labs/flux-2-klein-4b' });
+}
+
+function shouldAutoSearch(text) {
+  return /\b(latest|current|today|tonight|this week|news|search|look up|find online|web|price|release date|schedule|weather|score|who is|what happened|update on)\b/i.test(String(text || ''));
+}
+
+async function runToolActions(request, env, user, actions, workspaceId) {
+  const toolResults = [];
+  const generatedFiles = [];
+  for (const action of actions.slice(0, 3)) {
+    if (action.type === 'web_search') {
+      const query = String(action.query || '').trim();
+      if (query) {
+        const results = await searchWeb(query);
+        toolResults.push({ type: 'web_search', query, results });
+      }
+    } else if (action.type === 'browser_open') {
+      const url = String(action.url || '').trim();
+      if (url) {
+        try {
+          const rendered = await browserQuickText(env, 'markdown', url);
+          toolResults.push({ type: 'browser_open', url: rendered.url, content: rendered.text.slice(0, 9000) });
+        } catch (error) {
+          toolResults.push({ type: 'browser_open', url, error: error.message });
+        }
+      }
+    } else if (action.type === 'computer_exec') {
+      const command = String(action.command || '').trim();
+      if (command) {
+        const fake = new Request(request.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: request.headers.get('Authorization') || '' },
+          body: JSON.stringify({ command })
+        });
+        const response = await handleComputerExec(fake, env);
+        let data = {};
+        try { data = await response.json(); } catch {}
+        toolResults.push({ type: 'computer_exec', command, stdout: data.stdout || '', stderr: data.stderr || data.error || '' });
+      }
+    } else if (action.type === 'generate_image') {
+      const prompt = String(action.prompt || '').trim();
+      if (prompt) {
+        try {
+          const file = await generateImageForUser(env, user, prompt, workspaceId);
+          generatedFiles.push(file);
+          toolResults.push({ type: 'generate_image', prompt, file: { id: file.id, name: file.name } });
+        } catch (error) {
+          toolResults.push({ type: 'generate_image', prompt, error: error.message });
+        }
+      }
+    }
+  }
+  return { toolResults, generatedFiles };
+}
+
 async function handleChat(request, env) {
   if (!withinRateLimit(request)) return json(request, 429, { error: 'Too many messages at once. Try again in a minute.' }, { 'Retry-After': '60' });
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const meta = await ensureUserMeta(env, auth.user);
+  if (meta.banned_until && Number(meta.banned_until) > Date.now()) return json(request, 403, { error: 'This account is temporarily suspended.' });
+  const beforeUsage = await usageSnapshot(env, auth.user, meta);
+  if (beforeUsage.weekly.remainingPercent <= 0 || (beforeUsage.threeHour && beforeUsage.threeHour.remainingPercent <= 0)) {
+    return json(request, 429, { error: 'Ripo Bot usage limit reached. It will reset automatically.', usage: beforeUsage });
+  }
+
   const body = await readJsonBody(request);
   let messages;
   try { messages = normalizeMessages(body.messages); }
@@ -822,23 +929,32 @@ async function handleChat(request, env) {
   const allowAgentAdmin = Boolean(body.allowAgentAdmin);
   const allowRename = Boolean(body.allowRename);
   const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content || '';
+  const workspace = await resolveWorkspace(env, auth.user, body.workspaceId);
   let sources = [];
-  if (body.search) sources = await searchWeb(lastUser);
+  if (shouldAutoSearch(lastUser)) sources = await searchWeb(lastUser);
 
-  const capabilities = [];
+  const capabilities = [
+    'You have tools and should use them automatically when useful. Do not ask the user to turn search or computer mode on.',
+    'To search the web, emit <ripo_action>{"type":"web_search","query":"what to search"}</ripo_action>.',
+    'To open and read a webpage with the browser, emit <ripo_action>{"type":"browser_open","url":"https://example.com"}</ripo_action>.',
+    'To use the private Ripo Computer terminal/filesystem, emit <ripo_action>{"type":"computer_exec","command":"command here"}</ripo_action>.',
+    'To create an image when the user asks for an image, emit <ripo_action>{"type":"generate_image","prompt":"detailed image prompt"}</ripo_action>.',
+    'Use at most three tool actions in one turn. Tool actions are hidden from the user and their results will be returned to you before your final answer.'
+  ];
   if (allowAgentAdmin) {
-    capabilities.push(`When the user explicitly asks you to create a new specialist agent, you may include exactly one machine-readable action after your normal response using: <ripo_action>{"type":"create_agent","name":"Name","role":"Role","description":"Short description","instructions":"Instructions","avatar":"nova"}</ripo_action>.`);
-    capabilities.push(`When the user explicitly asks you to form a team from existing agents, you may include: <ripo_action>{"type":"create_team","name":"Team name","memberNames":["Agent One","Agent Two"]}</ripo_action>.`);
-    capabilities.push(`When the user explicitly asks you to rename another agent, you may include: <ripo_action>{"type":"rename_agent","targetName":"Current agent name","name":"New name"}</ripo_action>.`);
+    capabilities.push('To create a specialist agent when requested, emit <ripo_action>{"type":"create_agent","name":"Name","role":"Role","description":"Short description","instructions":"Instructions","avatar":"nova"}</ripo_action>.');
+    capabilities.push('To form a team, emit <ripo_action>{"type":"create_team","name":"Team name","memberNames":["Agent One","Agent Two"]}</ripo_action>.');
+    capabilities.push('To rename another agent, emit <ripo_action>{"type":"rename_agent","targetName":"Current agent name","name":"New name"}</ripo_action>.');
+    capabilities.push('To hand a note to another existing bot, emit <ripo_action>{"type":"message_agent","targetName":"Bot name","message":"Message"}</ripo_action>.');
   }
-  if (allowRename) capabilities.push('If your own role changes substantially and a better short name is useful, you may put [[rename:New Name]] at the very start of your reply. Do this rarely and only when it clearly helps.');
+  if (allowRename) capabilities.push('If your own role changes substantially and a better short name is useful, you may put [[rename:New Name]] at the start of the reply. Do this rarely.');
 
   const system = [
     BASE_PROMPT,
     `You are currently ${agentName}, role: ${agentRole}.`,
     agentInstructions ? `Agent-specific instructions: ${agentInstructions}` : '',
     capabilities.join(' '),
-    sources.length ? `${searchContext(sources)}\nUse these results when answering and distinguish uncertainty. Do not invent sources beyond this list.` : ''
+    sources.length ? `${searchContext(sources)}\nUse these results when answering and distinguish uncertainty.` : ''
   ].filter(Boolean).join('\n\n');
 
   const requestMessages = [{ role: 'system', content: system }, ...messages];
@@ -847,8 +963,45 @@ async function handleChat(request, env) {
   if (!result) { try { result = await callWorkersAI(requestMessages, env); } catch {} }
   if (!result) { try { result = await callBackup(requestMessages); } catch {} }
   if (!result) return json(request, 502, { error: 'Ripo Bot could not reach an AI model.' });
-  const parsed = extractActions(result.reply);
-  return json(request, 200, { ...result, reply: parsed.reply || 'Done.', actions: parsed.actions, sources });
+
+  let parsed = extractActions(result.reply);
+  const immediateActions = parsed.actions.filter((action) => ['create_agent','create_team','rename_agent','message_agent'].includes(action.type));
+  const toolActions = parsed.actions.filter((action) => ['web_search','browser_open','computer_exec','generate_image'].includes(action.type));
+  let generatedFiles = [];
+
+  if (toolActions.length) {
+    const toolRun = await runToolActions(request, env, auth.user, toolActions, workspace.id);
+    generatedFiles = toolRun.generatedFiles;
+    const toolMessage = `Tool results:\n${JSON.stringify(toolRun.toolResults).slice(0, 28000)}\n\nNow answer the user's request. Do not emit more tool actions. Mention created files/images naturally when relevant.`;
+    const followupMessages = [...requestMessages, { role: 'assistant', content: parsed.reply || 'I am using tools now.' }, { role: 'user', content: toolMessage }];
+    let followup = null;
+    try { followup = await callHuggingFace(followupMessages, env); } catch {}
+    if (!followup) { try { followup = await callWorkersAI(followupMessages, env); } catch {} }
+    if (!followup) { try { followup = await callBackup(followupMessages); } catch {} }
+    if (followup?.reply) {
+      result = followup;
+      parsed = extractActions(followup.reply);
+    }
+  }
+
+  if (!sources.length) {
+    const searchTool = toolActions.find((action) => action.type === 'web_search');
+    if (searchTool?.query) sources = await searchWeb(searchTool.query);
+  }
+
+  const tokens = estimateTokens(messages, parsed.reply);
+  await recordUsage(env, auth.user, tokens);
+  const freshMeta = await ensureUserMeta(env, auth.user);
+  const usage = await usageSnapshot(env, auth.user, freshMeta);
+  return json(request, 200, {
+    ...result,
+    reply: parsed.reply || 'Done.',
+    actions: immediateActions,
+    sources,
+    generatedFiles,
+    usage,
+    coins: Number(freshMeta.coins || 0)
+  });
 }
 
 async function handleSearch(request) {
@@ -1051,11 +1204,24 @@ export default {
       if (url.pathname === '/api/auth/login' && request.method === 'POST') return handleLogin(request, env);
       if (url.pathname === '/api/auth/session' && request.method === 'GET') return handleSession(request, env);
       if (url.pathname === '/api/auth/logout' && request.method === 'POST') return handleLogout(request, env);
+      if (url.pathname === '/api/account' && request.method === 'GET') return handleAccountGet(request, env);
+      if (url.pathname === '/api/account' && request.method === 'PUT') return handleAccountUpdate(request, env);
+      if (url.pathname === '/api/account/avatar' && request.method === 'POST') return handleAvatarUpload(request, env);
+      if (url.pathname === '/api/account/avatar' && request.method === 'GET') return handleAvatarGet(request, env);
+      if (url.pathname === '/api/coins/daily' && request.method === 'POST') return handleDailyClaim(request, env);
+      if (url.pathname === '/api/plans/upgrade' && request.method === 'POST') return handlePlusUpgrade(request, env);
+      if (url.pathname === '/api/workspaces' && request.method === 'GET') return handleWorkspacesList(request, env);
+      if (url.pathname === '/api/workspaces' && request.method === 'POST') return handleWorkspaceCreate(request, env);
+      if (url.pathname.startsWith('/api/workspaces/') && url.pathname.endsWith('/rename') && request.method === 'PUT') return handleWorkspaceRename(request, env, decodeURIComponent(url.pathname.split('/')[3]));
+      if (url.pathname === '/api/admin/users' && request.method === 'GET') return handleAdminUsers(request, env);
+      if (url.pathname.startsWith('/api/admin/users/') && url.pathname.endsWith('/action') && request.method === 'POST') return handleAdminAction(request, env, decodeURIComponent(url.pathname.split('/')[4]));
+      if (url.pathname === '/api/images/generate' && request.method === 'POST') return handleImageGenerate(request, env);
       if (url.pathname === '/api/state' && request.method === 'GET') return handleStateGet(request, env);
       if (url.pathname === '/api/state' && request.method === 'PUT') return handleStatePut(request, env);
       if (url.pathname === '/api/files' && request.method === 'GET') return handleFilesList(request, env);
       if (url.pathname === '/api/files' && request.method === 'POST') return handleFileUpload(request, env);
       if (url.pathname.startsWith('/api/files/') && request.method === 'GET') return handleFileGet(request, env, decodeURIComponent(url.pathname.slice('/api/files/'.length)));
+      if (url.pathname.startsWith('/api/files/') && request.method === 'DELETE') return handleFileDelete(request, env, decodeURIComponent(url.pathname.slice('/api/files/'.length)));
       if (url.pathname === '/api/search' && request.method === 'POST') return handleSearch(request);
       if (url.pathname === '/api/chat' && request.method === 'POST') return handleChat(request, env);
       if (url.pathname === '/api/computer/status' && request.method === 'GET') return json(request, 200, { configured: Boolean(env.DB), provider: 'Ripo Computer Lite', linux: true, browser: Boolean(env.BROWSER), browserProvider: env.BROWSER ? 'Cloudflare Browser Run Free' : 'Search fallback', browserFreeLimit: '10 minutes/day', persistent: Boolean(env.DB), note: 'Zero-cost Linux-style workspace with persistent files and real rendered browsing on the Browser Run free allowance.' });
