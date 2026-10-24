@@ -63,3 +63,35 @@ export function avatarVisual(agent = {}) {
     speed: 5.4 + ((seed % 29) / 10)
   };
 }
+
+
+export function diversifyLegacyAgents(agents = []) {
+  const usedShapes = new Set();
+  return agents.map((agent, index) => {
+    if (Number(agent?.avatarVisualVersion) >= 5) {
+      usedShapes.add(Number(agent.avatarShape) % AVATAR_SHAPES.length);
+      return agent;
+    }
+    const base = avatarVisual({
+      ...agent,
+      avatarShape: undefined,
+      avatarMotion: undefined,
+      avatarColor: undefined
+    });
+    let shapeIndex = (base.shapeIndex + index * 3) % AVATAR_SHAPES.length;
+    let guard = 0;
+    while (usedShapes.has(shapeIndex) && guard < AVATAR_SHAPES.length) {
+      shapeIndex = (shapeIndex + 1) % AVATAR_SHAPES.length;
+      guard += 1;
+    }
+    usedShapes.add(shapeIndex);
+    return {
+      ...agent,
+      avatarVisualVersion: 5,
+      avatarSeed: agent?.avatarSeed || agent?.id || agent?.name || `bot-${index}`,
+      avatarShape: shapeIndex,
+      avatarMotion: (base.motion + index) % 8,
+      avatarColor: agent?.avatarColor || AVATAR_COLORS[(base.seed + index * 2) % AVATAR_COLORS.length]
+    };
+  });
+}
