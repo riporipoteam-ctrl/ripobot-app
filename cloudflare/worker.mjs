@@ -524,6 +524,44 @@ function childNames(state, dir) {
   return [...names].sort();
 }
 
+function browserUrl(input) {
+  const raw = String(input || '').trim();
+  if (!raw) throw new Error('Add a URL, for example: open https://example.com');
+  const value = /^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`;
+  const parsed = new URL(value);
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Only http and https URLs are supported.');
+  const host = parsed.hostname.toLowerCase();
+  const blocked = host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal') ||
+    /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) ||
+    /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:');
+  if (blocked) throw new Error('Private or local network addresses are not allowed.');
+  if (parsed.href.length > 2048) throw new Error('URL is too long.');
+  return parsed.href;
+}
+
+async function browserQuickText(env, action, input) {
+  if (!env.BROWSER) throw new Error('Browser Run is unavailable.');
+  const url = browserUrl(input);
+  const response = await env.BROWSER.quickAction(action, {
+    url,
+    gotoOptions: { waitUntil: 'domcontentloaded', timeout: 20000 }
+  });
+  const browserMs = Number(response.headers.get('X-Browser-Ms-Used') || 0);
+  const raw = await response.text();
+  if (!response.ok) {
+    if (response.status === 429) throw new Error('The free Browser Run allowance is used up for today. Try again tomorrow.');
+    throw new Error(`Browser Run failed with HTTP ${response.status}.`);
+  }
+  let value = raw;
+  try {
+    const parsed = JSON.parse(raw);
+    value = parsed?.result?.markdown ?? parsed?.result?.content ?? parsed?.result ?? parsed?.markdown ?? raw;
+    if (typeof value !== 'string') value = JSON.stringify(value, null, 2);
+  } catch {}
+  return { url, text: String(value).slice(0, 16000), browserMs };
+}
+
 async function handleComputerExec(request, env) {
   const auth = await requireUser(request, env); if (auth.error) return auth.error;
   const body = await readJsonBody(request);
@@ -537,7 +575,7 @@ async function handleComputerExec(request, env) {
   let stderr = '';
   let changed = false;
 
-  if (name === 'help') stdout = 'Commands: pwd, ls [path], cd <dir>, mkdir <dir>, touch <file>, cat <file>, echo <text> > <file>, rm <path>, cp <src> <dst>, mv <src> <dst>, files, search <query>, whoami, uname, date, clear, help';
+  if (name === 'help') stdout = 'Commands: pwd, ls [path], cd <dir>, mkdir <dir>, touch <file>, cat <file>, echo <text> > <file>, rm <path>, cp <src> <dst>, mv <src> <dst>, files, search <query>, open <url>, links <url>, whoami, uname, date, clear, help';
   else if (name === 'pwd') stdout = state.cwd;
   else if (name === 'whoami') stdout = auth.user.email;
   else if (name === 'uname') stdout = 'RipoOS Lite 1.0 · Cloudflare Worker virtual workspace';
@@ -572,6 +610,16 @@ async function handleComputerExec(request, env) {
     stdout = (rows.results || []).map((f) => `${f.id}  ${f.name}  ${Math.max(1, Math.round(Number(f.size || 0)/1024))}KB`).join('\n') || 'No uploaded cloud files.';
   } else if (name === 'search') {
     if (!arg) stderr = 'search: add a query'; else { const results = await searchWeb(arg); stdout = results.map((r, i) => `${i+1}. ${r.title}\n${r.url}\n${r.snippet || ''}`).join('\n\n') || 'No results.'; }
+  } else if (name === 'open' || name === 'browser') {
+    try {
+      const rendered = await browserQuickText(env, 'markdown', arg);
+      stdout = `Rendered with Cloudflare Browser Run · ${Math.max(1, rendered.browserMs)}ms\n${rendered.url}\n\n${rendered.text}`;
+    } catch (error) { stderr = error.message || 'Browser Run failed.'; }
+  } else if (name === 'links') {
+    try {
+      const rendered = await browserQuickText(env, 'links', arg);
+      stdout = `Rendered links · ${Math.max(1, rendered.browserMs)}ms\n${rendered.url}\n\n${rendered.text}`;
+    } catch (error) { stderr = error.message || 'Browser Run failed.'; }
   } else stderr = `${nameRaw}: command not found. Type help.`;
 
   if (changed) await saveComputerState(env, auth.user.id, state);
@@ -613,7 +661,9 @@ export default {
         storageReady: Boolean(env.DB && env.FILES),
         computerReady: Boolean(env.DB),
         storageProvider: env.FILES ? 'Workers KV Free' : 'device',
-        computerProvider: 'Ripo Computer Lite'
+        computerProvider: 'Ripo Computer Lite',
+        browserReady: Boolean(env.BROWSER),
+        browserProvider: env.BROWSER ? 'Cloudflare Browser Run Free' : 'Search fallback'
       });
 
       if (url.pathname === '/api/auth/register' && request.method === 'POST') return handleRegister(request, env);
@@ -627,7 +677,7 @@ export default {
       if (url.pathname.startsWith('/api/files/') && request.method === 'GET') return handleFileGet(request, env, decodeURIComponent(url.pathname.slice('/api/files/'.length)));
       if (url.pathname === '/api/search' && request.method === 'POST') return handleSearch(request);
       if (url.pathname === '/api/chat' && request.method === 'POST') return handleChat(request, env);
-      if (url.pathname === '/api/computer/status' && request.method === 'GET') return json(request, 200, { configured: Boolean(env.DB), provider: 'Ripo Computer Lite', linux: true, browser: true, persistent: Boolean(env.DB), note: 'Zero-cost virtual Linux-style workspace with persistent files and web search.' });
+      if (url.pathname === '/api/computer/status' && request.method === 'GET') return json(request, 200, { configured: Boolean(env.DB), provider: 'Ripo Computer Lite', linux: true, browser: Boolean(env.BROWSER), browserProvider: env.BROWSER ? 'Cloudflare Browser Run Free' : 'Search fallback', browserFreeLimit: '10 minutes/day', persistent: Boolean(env.DB), note: 'Zero-cost Linux-style workspace with persistent files and real rendered browsing on the Browser Run free allowance.' });
       if (url.pathname === '/api/computer/exec' && request.method === 'POST') return handleComputerExec(request, env);
       if (url.pathname.startsWith('/api/')) return json(request, 404, { error: 'API route not found.' });
       return json(request, 404, { error: 'Ripo Bot API is online.' });
