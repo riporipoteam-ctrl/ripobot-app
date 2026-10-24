@@ -77,7 +77,10 @@ const LOCAL_KEYS = {
   teams: 'ripobot.teams.v2',
   files: 'ripobot.files.v2',
   onboarded: 'ripobot.onboarded.v2',
-  theme: 'ripobot.theme.v3'
+  theme: 'ripobot.theme.v3',
+  accent: 'ripobot.accent.v4',
+  archivedChats: 'ripobot.archived.v4',
+  activeWorkspace: 'ripobot.workspace.v4'
 };
 
 function readLocal(key, fallback) {
@@ -1023,6 +1026,11 @@ export default function App() {
   const [activeTeamId, setActiveTeamId] = useState(null);
   const [mobileNav, setMobileNav] = useState(true);
   const [theme, setTheme] = useState(() => readLocal(LOCAL_KEYS.theme, 'light'));
+  const [accent, setAccent] = useState(() => readLocal(LOCAL_KEYS.accent, '#111111'));
+  const [account, setAccount] = useState(null);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(() => readLocal(LOCAL_KEYS.activeWorkspace, null));
+  const [archivedChats, setArchivedChats] = useState(() => readLocal(LOCAL_KEYS.archivedChats, []));
   const [modal, setModal] = useState(null);
   const [sending, setSending] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -1034,22 +1042,64 @@ export default function App() {
   const threadKey = activeTeam ? `team:${activeTeam.id}` : activeAgent?.id;
   const messages = conversations[threadKey] || [];
 
-  useEffect(() => {
-    api('/api/auth/session').then((data) => {
-      if (data?.user) {
-        const previous = readLocal(LOCAL_KEYS.session, null);
-        const next = { profile: data.user, cloud: true, token: previous?.token || '', expiresAt: previous?.expiresAt || null };
-        setAuth(next); setProfile(data.user); setCloudMode(true);
-        writeLocal(LOCAL_KEYS.session, next); writeLocal(LOCAL_KEYS.profile, data.user);
-        return api('/api/state').then((state) => {
-          if (state?.agents?.length) setAgents(state.agents);
-          if (state?.conversations) setConversations(state.conversations);
-          if (state?.teams) setTeams(state.teams);
-          if (typeof state?.onboarded === 'boolean') setOnboarded(state.onboarded);
-          return api('/api/files').then((dataFiles) => { if (Array.isArray(dataFiles?.files)) setFiles(dataFiles.files); }).catch(() => {});
-        });
+  async function refreshAccount() {
+    if (!cloudMode && !storedToken()) return null;
+    try {
+      const data = await api('/api/account');
+      setAccount(data);
+      if (data?.user) { setProfile(data.user); writeLocal(LOCAL_KEYS.profile, data.user); }
+      return data;
+    } catch { return null; }
+  }
+
+  async function refreshWorkspaces(preferredId = activeWorkspaceId) {
+    if (!storedToken()) return [];
+    try {
+      const data = await api('/api/workspaces');
+      const list = data.workspaces || [];
+      setWorkspaces(list);
+      const chosen = list.find((item) => item.id === preferredId)?.id || list[0]?.id || null;
+      if (chosen && chosen !== activeWorkspaceId) {
+        setActiveWorkspaceId(chosen);
+        writeLocal(LOCAL_KEYS.activeWorkspace, chosen);
       }
-      return null;
+      return list;
+    } catch { return []; }
+  }
+
+  async function loadWorkspace(workspaceId) {
+    if (!workspaceId || !storedToken()) return;
+    try {
+      const state = await api(`/api/state?workspaceId=${encodeURIComponent(workspaceId)}`);
+      const nextAgents = state?.agents?.length ? state.agents : [STARTER_AGENTS[0]];
+      setAgents(nextAgents);
+      setConversations(state?.conversations && Object.keys(state.conversations).length ? state.conversations : { ripo: DEFAULT_CONVERSATIONS.ripo });
+      setTeams(Array.isArray(state?.teams) ? state.teams : []);
+      setArchivedChats(Array.isArray(state?.archivedChats) ? state.archivedChats : []);
+      if (typeof state?.onboarded === 'boolean') setOnboarded(state.onboarded);
+      const dataFiles = await api(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ files: [] }));
+      setFiles(Array.isArray(dataFiles?.files) ? dataFiles.files : []);
+      setActiveAgentId(nextAgents[0]?.id || 'ripo');
+      setActiveTeamId(null);
+    } catch {}
+  }
+
+  useEffect(() => {
+    api('/api/auth/session').then(async (data) => {
+      if (!data?.user) return;
+      const previous = readLocal(LOCAL_KEYS.session, null);
+      const next = { profile: data.user, cloud: true, token: previous?.token || '', expiresAt: previous?.expiresAt || null };
+      setAuth(next); setProfile(data.user); setCloudMode(true); setAccount(data);
+      writeLocal(LOCAL_KEYS.session, next); writeLocal(LOCAL_KEYS.profile, data.user);
+      const workspaceData = await api('/api/workspaces').catch(() => ({ workspaces: [] }));
+      const list = workspaceData.workspaces || [];
+      setWorkspaces(list);
+      const remembered = readLocal(LOCAL_KEYS.activeWorkspace, null);
+      const workspaceId = list.find((item) => item.id === remembered)?.id || data.defaultWorkspaceId || list[0]?.id;
+      if (workspaceId) {
+        setActiveWorkspaceId(workspaceId); writeLocal(LOCAL_KEYS.activeWorkspace, workspaceId);
+        await loadWorkspace(workspaceId);
+      }
     }).catch(() => {});
   }, []);
 
@@ -1058,6 +1108,12 @@ export default function App() {
   useEffect(() => { writeLocal(LOCAL_KEYS.teams, teams); }, [teams]);
   useEffect(() => { writeLocal(LOCAL_KEYS.files, files); }, [files]);
   useEffect(() => { writeLocal(LOCAL_KEYS.onboarded, onboarded); }, [onboarded]);
+  useEffect(() => { writeLocal(LOCAL_KEYS.archivedChats, archivedChats); }, [archivedChats]);
+  useEffect(() => { if (activeWorkspaceId) writeLocal(LOCAL_KEYS.activeWorkspace, activeWorkspaceId); }, [activeWorkspaceId]);
+  useEffect(() => {
+    writeLocal(LOCAL_KEYS.accent, accent);
+    document.documentElement.style.setProperty('--user-accent', accent);
+  }, [accent]);
   useEffect(() => {
     writeLocal(LOCAL_KEYS.theme, theme);
     const root = document.documentElement;
@@ -1078,11 +1134,11 @@ export default function App() {
     const timer = setTimeout(() => {
       api('/api/state', {
         method: 'PUT',
-        body: JSON.stringify({ agents, conversations, teams, onboarded })
+        body: JSON.stringify({ workspaceId: activeWorkspaceId, agents, conversations, teams, archivedChats, onboarded })
       }).then(() => setSyncState('saved')).catch(() => setSyncState('local'));
     }, 700);
     return () => clearTimeout(timer);
-  }, [agents, conversations, teams, onboarded, cloudMode, auth]);
+  }, [agents, conversations, teams, archivedChats, onboarded, cloudMode, auth, activeWorkspaceId]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -1090,10 +1146,17 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  function authenticated({ profile: nextProfile, cloud, token = '', expiresAt = null }) {
+  async function authenticated({ profile: nextProfile, cloud, token = '', expiresAt = null, account: nextAccount = null }) {
     const next = { profile: nextProfile, cloud, token, expiresAt };
     setAuth(next); setProfile(nextProfile); setCloudMode(cloud);
     writeLocal(LOCAL_KEYS.session, next); writeLocal(LOCAL_KEYS.profile, nextProfile);
+    if (cloud) {
+      const accountData = nextAccount || await api('/api/account').catch(() => null);
+      if (accountData) setAccount(accountData);
+      const list = await refreshWorkspaces(accountData?.defaultWorkspaceId || null);
+      const workspaceId = list[0]?.id || accountData?.defaultWorkspaceId;
+      if (workspaceId) { setActiveWorkspaceId(workspaceId); await loadWorkspace(workspaceId); }
+    }
   }
 
   function finishOnboarding(data) {
@@ -1102,6 +1165,42 @@ export default function App() {
     const nextProfile = { ...(profile || {}), name: data.displayName, goal: data.goal };
     setProfile(nextProfile); writeLocal(LOCAL_KEYS.profile, nextProfile);
     setOnboarded(true);
+  }
+
+  async function selectWorkspace(workspaceId) {
+    if (!workspaceId || workspaceId === activeWorkspaceId) { setView('chat'); return; }
+    if (cloudMode && activeWorkspaceId) {
+      await api('/api/state', { method: 'PUT', body: JSON.stringify({ workspaceId: activeWorkspaceId, agents, conversations, teams, archivedChats, onboarded }) }).catch(() => {});
+    }
+    setActiveWorkspaceId(workspaceId);
+    writeLocal(LOCAL_KEYS.activeWorkspace, workspaceId);
+    await loadWorkspace(workspaceId);
+    setView('chat'); setMobileNav(false); setToast('Workspace switched');
+  }
+
+  function archiveCurrentChat() {
+    if (!threadKey || !messages.length) return;
+    const firstUser = messages.find((message) => message.role === 'user')?.content || (activeTeam?.name || activeAgent?.name || 'Conversation');
+    const archive = {
+      id: uid('archive'), threadKey, agentId: activeAgent?.id || null, teamId: activeTeam?.id || null,
+      title: firstUser.slice(0, 72), createdAt: Date.now(), messages
+    };
+    setArchivedChats((current) => [archive, ...current].slice(0, 200));
+  }
+
+  function newTask() {
+    archiveCurrentChat();
+    if (!threadKey) return;
+    setConversations((current) => ({ ...current, [threadKey]: [] }));
+    setView('chat'); setMobileNav(false);
+  }
+
+  function openArchive(archive) {
+    if (!archive) return;
+    if (archive.teamId) { setActiveTeamId(archive.teamId); }
+    else { setActiveAgentId(archive.agentId || 'ripo'); setActiveTeamId(null); }
+    setConversations((current) => ({ ...current, [archive.threadKey]: archive.messages || [] }));
+    setView('chat'); setMobileNav(false);
   }
 
   function navigate(next) {
@@ -1147,6 +1246,7 @@ export default function App() {
         try {
           const body = new FormData();
           body.append('file', file);
+          if (activeWorkspaceId) body.append('workspaceId', activeWorkspaceId);
           const result = await api('/api/files', { method: 'POST', body });
           if (result?.file) { uploaded.push(result.file); continue; }
         } catch {
@@ -1157,11 +1257,21 @@ export default function App() {
     }
     setFiles((current) => [...uploaded, ...current]);
     setToast(`${uploaded.length} file${uploaded.length === 1 ? '' : 's'} added`);
+    refreshWorkspaces(activeWorkspaceId).catch(() => {});
   }
 
-  async function sendSingleAgent(agent, text, options, history, targetKey) {
-    const search = Boolean(options.search);
-    setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: search ? 'searching' : 'thinking' } : item));
+  async function deleteFile(file) {
+    if (!file?.id) return;
+    try {
+      await api(`/api/files/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
+      setFiles((current) => current.filter((item) => item.id !== file.id));
+      setToast('File deleted');
+      refreshWorkspaces(activeWorkspaceId).catch(() => {});
+    } catch (error) { alert(error.message || 'Could not delete file.'); }
+  }
+
+  async function sendSingleAgent(agent, text, options = {}, history, targetKey) {
+    setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: 'working' } : item));
     const payloadMessages = history.slice(-18).map((message) => ({ role: message.role, content: message.content }));
     const result = await api('/api/chat', {
       method: 'POST',
@@ -1170,8 +1280,7 @@ export default function App() {
         agentRole: agent.role,
         agentInstructions: agent.instructions || '',
         messages: payloadMessages,
-        search,
-        computer: Boolean(options.computer),
+        workspaceId: activeWorkspaceId,
         attachments: (options.attachments || []).map((file) => ({ id: file.id, name: file.name, type: file.type })),
         allowAgentAdmin: Boolean(agent.isPrimary),
         allowRename: Boolean(agent.canRenameSelf)
@@ -1205,6 +1314,14 @@ export default function App() {
           setConversations((current) => current[newAgent.id] ? current : { ...current, [newAgent.id]: [] });
           setToast(`${newAgent.name} joined your team`);
         }
+        if (action.type === 'message_agent' && agent.isPrimary && action.targetName && action.message) {
+          const target = agents.find((item) => item.name.toLowerCase() === String(action.targetName).toLowerCase());
+          if (target) {
+            const handoff = { id: uid('handoff'), role: 'assistant', content: `Message from ${agent.name}: ${String(action.message).slice(0, 2000)}`, createdAt: new Date().toISOString(), agentId: agent.id };
+            setConversations((current) => ({ ...current, [target.id]: [...(current[target.id] || []), handoff] }));
+            setToast(`${agent.name} messaged ${target.name}`);
+          }
+        }
         if (action.type === 'create_team' && agent.isPrimary && action.name && Array.isArray(action.memberNames)) {
           const wanted = action.memberNames.map((name) => String(name).toLowerCase());
           const memberIds = agents.filter((item) => wanted.includes(item.name.toLowerCase())).map((item) => item.id);
@@ -1220,8 +1337,15 @@ export default function App() {
     const reply = {
       id: uid('assistant'), role: 'assistant', content: result.reply,
       createdAt: new Date().toISOString(), agentId: agent.id,
-      sources: result.sources || []
+      sources: result.sources || [],
+      generatedFiles: result.generatedFiles || []
     };
+    if (Array.isArray(result.generatedFiles) && result.generatedFiles.length) {
+      setFiles((current) => [...result.generatedFiles, ...current.filter((file) => !result.generatedFiles.some((generated) => generated.id === file.id))]);
+    }
+    if (result.usage || typeof result.coins === 'number') {
+      setAccount((current) => current ? { ...current, usage: result.usage || current.usage, coins: typeof result.coins === 'number' ? result.coins : current.coins } : current);
+    }
     setConversations((current) => ({ ...current, [targetKey]: [...(current[targetKey] || []), reply] }));
     setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: 'done' } : item));
     setTimeout(() => setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: 'ready' } : item)), 1200);
@@ -1258,11 +1382,36 @@ export default function App() {
     }
   }
 
+  async function sendVoiceTurn(text, participantIds) {
+    if (!threadKey || sending) return [];
+    const selected = (participantIds || []).map((id) => agents.find((agent) => agent.id === id)).filter(Boolean);
+    const participants = selected.length ? selected : [activeAgent].filter(Boolean);
+    const userMessage = { id: uid('voice-user'), role: 'user', content: text, createdAt: new Date().toISOString(), voice: true };
+    const base = [...(conversations[threadKey] || []), userMessage];
+    setConversations((current) => ({ ...current, [threadKey]: [...(current[threadKey] || []), userMessage] }));
+    setSending(true);
+    const replies = [];
+    try {
+      let rolling = base;
+      for (const participant of participants) {
+        const prompt = participants.length > 1 ? `Voice meeting message from the user: ${text}\nRespond as ${participant.name}. You may coordinate with the other bots, but keep the spoken response concise.` : text;
+        const reply = await sendSingleAgent(participant, prompt, {}, rolling, threadKey);
+        replies.push({ ...reply, agent: participant });
+        rolling = [...rolling, reply];
+      }
+      return replies;
+    } finally { setSending(false); }
+  }
+
   async function logout() {
     if (cloudMode) api('/api/auth/logout', { method: 'POST', body: '{}' }).catch(() => {});
-    setAuth(null); setCloudMode(false); setProfile(null); setOnboarded(false);
+    setAuth(null); setCloudMode(false); setProfile(null); setAccount(null); setOnboarded(false); setWorkspaces([]);
+    const keepTheme = theme, keepAccent = accent;
     Object.values(LOCAL_KEYS).forEach((key) => { try { localStorage.removeItem(key); } catch {} });
+    writeLocal(LOCAL_KEYS.theme, keepTheme); writeLocal(LOCAL_KEYS.accent, keepAccent);
   }
+
+  async function switchAccount() { await logout(); }
 
   const visibleAgents = useMemo(() => {
     const query = searchText.trim().toLowerCase();
