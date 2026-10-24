@@ -21,10 +21,11 @@ const allowedOrigins = new Set([
 ]);
 
 const BASE_PROMPT = [
-  'You are Ripo Bot, the lead AI agent inside the Ripo Bot workspace.',
+  'You are an AI bot operating inside the Ripo Bot product.',
+  'Ripo Bot is the product name and also the name of the main bot. Never call yourself Ripo Bot unless the current bot name is exactly Ripo Bot.',
+  'Always preserve your assigned bot identity, role, and instructions. When referring to yourself, use your own current bot name.',
   'Be practical, warm, direct, and useful. Prefer concise answers unless the user asks for detail.',
-  'Never claim a web search, file read, computer action, or external change happened unless a tool result is explicitly included in the conversation context.',
-  'The user may have multiple specialist agents. Respect the current agent name, role, and instructions.'
+  'Never claim a web search, file read, image inspection, computer action, file edit, or external change happened unless a tool result or attachment context explicitly proves it.'
 ].join(' ');
 
 function corsHeaders(request) {
@@ -714,6 +715,118 @@ function normalizeMessages(input) {
   });
 }
 
+
+function normalizeAvailableAgents(input, currentName = '') {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set();
+  return input.slice(0, 20).flatMap((agent) => {
+    const id = String(agent?.id || '').trim().slice(0, 100);
+    const name = String(agent?.name || '').trim().slice(0, 80);
+    if (!id || !name || seen.has(id)) return [];
+    seen.add(id);
+    return [{
+      id,
+      name,
+      role: String(agent?.role || 'AI bot').trim().slice(0, 120),
+      description: String(agent?.description || '').trim().slice(0, 300),
+      instructions: String(agent?.instructions || '').trim().slice(0, 1600),
+      isPrimary: Boolean(agent?.isPrimary),
+      isCurrent: name.toLowerCase() === String(currentName || '').toLowerCase()
+    }];
+  });
+}
+
+function isTextLikeMime(type = '', name = '') {
+  const mime = String(type || '').toLowerCase();
+  const filename = String(name || '').toLowerCase();
+  return mime.startsWith('text/') ||
+    /application\/(json|xml|javascript|x-javascript|sql|rtf|yaml|x-yaml)/.test(mime) ||
+    /\.(txt|md|markdown|json|js|jsx|ts|tsx|css|html|htm|xml|yaml|yml|csv|log|ini|toml|sql|py|java|c|cc|cpp|h|hpp|rs|go|swift|kt|sh)$/i.test(filename);
+}
+
+async function ownedFile(env, userId, fileId) {
+  if (!env.DB || !env.FILES || !fileId) return null;
+  const row = await env.DB.prepare('SELECT id, object_key, name, mime_type, size, created_at FROM files WHERE id = ?1 AND user_id = ?2')
+    .bind(String(fileId), userId).first();
+  if (!row) return null;
+  const bytes = await env.FILES.get(row.object_key, { type: 'arrayBuffer' });
+  if (!bytes) return null;
+  return {
+    id: row.id,
+    key: row.object_key,
+    name: row.name,
+    type: row.mime_type || 'application/octet-stream',
+    size: Number(row.size || bytes.byteLength || 0),
+    createdAt: Number(row.created_at || Date.now()),
+    bytes
+  };
+}
+
+async function describeImageAttachment(env, stored, userQuestion) {
+  if (!env.AI || !stored?.bytes) return '';
+  const bytes = new Uint8Array(stored.bytes);
+  if (bytes.byteLength > 8 * 1024 * 1024) return '[Image is attached but too large for the vision pass.]';
+  const image = `data:${stored.type || 'image/png'};base64,${bytesToBase64(bytes)}`;
+  const prompt = String(userQuestion || 'Describe this image accurately and mention text, objects, UI, errors, and details that could matter.').slice(0, 1800);
+  try {
+    const result = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+      messages: [
+        { role: 'system', content: 'Analyze the attached image precisely. Do not invent details. Extract visible text when relevant.' },
+        { role: 'user', content: prompt }
+      ],
+      image,
+      max_tokens: 700,
+      temperature: 0.15
+    });
+    return String(result?.response || result?.result || result?.description || '').trim().slice(0, 9000);
+  } catch (error) {
+    return `[Vision analysis failed for ${stored.name}: ${error?.message || 'unavailable'}]`;
+  }
+}
+
+async function buildAttachmentContext(env, user, attachments, userQuestion) {
+  if (!Array.isArray(attachments) || !attachments.length) return { text: '', files: [] };
+  const sections = [];
+  const files = [];
+  for (const attachment of attachments.slice(0, 6)) {
+    const stored = await ownedFile(env, user.id, attachment?.id);
+    if (!stored) {
+      sections.push(`Attachment "${String(attachment?.name || attachment?.id || 'file')}" could not be opened.`);
+      continue;
+    }
+    files.push({ id: stored.id, name: stored.name, type: stored.type, size: stored.size });
+    if (stored.type.startsWith('image/')) {
+      const description = await describeImageAttachment(env, stored, userQuestion);
+      sections.push(`IMAGE ATTACHMENT: ${stored.name}\nVision analysis:\n${description || '[No vision description returned.]'}`);
+      continue;
+    }
+    if (isTextLikeMime(stored.type, stored.name) && stored.bytes.byteLength <= 1024 * 1024) {
+      let decoded = '';
+      try { decoded = new TextDecoder('utf-8', { fatal: false }).decode(stored.bytes); } catch {}
+      decoded = decoded.replace(/\u0000/g, '').slice(0, 24000);
+      sections.push(`FILE ATTACHMENT: ${stored.name} (${stored.type})\nContents:\n${decoded || '[File is empty or not valid UTF-8 text.]'}`);
+      continue;
+    }
+    sections.push(`FILE ATTACHMENT: ${stored.name} (${stored.type}, ${stored.size} bytes). The binary file is attached, but this runtime does not yet have a safe parser for this format.`);
+  }
+  return {
+    text: sections.length ? `Attached user files are available below. Use them directly when answering.\n\n${sections.join('\n\n---\n\n')}` : '',
+    files
+  };
+}
+
+async function rewriteStoredTextFile(env, user, fileId, content) {
+  const stored = await ownedFile(env, user.id, fileId);
+  if (!stored) throw new Error('The file to edit was not found.');
+  if (!isTextLikeMime(stored.type, stored.name)) throw new Error('Only text/code files can be rewritten directly. Use image editing for images.');
+  const textValue = String(content ?? '');
+  const bytes = new TextEncoder().encode(textValue);
+  if (bytes.byteLength > 1024 * 1024) throw new Error('Edited text files are limited to 1 MB.');
+  await env.FILES.put(stored.key, bytes, { metadata: { type: stored.type, name: stored.name, userId: user.id, edited: 'true' } });
+  await env.DB.prepare('UPDATE files SET size = ?1 WHERE id = ?2 AND user_id = ?3').bind(bytes.byteLength, stored.id, user.id).run();
+  return { id: stored.id, name: stored.name, type: stored.type, size: bytes.byteLength, source: 'cloud', edited: true, url: `/api/files/${stored.id}` };
+}
+
 async function callHuggingFace(messages, env) {
   if (!env.HF_TOKEN) return null;
   const model = env.HF_MODEL || DEFAULT_MODEL;
@@ -839,7 +952,7 @@ function extractActions(text) {
   clean = clean.replace(regex, (_, raw) => {
     try {
       const parsed = JSON.parse(raw.trim());
-      if (parsed && ['create_agent', 'create_team', 'rename_agent', 'web_search', 'browser_open', 'computer_exec', 'generate_image', 'message_agent'].includes(parsed.type)) actions.push(parsed);
+      if (parsed && ['create_agent', 'create_team', 'rename_agent', 'web_search', 'browser_open', 'browser_click', 'browser_type', 'browser_scroll', 'browser_key', 'computer_exec', 'generate_image', 'edit_image', 'rewrite_file', 'message_agent', 'delegate_agent'].includes(parsed.type)) actions.push(parsed);
     } catch {}
     return '';
   });
@@ -857,15 +970,25 @@ function base64ImageBytes(value) {
   return base64ToBytes(raw);
 }
 
-async function generateImageForUser(env, user, prompt, workspaceId) {
+async function generateImageForUser(env, user, prompt, workspaceId, referenceFileIds = []) {
   if (!env.AI || !env.FILES) throw new Error('Image generation is unavailable.');
   const meta = await ensureUserMeta(env, user);
   const workspace = await resolveWorkspace(env, user, workspaceId);
   const storage = await storageSnapshot(env, user, meta);
   const form = new FormData();
-  form.append('prompt', String(prompt || '').trim().slice(0, 1200));
+  form.append('prompt', String(prompt || '').trim().slice(0, 1800));
   form.append('width', '768');
   form.append('height', '768');
+
+  let imageIndex = 0;
+  for (const fileId of (Array.isArray(referenceFileIds) ? referenceFileIds : []).slice(0, 4)) {
+    const stored = await ownedFile(env, user.id, fileId);
+    if (!stored || !stored.type.startsWith('image/')) continue;
+    const blob = new Blob([stored.bytes], { type: stored.type });
+    form.append(`input_image_${imageIndex}`, blob, stored.name || `reference-${imageIndex}.png`);
+    imageIndex += 1;
+  }
+
   const serialized = new Response(form);
   const result = await env.AI.run('@cf/black-forest-labs/flux-2-klein-4b', {
     multipart: { body: serialized.body, contentType: serialized.headers.get('content-type') }
@@ -876,16 +999,16 @@ async function generateImageForUser(env, user, prompt, workspaceId) {
   if (storage.used + bytes.byteLength > storage.limit) throw new Error('Workspace storage is full.');
   const id = crypto.randomUUID();
   const key = `file:${user.id}:${id}`;
-  const name = `ripo-image-${new Date().toISOString().replace(/[:.]/g, '-')}.${'png'}`;
+  const name = `ripo-image-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
   const createdAt = Date.now();
-  await env.FILES.put(key, bytes, { metadata: { type: 'image/png', name, userId: user.id, generated: 'true' } });
+  await env.FILES.put(key, bytes, { metadata: { type: 'image/png', name, userId: user.id, generated: 'true', editedFrom: referenceFileIds.join(',') } });
   await env.DB.batch([
     env.DB.prepare('INSERT INTO files (id, user_id, object_key, name, mime_type, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)')
       .bind(id, user.id, key, name, 'image/png', bytes.byteLength, createdAt),
     env.DB.prepare('INSERT OR REPLACE INTO file_workspaces (file_id, workspace_id, user_id) VALUES (?1, ?2, ?3)')
       .bind(id, workspace.id, user.id)
   ]);
-  return { id, name, type: 'image/png', size: bytes.byteLength, source: 'cloud', workspaceId: workspace.id, generated: true, createdAt, url: `/api/files/${id}` };
+  return { id, name, type: 'image/png', size: bytes.byteLength, source: 'cloud', workspaceId: workspace.id, generated: true, editedFrom: referenceFileIds, createdAt, url: `/api/files/${id}` };
 }
 
 async function handleImageGenerate(request, env) {
@@ -904,7 +1027,8 @@ function shouldAutoSearch(text) {
 async function runToolActions(request, env, user, actions, workspaceId) {
   const toolResults = [];
   const generatedFiles = [];
-  for (const action of actions.slice(0, 3)) {
+  const updatedFiles = [];
+  for (const action of actions.slice(0, 5)) {
     if (action.type === 'web_search') {
       const query = String(action.query || '').trim();
       if (query) {
@@ -915,12 +1039,36 @@ async function runToolActions(request, env, user, actions, workspaceId) {
       const url = String(action.url || '').trim();
       if (url) {
         try {
-          const rendered = await browserQuickText(env, 'markdown', url);
-          toolResults.push({ type: 'browser_open', url: rendered.url, content: rendered.text.slice(0, 9000) });
+          const rendered = await ensureLiveComputer(env, user.id, url);
+          toolResults.push({ type: 'browser_open', url: rendered.url, title: rendered.title, content: rendered.text.slice(0, 9000), interactiveElements: rendered.items.slice(0, 50), live: true });
         } catch (error) {
           toolResults.push({ type: 'browser_open', url, error: error.message });
         }
       }
+    } else if (action.type === 'browser_click') {
+      try {
+        const live = await browserLiveAction(env, user.id, action.selector
+          ? { kind: 'click_selector', selector: action.selector }
+          : { kind: 'click', x: action.x, y: action.y });
+        toolResults.push({ type: 'browser_click', url: live.url, title: live.title, content: live.text.slice(0, 7000), interactiveElements: live.items.slice(0, 50) });
+      } catch (error) { toolResults.push({ type: 'browser_click', error: error.message }); }
+    } else if (action.type === 'browser_type') {
+      try {
+        const live = await browserLiveAction(env, user.id, action.selector
+          ? { kind: 'type_selector', selector: action.selector, text: action.text }
+          : { kind: 'type', text: action.text });
+        toolResults.push({ type: 'browser_type', url: live.url, content: live.text.slice(0, 7000) });
+      } catch (error) { toolResults.push({ type: 'browser_type', error: error.message }); }
+    } else if (action.type === 'browser_scroll') {
+      try {
+        const live = await browserLiveAction(env, user.id, { kind: 'scroll', deltaX: action.deltaX, deltaY: action.deltaY });
+        toolResults.push({ type: 'browser_scroll', url: live.url, content: live.text.slice(0, 7000) });
+      } catch (error) { toolResults.push({ type: 'browser_scroll', error: error.message }); }
+    } else if (action.type === 'browser_key') {
+      try {
+        const live = await browserLiveAction(env, user.id, { kind: 'key', key: action.key });
+        toolResults.push({ type: 'browser_key', url: live.url, content: live.text.slice(0, 7000) });
+      } catch (error) { toolResults.push({ type: 'browser_key', error: error.message }); }
     } else if (action.type === 'computer_exec') {
       const command = String(action.command || '').trim();
       if (command) {
@@ -945,9 +1093,60 @@ async function runToolActions(request, env, user, actions, workspaceId) {
           toolResults.push({ type: 'generate_image', prompt, error: error.message });
         }
       }
+    } else if (action.type === 'edit_image') {
+      const prompt = String(action.prompt || '').trim();
+      const fileId = String(action.fileId || '').trim();
+      if (prompt && fileId) {
+        try {
+          const file = await generateImageForUser(env, user, prompt, workspaceId, [fileId]);
+          generatedFiles.push(file);
+          toolResults.push({ type: 'edit_image', prompt, sourceFileId: fileId, file: { id: file.id, name: file.name } });
+        } catch (error) {
+          toolResults.push({ type: 'edit_image', prompt, sourceFileId: fileId, error: error.message });
+        }
+      }
+    } else if (action.type === 'rewrite_file') {
+      const fileId = String(action.fileId || '').trim();
+      if (fileId && typeof action.content === 'string') {
+        try {
+          const file = await rewriteStoredTextFile(env, user, fileId, action.content);
+          updatedFiles.push(file);
+          toolResults.push({ type: 'rewrite_file', file: { id: file.id, name: file.name, size: file.size } });
+        } catch (error) {
+          toolResults.push({ type: 'rewrite_file', fileId, error: error.message });
+        }
+      }
     }
   }
-  return { toolResults, generatedFiles };
+  return { toolResults, generatedFiles, updatedFiles };
+}
+
+async function runDelegations(env, roster, actions, userText, attachmentContext) {
+  const replies = [];
+  const seen = new Set();
+  for (const action of actions.slice(0, 3)) {
+    const requested = String(action.targetName || action.agentName || '').trim().toLowerCase();
+    const target = roster.find((agent) => agent.name.toLowerCase() === requested || agent.id.toLowerCase() === requested);
+    if (!target || target.isCurrent || seen.has(target.id)) continue;
+    seen.add(target.id);
+    const task = String(action.task || action.message || userText || '').trim().slice(0, 5000);
+    const system = [
+      BASE_PROMPT,
+      `Identity rule: your name is "${target.name}". You are NOT Ripo Bot unless that exact string is your assigned name.`,
+      `Your role is: ${target.role}.`,
+      target.description ? `Description: ${target.description}` : '',
+      target.instructions ? `Bot-specific instructions: ${target.instructions}` : '',
+      attachmentContext?.text || '',
+      'You are collaborating with the main bot. Answer the delegated task directly and return useful work, not a greeting.'
+    ].filter(Boolean).join('\n\n');
+    const requestMessages = [{ role: 'system', content: system }, { role: 'user', content: task }];
+    let result = null;
+    try { result = await callHuggingFace(requestMessages, env); } catch {}
+    if (!result) { try { result = await callWorkersAI(requestMessages, env); } catch {} }
+    if (!result) { try { result = await callBackup(requestMessages); } catch {} }
+    if (result?.reply) replies.push({ agentId: target.id, agentName: target.name, content: result.reply, provider: result.provider, model: result.model });
+  }
+  return replies;
 }
 
 async function handleChat(request, env) {
@@ -966,35 +1165,49 @@ async function handleChat(request, env) {
   catch (error) { return json(request, 400, { error: error.message }); }
 
   const agentName = String(body.agentName || 'Ripo Bot').slice(0, 80);
-  const agentRole = String(body.agentRole || 'AI agent').slice(0, 120);
+  const agentRole = String(body.agentRole || 'AI bot').slice(0, 120);
   const agentInstructions = String(body.agentInstructions || '').slice(0, 2200);
   const allowAgentAdmin = Boolean(body.allowAgentAdmin);
   const allowRename = Boolean(body.allowRename);
   const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content || '';
   const workspace = await resolveWorkspace(env, auth.user, body.workspaceId);
+  const roster = normalizeAvailableAgents(body.availableAgents, agentName);
+  const attachmentContext = await buildAttachmentContext(env, auth.user, body.attachments, lastUser);
   let sources = [];
   if (shouldAutoSearch(lastUser)) sources = await searchWeb(lastUser, env);
 
   const capabilities = [
-    'You have tools and should use them automatically when useful. Do not ask the user to turn search or computer mode on.',
+    'You have tools and should use them automatically when useful. Do not ask the user to turn search, files, images, or computer mode on.',
     'To search the web, emit <ripo_action>{"type":"web_search","query":"what to search"}</ripo_action>.',
-    'To open and read a webpage with the browser, emit <ripo_action>{"type":"browser_open","url":"https://example.com"}</ripo_action>.',
+    'To open a real persistent browser page that appears live in Ripo Computer, emit <ripo_action>{"type":"browser_open","url":"https://example.com"}</ripo_action>.',
+    'After opening the browser, you may click a selector with <ripo_action>{"type":"browser_click","selector":"button.login"}</ripo_action>, type with <ripo_action>{"type":"browser_type","selector":"input[name=email]","text":"value"}</ripo_action>, scroll with <ripo_action>{"type":"browser_scroll","deltaY":700}</ripo_action>, or press a key with <ripo_action>{"type":"browser_key","key":"Enter"}</ripo_action>.',
     'To use the private Ripo Computer terminal/filesystem, emit <ripo_action>{"type":"computer_exec","command":"command here"}</ripo_action>.',
-    'To create an image when the user asks for an image, emit <ripo_action>{"type":"generate_image","prompt":"detailed image prompt"}</ripo_action>.',
-    'Use at most three tool actions in one turn. Tool actions are hidden from the user and their results will be returned to you before your final answer.'
+    'To create a new image, emit <ripo_action>{"type":"generate_image","prompt":"detailed image prompt"}</ripo_action>.',
+    'To edit an attached image, emit <ripo_action>{"type":"edit_image","fileId":"attached-file-id","prompt":"describe the exact edit"}</ripo_action>.',
+    'To overwrite an attached text/code file, emit <ripo_action>{"type":"rewrite_file","fileId":"attached-file-id","content":"complete replacement file contents"}</ripo_action>.',
+    'Use tools only when they are needed. Tool actions are hidden and their results are returned before your final answer.'
   ];
   if (allowAgentAdmin) {
-    capabilities.push('To create a specialist agent when requested, emit <ripo_action>{"type":"create_agent","name":"Name","role":"Role","description":"Short description","instructions":"Instructions","avatar":"nova"}</ripo_action>.');
-    capabilities.push('To form a team, emit <ripo_action>{"type":"create_team","name":"Team name","memberNames":["Agent One","Agent Two"]}</ripo_action>.');
-    capabilities.push('To rename another agent, emit <ripo_action>{"type":"rename_agent","targetName":"Current agent name","name":"New name"}</ripo_action>.');
-    capabilities.push('To hand a note to another existing bot, emit <ripo_action>{"type":"message_agent","targetName":"Bot name","message":"Message"}</ripo_action>.');
+    capabilities.push('You are the main bot and may coordinate other bots without waiting for the user to manually invite them.');
+    capabilities.push('To bring an existing specialist into the current task, emit <ripo_action>{"type":"delegate_agent","targetName":"Existing bot name","task":"specific task for that bot"}</ripo_action>. Use this whenever the user asks you to add, use, bring in, ask, or collaborate with another bot.');
+    capabilities.push('To create a specialist bot when the requested specialist does not already exist, emit <ripo_action>{"type":"create_agent","name":"Name","role":"Role","description":"Short description","instructions":"Instructions","avatar":"nova"}</ripo_action>.');
+    capabilities.push('To form a persistent team, emit <ripo_action>{"type":"create_team","name":"Team name","memberNames":["Agent One","Agent Two"]}</ripo_action>.');
+    capabilities.push('To rename another bot, emit <ripo_action>{"type":"rename_agent","targetName":"Current bot name","name":"New name"}</ripo_action>.');
+    capabilities.push('To leave a note in another bot chat, emit <ripo_action>{"type":"message_agent","targetName":"Bot name","message":"Message"}</ripo_action>.');
   }
   if (allowRename) capabilities.push('If your own role changes substantially and a better short name is useful, you may put [[rename:New Name]] at the start of the reply. Do this rarely.');
 
+  const rosterText = roster.length
+    ? `Available bots in this workspace:\n${roster.map((agent) => `- ${agent.name} — ${agent.role}${agent.isCurrent ? ' (you)' : ''}`).join('\n')}`
+    : '';
+
   const system = [
     BASE_PROMPT,
-    `You are currently ${agentName}, role: ${agentRole}.`,
-    agentInstructions ? `Agent-specific instructions: ${agentInstructions}` : '',
+    `Identity rule: your name is "${agentName}". You are NOT Ripo Bot unless your assigned name is exactly "Ripo Bot". Never introduce yourself using another bot's name.`,
+    `Your role is: ${agentRole}.`,
+    agentInstructions ? `Bot-specific instructions: ${agentInstructions}` : '',
+    rosterText,
+    attachmentContext.text,
     capabilities.join(' '),
     sources.length ? `${searchContext(sources)}\nUse these results when answering and distinguish uncertainty.` : ''
   ].filter(Boolean).join('\n\n');
@@ -1004,37 +1217,74 @@ async function handleChat(request, env) {
   try { result = await callHuggingFace(requestMessages, env); } catch {}
   if (!result) { try { result = await callWorkersAI(requestMessages, env); } catch {} }
   if (!result) { try { result = await callBackup(requestMessages); } catch {} }
-  if (!result) return json(request, 502, { error: 'Ripo Bot could not reach an AI model.' });
+  if (!result) return json(request, 502, { error: `${agentName} could not reach an AI model.` });
 
   let parsed = extractActions(result.reply);
   const immediateActions = parsed.actions.filter((action) => ['create_agent','create_team','rename_agent','message_agent'].includes(action.type));
-  const toolActions = parsed.actions.filter((action) => ['web_search','browser_open','computer_exec','generate_image'].includes(action.type));
-  if (!toolActions.some((action) => action.type === 'generate_image') && /\b(generate|create|make|draw)\b[\s\S]{0,60}\b(image|picture|photo|art|logo|wallpaper)\b/i.test(lastUser)) {
-    toolActions.push({ type: 'generate_image', prompt: lastUser });
+  const toolActions = parsed.actions.filter((action) => ['web_search','browser_open','browser_click','browser_type','browser_scroll','browser_key','computer_exec','generate_image','edit_image','rewrite_file'].includes(action.type));
+  const delegateActions = parsed.actions.filter((action) => action.type === 'delegate_agent');
+
+  if (allowAgentAdmin && !delegateActions.length && roster.length > 1) {
+    const lowered = lastUser.toLowerCase();
+    const wantsCollab = /\b(add|bring|invite|use|ask|tell|delegate|collaborate|work with|help from|get)\b/.test(lowered) && /\b(bot|bots|agent|agents|team)\b/.test(lowered);
+    const named = roster.filter((candidate) => !candidate.isCurrent && lowered.includes(candidate.name.toLowerCase()));
+    if (named.length) {
+      for (const candidate of named.slice(0, 3)) delegateActions.push({ type: 'delegate_agent', targetName: candidate.name, task: lastUser });
+    } else if (wantsCollab) {
+      for (const candidate of roster.filter((candidate) => !candidate.isCurrent).slice(0, 2)) {
+        delegateActions.push({ type: 'delegate_agent', targetName: candidate.name, task: lastUser });
+      }
+    }
   }
+
+  if (!toolActions.some((action) => action.type === 'generate_image' || action.type === 'edit_image') && /\b(generate|create|make|draw)\b[\s\S]{0,60}\b(image|picture|photo|art|logo|wallpaper)\b/i.test(lastUser)) {
+    const attachedImage = attachmentContext.files.find((file) => String(file.type).startsWith('image/'));
+    if (attachedImage && /\b(edit|change|remove|add|replace|fix|modify|redesign)\b/i.test(lastUser)) {
+      toolActions.push({ type: 'edit_image', fileId: attachedImage.id, prompt: lastUser });
+    } else {
+      toolActions.push({ type: 'generate_image', prompt: lastUser });
+    }
+  }
+
   const urlMatch = /https?:\/\/[^\s)\]}]+/i.exec(lastUser);
   if (urlMatch && /\b(open|browse|visit|read|check)\b/i.test(lastUser) && !toolActions.some((action) => action.type === 'browser_open')) {
     toolActions.push({ type: 'browser_open', url: urlMatch[0] });
   }
+
   const commandMatch = /\b(?:run|execute)\s+(?:the\s+)?(?:command\s+)?[`"']?([a-z][^\n`"']{0,100})/i.exec(lastUser);
   if (commandMatch && /\b(computer|terminal|command|shell|run|execute)\b/i.test(lastUser) && !toolActions.some((action) => action.type === 'computer_exec')) {
     toolActions.push({ type: 'computer_exec', command: commandMatch[1].trim() });
   }
+
   let generatedFiles = [];
+  let updatedFiles = [];
+  let delegatedReplies = [];
+
+  if (delegateActions.length) {
+    delegatedReplies = await runDelegations(env, roster, delegateActions, lastUser, attachmentContext);
+  }
 
   if (toolActions.length) {
     const toolRun = await runToolActions(request, env, auth.user, toolActions, workspace.id);
     generatedFiles = toolRun.generatedFiles;
-    const toolMessage = `Tool results:\n${JSON.stringify(toolRun.toolResults).slice(0, 28000)}\n\nNow answer the user's request. Do not emit more tool actions. Mention created files/images naturally when relevant.`;
+    updatedFiles = toolRun.updatedFiles;
+    const toolMessage = `Tool results:\n${JSON.stringify(toolRun.toolResults).slice(0, 30000)}\n\nNow answer the user's request. Do not emit more tool actions. Mention created or edited files naturally when relevant.`;
     const followupMessages = [...requestMessages, { role: 'assistant', content: parsed.reply || 'I am using tools now.' }, { role: 'user', content: toolMessage }];
     let followup = null;
     try { followup = await callHuggingFace(followupMessages, env); } catch {}
     if (!followup) { try { followup = await callWorkersAI(followupMessages, env); } catch {} }
     if (!followup) { try { followup = await callBackup(followupMessages); } catch {} }
-    if (followup?.reply) {
-      result = followup;
-      parsed = extractActions(followup.reply);
-    }
+    if (followup?.reply) { result = followup; parsed = extractActions(followup.reply); }
+  }
+
+  if (delegatedReplies.length) {
+    const delegationMessage = `Specialist bot results:\n${delegatedReplies.map((item) => `[${item.agentName}] ${item.content}`).join('\n\n')}\n\nSynthesize these specialist results into your final response. Credit the specialists by their actual bot names when useful. Do not call them Ripo Bot.`;
+    const followupMessages = [...requestMessages, { role: 'assistant', content: parsed.reply || 'I am coordinating the team.' }, { role: 'user', content: delegationMessage }];
+    let followup = null;
+    try { followup = await callHuggingFace(followupMessages, env); } catch {}
+    if (!followup) { try { followup = await callWorkersAI(followupMessages, env); } catch {} }
+    if (!followup) { try { followup = await callBackup(followupMessages); } catch {} }
+    if (followup?.reply) { result = followup; parsed = extractActions(followup.reply); }
   }
 
   if (!sources.length) {
@@ -1042,7 +1292,7 @@ async function handleChat(request, env) {
     if (searchTool?.query) sources = await searchWeb(searchTool.query, env);
   }
 
-  const tokens = estimateTokens(messages, parsed.reply);
+  const tokens = estimateTokens(messages, parsed.reply) + delegatedReplies.reduce((sum, item) => sum + Math.ceil(item.content.length / 4), 0);
   await recordUsage(env, auth.user, tokens, workspace.id);
   const freshMeta = await ensureUserMeta(env, auth.user);
   const usage = await usageSnapshot(env, auth.user, freshMeta);
@@ -1052,6 +1302,9 @@ async function handleChat(request, env) {
     actions: immediateActions,
     sources,
     generatedFiles,
+    updatedFiles,
+    delegatedReplies,
+    attachmentFiles: attachmentContext.files,
     usage,
     coins: Number(freshMeta.coins || 0)
   });
@@ -1187,6 +1440,173 @@ function browserUrl(input) {
   return parsed.href;
 }
 
+
+let nextCdpCommandId = 0;
+
+function sendCdpCommand(socket, method, params = {}) {
+  return new Promise((resolve, reject) => {
+    const id = ++nextCdpCommandId;
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error(`CDP command "${method}" timed out`));
+    }, 20_000);
+    const cleanup = () => {
+      clearTimeout(timeout);
+      socket.removeEventListener('message', onMessage);
+      socket.removeEventListener('close', onClose);
+    };
+    const onClose = () => {
+      cleanup();
+      reject(new Error('Browser connection closed before the command completed.'));
+    };
+    const onMessage = (event) => {
+      let message;
+      try { message = JSON.parse(event.data); } catch { return; }
+      if (message.id !== id) return;
+      cleanup();
+      if (message.error) reject(new Error(message.error.message || 'Browser command failed.'));
+      else resolve(message.result || {});
+    };
+    socket.addEventListener('message', onMessage);
+    socket.addEventListener('close', onClose);
+    try { socket.send(JSON.stringify({ id, method, params })); }
+    catch (error) { cleanup(); reject(error); }
+  });
+}
+
+async function withCdpTarget(env, sessionId, targetId, callback) {
+  const connection = await env.BROWSER.connectSession(sessionId, targetId ? { targetId } : undefined);
+  const response = await connection.webSocket.fetch('https://browser-binding.invalid', { headers: { Upgrade: 'websocket' } });
+  if (!response.webSocket) throw new Error('Browser Run did not return a CDP WebSocket.');
+  const socket = response.webSocket;
+  socket.accept();
+  try { return await callback(socket); }
+  finally { try { socket.close(); } catch {} }
+}
+
+async function browserDomSummary(env, sessionId, targetId) {
+  return withCdpTarget(env, sessionId, targetId, async (socket) => {
+    const result = await sendCdpCommand(socket, 'Runtime.evaluate', {
+      returnByValue: true,
+      expression: `(() => {
+        const clean = (value) => String(value || '').replace(/\\s+/g,' ').trim();
+        const items = [...document.querySelectorAll('a,button,input,textarea,select,[role="button"]')].slice(0,80).map((el,index)=>({
+          index,
+          tag: el.tagName.toLowerCase(),
+          text: clean(el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('placeholder')).slice(0,180),
+          id: el.id || '',
+          name: el.getAttribute('name') || '',
+          type: el.getAttribute('type') || '',
+          aria: el.getAttribute('aria-label') || ''
+        }));
+        return { url: location.href, title: document.title, text: clean(document.body?.innerText).slice(0,12000), items };
+      })()`
+    });
+    return result?.result?.value || {};
+  });
+}
+
+async function ensureLiveComputer(env, userId, inputUrl = '') {
+  if (!env.BROWSER) throw new Error('Browser Run is unavailable.');
+  const state = await getComputerState(env, userId);
+  let sessionId = state.browserSessionId || '';
+  let targetId = state.browserTargetId || '';
+  if (sessionId) {
+    try {
+      const existing = await env.BROWSER.getSession(sessionId);
+      if (!existing) sessionId = '';
+    } catch { sessionId = ''; }
+  }
+  if (!sessionId) {
+    const acquired = await env.BROWSER.acquire({
+      keepAlive: 1_200_000,
+      recording: true,
+      targets: true,
+      liveViewUrlExpiresInMs: 3_600_000
+    });
+    sessionId = acquired.sessionId;
+    const targets = acquired.targets || await env.BROWSER.devtools.listTargets(sessionId, { liveViewUrlExpiresInMs: 3_600_000 });
+    targetId = targets.find((target) => target.type === 'page')?.id || '';
+    if (!targetId) {
+      const created = await env.BROWSER.devtools.newTarget(sessionId, 'about:blank', { liveViewUrlExpiresInMs: 3_600_000 });
+      targetId = created?.id || created?.targetId || '';
+    }
+  }
+  if (!targetId) {
+    const targets = await env.BROWSER.devtools.listTargets(sessionId, { liveViewUrlExpiresInMs: 3_600_000 });
+    targetId = targets.find((target) => target.type === 'page')?.id || '';
+  }
+  if (!targetId) throw new Error('Browser Run did not provide a page target.');
+
+  if (inputUrl) {
+    const url = browserUrl(inputUrl);
+    await withCdpTarget(env, sessionId, targetId, async (socket) => {
+      await sendCdpCommand(socket, 'Page.enable');
+      await sendCdpCommand(socket, 'Page.navigate', { url });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 650));
+  }
+
+  const summary = await browserDomSummary(env, sessionId, targetId).catch(() => ({}));
+  const liveView = await env.BROWSER.getLiveView(sessionId, { targetId, mode: 'tab', expiresInMs: 3_600_000 });
+  state.browserSessionId = sessionId;
+  state.browserTargetId = targetId;
+  state.browserUrl = summary.url || state.browserUrl || inputUrl || 'about:blank';
+  state.browserTitle = summary.title || state.browserTitle || '';
+  state.browserUpdatedAt = Date.now();
+  await saveComputerState(env, userId, state);
+  return {
+    active: true,
+    sessionId,
+    targetId,
+    url: state.browserUrl,
+    title: state.browserTitle,
+    liveViewUrl: liveView?.devtoolsFrontendUrl || liveView?.url || '',
+    text: summary.text || '',
+    items: summary.items || []
+  };
+}
+
+async function browserLiveAction(env, userId, action) {
+  const state = await getComputerState(env, userId);
+  if (!state.browserSessionId || !state.browserTargetId) throw new Error('Start the live computer first.');
+  const sessionId = state.browserSessionId;
+  const targetId = state.browserTargetId;
+  const kind = String(action?.kind || '').toLowerCase();
+  await withCdpTarget(env, sessionId, targetId, async (socket) => {
+    if (kind === 'navigate') {
+      await sendCdpCommand(socket, 'Page.navigate', { url: browserUrl(action.url) });
+    } else if (kind === 'click') {
+      const x = Math.max(0, Number(action.x || 0));
+      const y = Math.max(0, Number(action.y || 0));
+      await sendCdpCommand(socket, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+      await sendCdpCommand(socket, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+      await sendCdpCommand(socket, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    } else if (kind === 'click_selector') {
+      const selector = String(action.selector || '').slice(0, 500);
+      const expression = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return {ok:false}; el.scrollIntoView({block:'center'}); el.click(); return {ok:true,tag:el.tagName,text:String(el.innerText||el.value||'').slice(0,200)}; })()`;
+      await sendCdpCommand(socket, 'Runtime.evaluate', { expression, returnByValue: true });
+    } else if (kind === 'type') {
+      await sendCdpCommand(socket, 'Input.insertText', { text: String(action.text || '').slice(0, 4000) });
+    } else if (kind === 'type_selector') {
+      const selector = String(action.selector || '').slice(0, 500);
+      const value = String(action.text || '').slice(0, 4000);
+      const expression = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return {ok:false}; el.focus(); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return {ok:true}; })()`;
+      await sendCdpCommand(socket, 'Runtime.evaluate', { expression, returnByValue: true });
+    } else if (kind === 'scroll') {
+      await sendCdpCommand(socket, 'Input.dispatchMouseEvent', { type: 'mouseWheel', x: 480, y: 360, deltaX: Number(action.deltaX || 0), deltaY: Number(action.deltaY || 650) });
+    } else if (kind === 'key') {
+      const key = String(action.key || 'Enter').slice(0, 40);
+      await sendCdpCommand(socket, 'Input.dispatchKeyEvent', { type: 'keyDown', key });
+      await sendCdpCommand(socket, 'Input.dispatchKeyEvent', { type: 'keyUp', key });
+    } else {
+      throw new Error('Unsupported live-browser action.');
+    }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 220));
+  return ensureLiveComputer(env, userId);
+}
+
 async function browserQuickText(env, action, input) {
   if (!env.BROWSER) throw new Error('Browser Run is unavailable.');
   const url = browserUrl(input);
@@ -1259,8 +1679,8 @@ async function handleComputerExec(request, env) {
     if (!arg) stderr = 'search: add a query'; else { const results = await searchWeb(arg, env); stdout = results.map((r, i) => `${i+1}. ${r.title}\n${r.url}\n${r.snippet || ''}`).join('\n\n') || 'No results.'; }
   } else if (name === 'open' || name === 'browser') {
     try {
-      const rendered = await browserQuickText(env, 'markdown', arg);
-      stdout = `Rendered with Cloudflare Browser Run · ${Math.max(1, rendered.browserMs)}ms\n${rendered.url}\n\n${rendered.text}`;
+      const rendered = await ensureLiveComputer(env, auth.user.id, arg);
+      stdout = `Live Browser Run session\n${rendered.url}\n${rendered.title || ''}\n\n${rendered.text}`;
     } catch (error) { stderr = error.message || 'Browser Run failed.'; }
   } else if (name === 'links') {
     try {
@@ -1271,6 +1691,66 @@ async function handleComputerExec(request, env) {
 
   if (changed) await saveComputerState(env, auth.user.id, state);
   return json(request, 200, { stdout, stderr, cwd: state.cwd, provider: 'Ripo Computer Lite' });
+}
+
+
+async function handleComputerLiveStart(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  if (!env.BROWSER) return json(request, 503, { error: 'Browser Run is unavailable.' });
+  const body = await readJsonBody(request);
+  const live = await ensureLiveComputer(env, auth.user.id, String(body.url || 'https://www.google.com'));
+  return json(request, 200, { ...live, provider: 'Cloudflare Browser Run Live View' });
+}
+
+async function handleComputerLiveStatus(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  if (!env.BROWSER) return json(request, 200, { active: false, configured: false });
+  const state = await getComputerState(env, auth.user.id);
+  if (!state.browserSessionId) return json(request, 200, { active: false, configured: true });
+  try {
+    const session = await env.BROWSER.getSession(state.browserSessionId);
+    if (!session) return json(request, 200, { active: false, configured: true });
+    const targets = await env.BROWSER.devtools.listTargets(state.browserSessionId, { liveViewUrlExpiresInMs: 3_600_000 });
+    const target = targets.find((item) => item.id === state.browserTargetId) || targets.find((item) => item.type === 'page');
+    if (!target) return json(request, 200, { active: false, configured: true });
+    const liveView = await env.BROWSER.getLiveView(state.browserSessionId, { targetId: target.id, mode: 'tab', expiresInMs: 3_600_000 });
+    return json(request, 200, {
+      active: true,
+      configured: true,
+      sessionId: state.browserSessionId,
+      targetId: target.id,
+      url: target.url || state.browserUrl || '',
+      title: target.title || state.browserTitle || '',
+      liveViewUrl: liveView?.devtoolsFrontendUrl || liveView?.url || ''
+    });
+  } catch {
+    state.browserSessionId = '';
+    state.browserTargetId = '';
+    await saveComputerState(env, auth.user.id, state);
+    return json(request, 200, { active: false, configured: true });
+  }
+}
+
+async function handleComputerLiveAction(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const body = await readJsonBody(request);
+  const live = await browserLiveAction(env, auth.user.id, body);
+  return json(request, 200, live);
+}
+
+async function handleComputerLiveClose(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const state = await getComputerState(env, auth.user.id);
+  if (env.BROWSER && state.browserSessionId) {
+    try { await env.BROWSER.closeSession(state.browserSessionId); } catch {}
+  }
+  state.browserSessionId = '';
+  state.browserTargetId = '';
+  state.browserUrl = '';
+  state.browserTitle = '';
+  state.browserUpdatedAt = Date.now();
+  await saveComputerState(env, auth.user.id, state);
+  return json(request, 200, { active: false });
 }
 
 async function readJsonBody(request) {
@@ -1339,7 +1819,11 @@ export default {
       if (url.pathname.startsWith('/api/files/') && request.method === 'DELETE') return handleFileDelete(request, env, decodeURIComponent(url.pathname.slice('/api/files/'.length)));
       if (url.pathname === '/api/search' && request.method === 'POST') return handleSearch(request, env);
       if (url.pathname === '/api/chat' && request.method === 'POST') return handleChat(request, env);
-      if (url.pathname === '/api/computer/status' && request.method === 'GET') return json(request, 200, { configured: Boolean(env.DB), provider: 'Ripo Computer Lite', linux: true, browser: Boolean(env.BROWSER), browserProvider: env.BROWSER ? 'Cloudflare Browser Run Free' : 'Search fallback', browserFreeLimit: '10 minutes/day', persistent: Boolean(env.DB), note: 'Zero-cost Linux-style workspace with persistent files and real rendered browsing on the Browser Run free allowance.' });
+      if (url.pathname === '/api/computer/status' && request.method === 'GET') return json(request, 200, { configured: Boolean(env.DB), provider: 'Ripo Computer', linux: true, browser: Boolean(env.BROWSER), liveViewReady: Boolean(env.BROWSER), browserProvider: env.BROWSER ? 'Cloudflare Browser Run Live View' : 'Unavailable', persistent: Boolean(env.DB), note: 'Persistent terminal plus a real Cloudflare Browser Run session with Live View.' });
+      if (url.pathname === '/api/computer/live/start' && request.method === 'POST') return handleComputerLiveStart(request, env);
+      if (url.pathname === '/api/computer/live/status' && request.method === 'GET') return handleComputerLiveStatus(request, env);
+      if (url.pathname === '/api/computer/live/action' && request.method === 'POST') return handleComputerLiveAction(request, env);
+      if (url.pathname === '/api/computer/live/close' && request.method === 'POST') return handleComputerLiveClose(request, env);
       if (url.pathname === '/api/computer/exec' && request.method === 'POST') return handleComputerExec(request, env);
       if (url.pathname.startsWith('/api/')) return json(request, 404, { error: 'API route not found.' });
       return json(request, 404, { error: 'Ripo Bot API is online.' });
