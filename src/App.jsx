@@ -52,7 +52,8 @@ const LOCAL_KEYS = {
   conversations: 'ripobot.conversations.v2',
   teams: 'ripobot.teams.v2',
   files: 'ripobot.files.v2',
-  onboarded: 'ripobot.onboarded.v2'
+  onboarded: 'ripobot.onboarded.v2',
+  theme: 'ripobot.theme.v3'
 };
 
 function readLocal(key, fallback) {
@@ -118,11 +119,19 @@ function formatTime(value) {
 function Avatar({ agent, size = 'md', active = false }) {
   const preset = AVATAR_PRESETS.find((item) => item.id === agent?.avatar) || AVATAR_PRESETS[0];
   const state = agent?.state || 'ready';
+  const seed = String(agent?.id || preset.id || 'ripo').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return (
-    <span className={cls('agent-avatar', `avatar-${size}`, `tone-${preset.tone}`, `state-${state}`, active && 'is-active')} aria-hidden="true">
+    <span
+      className={cls('agent-avatar', `avatar-${size}`, `tone-${preset.tone}`, `shape-${preset.id}`, `state-${state}`, active && 'is-active')}
+      style={{ '--avatar-delay': `-${(seed % 11) * 0.73}s`, '--avatar-phase': `${4 + (seed % 5)}s` }}
+      aria-hidden="true"
+    >
       <span className="avatar-halo" />
       <span className="avatar-core">
-        {preset.id === 'ripo' ? <img src="/assets/ripobot-mascot.png" alt="" /> : <span className="avatar-glyph">{preset.glyph}</span>}
+        <span className="avatar-face">
+          <i className="avatar-eye avatar-eye-left" />
+          <i className="avatar-eye avatar-eye-right" />
+        </span>
       </span>
       <span className="avatar-status-dot" />
     </span>
@@ -455,14 +464,25 @@ function ComputerView() {
   );
 }
 
-function SettingsView({ profile, cloudMode, onLogout }) {
+function SettingsView({ profile, cloudMode, theme, onThemeChange, onLogout }) {
   return (
     <section className="content-page settings-page">
-      <header className="page-heading"><div><span className="eyebrow">Workspace</span><h1>Settings</h1><p>Account, model, storage, and agent-runtime status.</p></div></header>
+      <header className="page-heading"><div><span className="eyebrow">Ripo Bot</span><h1>Settings</h1><p>Appearance, account, model, storage, and agent runtime.</p></div></header>
       <div className="settings-stack">
+        <article className="settings-card appearance-card">
+          <div className="settings-icon"><Circle size={19} /></div>
+          <div className="settings-copy"><strong>Appearance</strong><span>Light is the default. Choose dark or follow your device whenever you want.</span></div>
+          <div className="appearance-segmented" role="group" aria-label="Appearance">
+            {['light', 'dark', 'system'].map((value) => (
+              <button key={value} className={cls(theme === value && 'active')} onClick={() => onThemeChange(value)}>
+                {value === 'light' ? 'Light' : value === 'dark' ? 'Dark' : 'System'}
+              </button>
+            ))}
+          </div>
+        </article>
         <article className="settings-card"><div className="settings-icon"><UserRound size={19} /></div><div className="settings-copy"><strong>{profile?.name || 'Ripo Bot user'}</strong><span>{profile?.email || 'No email'}</span></div><span className={cls('badge', cloudMode ? 'badge-success' : 'badge-muted')}>{cloudMode ? 'Cloud account' : 'Device mode'}</span></article>
-        <article className="settings-card"><div className="settings-icon"><Sparkles size={19} /></div><div className="settings-copy"><strong>Ripo model route</strong><span>Cloudflare AI is live now. The Hugging Face primary route is supported and activates when its server-side token/model are configured.</span></div><span className="badge badge-success">Live</span></article>
-        <article className="settings-card"><div className="settings-icon"><HardDrive size={19} /></div><div className="settings-copy"><strong>Workspace persistence</strong><span>{cloudMode ? 'D1 account data + Workers KV free file storage.' : 'Saved in this browser until cloud storage is provisioned.'}</span></div></article>
+        <article className="settings-card"><div className="settings-icon"><Sparkles size={19} /></div><div className="settings-copy"><strong>Ripo model route</strong><span>Cloudflare AI is live. Hugging Face can become the primary route when its server-side token and model are configured.</span></div><span className="badge badge-success">Live</span></article>
+        <article className="settings-card"><div className="settings-icon"><HardDrive size={19} /></div><div className="settings-copy"><strong>Workspace persistence</strong><span>{cloudMode ? 'D1 account data + Workers KV free file storage.' : 'Saved in this browser until cloud storage is available.'}</span></div></article>
         <button className="danger-button" onClick={onLogout}><LogOut size={16} /> Sign out</button>
       </div>
     </section>
@@ -511,6 +531,7 @@ function ChatView({
 
   return (
     <section className="chat-pane">
+      <div className="chat-main-column">
       <header className="chat-header">
         <div className="chat-identity">
           <div className="stacked-avatars">{participants.slice(0, 3).map((item, index) => <span key={item.id} style={{ zIndex: participants.length - index }}><Avatar agent={item} size="sm" active={index === 0} /></span>)}</div>
@@ -582,6 +603,31 @@ function ChatView({
         </div>
         <div className="composer-footnote">Ripo Bot can make mistakes. Review important work and computer actions.</div>
       </div>
+      </div>
+      <aside className="chat-inspector" aria-label="Bot activity">
+        <div className="inspector-card screen-card">
+          <div className="inspector-title-row"><span>Computer</span><StateLabel state={sending ? 'working' : 'ready'} /></div>
+          <div className="mini-browser">
+            <div className="mini-browser-top"><i /><i /><i /><span>Ripo Computer</span></div>
+            <div className="mini-browser-body">
+              <div className="mini-browser-sidebar" />
+              <div className="mini-browser-page">
+                <span className="mini-page-line wide" />
+                <span className="mini-page-line" />
+                <div className="mini-page-cards"><i /><i /><i /></div>
+                <span className="mini-page-line short" />
+              </div>
+            </div>
+          </div>
+          <p>{team?.name || agent?.name || 'Ripo Bot'}'s screen</p>
+        </div>
+        <div className="inspector-card routines-card">
+          <div className="inspector-title-row"><span>Routines</span><button className="tiny-plus" aria-label="Add routine"><Plus size={14} /></button></div>
+          <div className="routine-row"><span className="routine-dot">↻</span><div><strong>Morning briefing</strong><small>Every day at 8:00 AM</small></div></div>
+          <div className="routine-row"><span className="routine-dot">↻</span><div><strong>Inbox cleanup</strong><small>Weekdays at 6:00 PM</small></div></div>
+          <div className="routine-row muted-routine"><span className="routine-dot">Ⅱ</span><div><strong>Weekly team update</strong><small>Paused</small></div></div>
+        </div>
+      </aside>
     </section>
   );
 }
@@ -598,7 +644,8 @@ export default function App() {
   const [view, setView] = useState('chat');
   const [activeAgentId, setActiveAgentId] = useState('ripo');
   const [activeTeamId, setActiveTeamId] = useState(null);
-  const [mobileNav, setMobileNav] = useState(false);
+  const [mobileNav, setMobileNav] = useState(true);
+  const [theme, setTheme] = useState(() => readLocal(LOCAL_KEYS.theme, 'light'));
   const [modal, setModal] = useState(null);
   const [sending, setSending] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -634,6 +681,19 @@ export default function App() {
   useEffect(() => { writeLocal(LOCAL_KEYS.teams, teams); }, [teams]);
   useEffect(() => { writeLocal(LOCAL_KEYS.files, files); }, [files]);
   useEffect(() => { writeLocal(LOCAL_KEYS.onboarded, onboarded); }, [onboarded]);
+  useEffect(() => {
+    writeLocal(LOCAL_KEYS.theme, theme);
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    if (theme === 'system') {
+      const dark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+      root.dataset.resolvedTheme = dark ? 'dark' : 'light';
+      root.style.colorScheme = dark ? 'dark' : 'light';
+    } else {
+      root.dataset.resolvedTheme = theme;
+      root.style.colorScheme = theme;
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (!cloudMode || !auth || !onboarded) return undefined;
@@ -836,11 +896,15 @@ export default function App() {
   if (!onboarded) return <Onboarding profile={profile || auth.profile} onDone={finishOnboarding} />;
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={theme}>
       <aside className={cls('sidebar', mobileNav && 'mobile-open')}>
         <div className="sidebar-top">
-          <div className="brand-lockup"><span className="brand-mark"><Sparkles size={17} /></span><span>Ripo Bot</span></div>
-          <button className="icon-button sidebar-close" onClick={() => setMobileNav(false)}><X size={18} /></button>
+          <button className="sidebar-profile-orb" onClick={() => navigate('settings')} aria-label="Open settings">{(profile?.name || 'R').slice(0, 1).toUpperCase()}</button>
+          <div className="brand-lockup sidebar-brand"><span>Ripo Bot</span></div>
+          <div className="sidebar-top-actions">
+            <button className="icon-button" onClick={() => setModal('new-agent')} aria-label="Create bot"><Plus size={18} /></button>
+            <button className="icon-button sidebar-close" onClick={() => setMobileNav(false)}><X size={18} /></button>
+          </div>
         </div>
         <button className="new-task-button" onClick={() => { openAgent('ripo'); setConversations((current) => ({ ...current, ripo: [] })); }}><Plus size={17} /><span>New task</span><kbd>⌘ N</kbd></button>
         <div className="sidebar-search"><Search size={15} /><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search bots" /><kbd>⌘ K</kbd></div>
@@ -873,11 +937,11 @@ export default function App() {
       {mobileNav && <div className="mobile-scrim" onClick={() => setMobileNav(false)} />}
 
       <main className="main-shell">
-        <button className="mobile-menu-button" onClick={() => setMobileNav(true)}><Menu size={19} /></button>
+        <button className="mobile-menu-button" onClick={() => setMobileNav(true)} aria-label="Back to bots"><ArrowLeft size={20} /></button>
         {view === 'chat' && <ChatView agent={activeAgent} team={activeTeam} agents={agents} messages={messages} sending={sending} onSend={sendMessage} onRename={renameAgent} onEdit={() => setModal('edit-agent')} files={files} onNavigateFiles={() => navigate('files')} />}
         {view === 'files' && <FilesView files={files} onUpload={uploadFiles} cloudMode={cloudMode} />}
         {view === 'computer' && <ComputerView />}
-        {view === 'settings' && <SettingsView profile={profile} cloudMode={cloudMode} onLogout={logout} />}
+        {view === 'settings' && <SettingsView profile={profile} cloudMode={cloudMode} theme={theme} onThemeChange={setTheme} onLogout={logout} />}
       </main>
 
       {modal === 'new-agent' && <AgentEditor onClose={() => setModal(null)} onSave={createAgent} />}
