@@ -17,6 +17,7 @@ import {
   Folder,
   Globe2,
   HardDrive,
+  Home,
   Image,
   LoaderCircle,
   LogOut,
@@ -476,15 +477,108 @@ function FilesView({ files, onUpload, cloudMode }) {
   );
 }
 
-function ComputerView() {
-  const [status, setStatus] = useState({ loading: true, configured: false, provider: 'Ripo Computer Lite' });
-  const [command, setCommand] = useState('pwd');
-  const [lines, setLines] = useState([{ type: 'system', text: 'Ripo Computer Lite · private zero-cost workspace · type help · try open https://example.com' }]);
-  const [busy, setBusy] = useState(false);
+function LiveComputerPreview({ compact = false, onOpen }) {
+  const [live, setLive] = useState(null);
 
   useEffect(() => {
-    api('/api/computer/status').then((data) => setStatus({ loading: false, ...data })).catch(() => setStatus({ loading: false, configured: false, provider: 'Ripo Computer Lite' }));
+    let alive = true;
+    let timer;
+    const load = async () => {
+      try {
+        const data = await api('/api/computer/live/status');
+        if (alive) setLive(data);
+      } catch {
+        if (alive) setLive({ active: false });
+      }
+    };
+    load();
+    timer = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(timer); };
   }, []);
+
+  if (!live?.active || !live?.liveViewUrl) {
+    return (
+      <button className={cls('computer-live-mini-empty', compact && 'compact')} onClick={onOpen}>
+        <Computer size={compact ? 22 : 30}/>
+        <strong>Computer idle</strong>
+        <span>When a bot opens a website, its real browser appears here live.</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className={cls('computer-live-mini', compact && 'compact')} onClick={compact ? onOpen : undefined}>
+      <div className="computer-live-mini-bar">
+        <span className="computer-live-dot"/><strong>LIVE</strong>
+        <span>{live.title || live.url || 'Browser Run'}</span>
+      </div>
+      <iframe
+        className="computer-live-frame"
+        src={live.liveViewUrl}
+        title="Ripo Computer live browser"
+        allow="clipboard-read; clipboard-write"
+      />
+    </div>
+  );
+}
+
+function ComputerView() {
+  const [status, setStatus] = useState({ loading: true, configured: false, provider: 'Ripo Computer' });
+  const [live, setLive] = useState({ active: false });
+  const [address, setAddress] = useState('https://www.google.com');
+  const [mode, setMode] = useState('live');
+  const [command, setCommand] = useState('pwd');
+  const [lines, setLines] = useState([{ type: 'system', text: 'Ripo Computer · persistent workspace and real Browser Run session · type help' }]);
+  const [busy, setBusy] = useState(false);
+  const [liveBusy, setLiveBusy] = useState(false);
+
+  async function refreshLive() {
+    try {
+      const data = await api('/api/computer/live/status');
+      setLive(data);
+      if (data?.url?.startsWith('http')) setAddress(data.url);
+      return data;
+    } catch {
+      setLive({ active: false });
+      return null;
+    }
+  }
+
+  useEffect(() => {
+    api('/api/computer/status').then((data) => setStatus({ loading: false, ...data })).catch(() => setStatus({ loading: false, configured: false, provider: 'Ripo Computer' }));
+    refreshLive();
+    const timer = setInterval(refreshLive, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function startOrNavigate() {
+    if (liveBusy) return;
+    setLiveBusy(true);
+    try {
+      const path = live?.active ? '/api/computer/live/action' : '/api/computer/live/start';
+      const body = live?.active ? { kind: 'navigate', url: address } : { url: address };
+      const data = await api(path, { method: 'POST', body: JSON.stringify(body) });
+      setLive(data);
+      if (data?.url) setAddress(data.url);
+    } catch (error) {
+      alert(error.message || 'Could not start the live computer.');
+    } finally {
+      setLiveBusy(false);
+    }
+  }
+
+  async function closeLive() {
+    if (liveBusy) return;
+    setLiveBusy(true);
+    try {
+      await api('/api/computer/live/close', { method: 'POST', body: '{}' });
+      setLive({ active: false });
+    } catch (error) {
+      alert(error.message || 'Could not close the browser.');
+    } finally {
+      setLiveBusy(false);
+    }
+  }
 
   async function run() {
     const value = command.trim();
@@ -494,34 +588,80 @@ function ComputerView() {
     setBusy(true);
     try {
       const data = await api('/api/computer/exec', { method: 'POST', body: JSON.stringify({ command: value }) });
-      if (data.stdout === '__CLEAR__') setLines([{ type: 'system', text: 'Ripo Computer Lite · terminal cleared' }]);
+      if (data.stdout === '__CLEAR__') setLines([{ type: 'system', text: 'Ripo Computer · terminal cleared' }]);
       else if (data.stdout) setLines((current) => [...current, { type: 'output', text: data.stdout }]);
       if (data.stderr) setLines((current) => [...current, { type: 'error', text: data.stderr }]);
+      if (/^(open|browser)\s+/i.test(value)) {
+        setMode('live');
+        setTimeout(refreshLive, 450);
+      }
     } catch (err) {
-      setLines((current) => [...current, { type: 'error', text: err.status === 503 ? 'Ripo Computer storage is temporarily unavailable.' : err.message }]);
+      setLines((current) => [...current, { type: 'error', text: err.message || 'Computer command failed.' }]);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section className="content-page computer-page">
-      <header className="page-heading"><div><span className="eyebrow">Agent computer</span><h1>Ripo Computer</h1><p>A private Linux-style workspace with persistent files, terminal commands, search, and a real rendered browser — built to stay on the free plan.</p></div><StateLabel state={status.configured ? 'ready' : 'waiting'} /></header>
-      <div className="computer-grid">
-        <article className="computer-preview-card">
-          <div className="computer-window-bar"><span className="traffic-lights"><i /><i /><i /></span><span>Ripo Computer</span><span className="computer-provider">{status.provider || 'Ripo Computer Lite'}</span></div>
-          <div className="terminal-screen">
-            {lines.map((line, index) => <pre key={`${line.type}-${index}`} className={`terminal-${line.type}`}>{line.text}</pre>)}
-            <div className="terminal-input-row"><span>$</span><input value={command} disabled={!status.configured || busy} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && run()} placeholder={status.configured ? 'Run a command' : 'Computer unavailable'} /><button onClick={run} disabled={!status.configured || busy}><ArrowUp size={15} /></button></div>
-          </div>
-        </article>
-        <aside className="computer-side-card">
-          <div className="side-feature"><SquareTerminal size={18} /><div><strong>Linux-style terminal</strong><span>Private per-account shell commands and a persistent virtual filesystem without a paid VM.</span></div></div>
-          <div className="side-feature"><HardDrive size={18} /><div><strong>Project files</strong><span>D1 and Workers KV keep workspace state and uploads across sessions on the free plan.</span></div></div>
-          <div className="side-feature"><Globe2 size={18} /><div><strong>Real browser</strong><span>Use <code>open https://…</code> or <code>links https://…</code>. Cloudflare Browser Run renders JavaScript pages with a free 10-minute daily allowance.</span></div></div>
-          {!status.configured && <div className="computer-warning"><strong>Computer unavailable</strong><span>Sign in again or retry in a moment. No paid Sandbox subscription is required.</span></div>}
-        </aside>
+    <section className="content-page computer-page computer-page-v6">
+      <header className="page-heading computer-heading-v6">
+        <div>
+          <div className="computer-brand-line"><span className="computer-live-dot"/><span>Ripo Computer</span></div>
+          <h1>See the bot work.</h1>
+          <p>This is the actual Cloudflare Browser Run session. When a bot navigates, clicks, types, or scrolls, this Live View updates in real time.</p>
+        </div>
+        <StateLabel state={live?.active ? 'working' : status.configured ? 'ready' : 'waiting'} />
+      </header>
+
+      <div className="computer-mode-tabs-v6">
+        <button className={cls(mode === 'live' && 'active')} onClick={() => setMode('live')}><Globe2 size={16}/>Live browser</button>
+        <button className={cls(mode === 'terminal' && 'active')} onClick={() => setMode('terminal')}><SquareTerminal size={16}/>Terminal</button>
       </div>
+
+      {mode === 'live' ? (
+        <div className="computer-live-card-v6">
+          <div className="computer-address-v6">
+            <span className={cls('live-status-pill-v6', live?.active && 'active')}><i/>{live?.active ? 'LIVE' : 'OFFLINE'}</span>
+            <input value={address} onChange={(event)=>setAddress(event.target.value)} onKeyDown={(event)=>event.key==='Enter'&&startOrNavigate()} placeholder="https://example.com"/>
+            <button onClick={startOrNavigate} disabled={liveBusy}>{liveBusy?<LoaderCircle className="spin" size={16}/>:live?.active?<ArrowUp size={16}/>:<Globe2 size={16}/>}<span>{live?.active?'Go':'Start'}</span></button>
+            <button className="computer-refresh-v6" onClick={refreshLive} aria-label="Refresh live view"><RefreshCw size={16}/></button>
+            {live?.active ? <button className="computer-stop-v6" onClick={closeLive} aria-label="Close browser"><X size={16}/></button> : null}
+          </div>
+
+          <div className="computer-live-stage-v6">
+            {live?.active && live?.liveViewUrl ? (
+              <iframe
+                key={live.liveViewUrl}
+                className="computer-live-frame"
+                src={live.liveViewUrl}
+                title="Ripo Computer Live View"
+                allow="clipboard-read; clipboard-write"
+              />
+            ) : (
+              <div className="computer-live-empty-v6">
+                <Avatar agent={{id:'computer-brand',avatarSeed:'computer-v6',avatarShape:3,avatarColor:'#111111',avatarMotion:3}} size="lg"/>
+                <h2>Real browser, not a mockup.</h2>
+                <p>Start the computer or ask a bot to open a website. The same Browser Run session the bot controls will appear here.</p>
+                <button onClick={startOrNavigate} disabled={liveBusy}><Globe2 size={17}/>Start live browser</button>
+              </div>
+            )}
+          </div>
+
+          <div className="computer-live-foot-v6">
+            <span>{live?.title || 'Cloudflare Browser Run'}</span>
+            <span>{live?.url || 'No active page'}</span>
+            {live?.active && live?.liveViewUrl ? <a href={live.liveViewUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/>Open full Live View</a> : null}
+          </div>
+        </div>
+      ) : (
+        <div className="computer-terminal-v6">
+          <div className="computer-window-bar"><span className="traffic-lights"><i/><i/><i/></span><span>Ripo Terminal</span><span className="computer-provider">{status.provider || 'Ripo Computer'}</span></div>
+          <div className="terminal-screen">
+            {lines.map((line,index)=><pre key={`${line.type}-${index}`} className={`terminal-${line.type}`}>{line.text}</pre>)}
+            <div className="terminal-input-row"><span>$</span><input value={command} disabled={!status.configured||busy} onChange={(event)=>setCommand(event.target.value)} onKeyDown={(event)=>event.key==='Enter'&&run()} placeholder={status.configured?'Run a command':'Computer unavailable'}/><button onClick={run} disabled={!status.configured||busy}><ArrowUp size={15}/></button></div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -844,10 +984,8 @@ function BotDetails({ agent, files, onClose, onEdit, onOpenComputer }) {
         <div className="bot-details-body">
           {tab === 'computer' && <div className="bot-computer-panel">
             <div className={cls('bot-screen-preview', busy && 'in-use')}>
-              <div className="bot-screen-top"><span /><span /><span /><strong>Ripo Computer</strong></div>
-              <div className="bot-screen-canvas">
-                {busy ? <><div className="working-browser"><i/><i/><i/><div className="working-card-row"><span/><span/><span/></div></div><span className="animated-cursor">↖</span></> : <div className="computer-idle"><Computer size={34}/><strong>Not in use by {agent?.name}</strong><span>The shared computer wakes automatically when this bot needs browser or terminal work.</span></div>}
-              </div>
+              <div className="bot-screen-top"><span/><span/><span/><strong>Ripo Computer · Live</strong></div>
+              <LiveComputerPreview onOpen={onOpenComputer}/>
             </div>
             <button className="secondary-button full-button" onClick={onOpenComputer}><Computer size={16}/>Open Ripo Computer</button>
           </div>}
@@ -1145,12 +1283,17 @@ function ChatView({
         <div className="message-list-v5">
           {messages.map((message)=>{
             const user=message.role==='user';
+            const author=!user && message.agentId ? agents.find((item)=>item.id===message.agentId) : null;
             return <article className={cls('bubble-row-v5',user&&'user')} key={message.id}>
-              <div className={cls('bubble-v5',user&&'user-bubble-v5')}>
+              {!user&&author?<div className="bubble-author-avatar-v6"><Avatar agent={author} size="xs"/></div>:null}
+              <div className="bubble-stack-v6">
+                {!user&&author?<div className="bubble-author-v6"><strong>{author.name}</strong><span>{author.role}</span></div>:null}
+                <div className={cls('bubble-v5',user&&'user-bubble-v5')}>
                 <div className="bubble-text">{message.content}</div>
                 {message.sources?.length?<button className="bubble-tool-note"><Globe2 size={13}/>{message.sources.length} sources</button>:null}
                 {message.attachments?.length?<div className="bubble-files-v5">{message.attachments.map((file)=><span key={file.id}><FileText size={14}/><span>{file.name}</span></span>)}</div>:null}
                 {message.generatedFiles?.length?<div className="generated-media-v5">{message.generatedFiles.map((file)=><SecureMedia key={file.id} file={file}/>)}</div>:null}
+              </div>
               </div>
             </article>;
           })}
@@ -1195,10 +1338,7 @@ function ChatView({
         <section className="rail-block">
           <div className="rail-block-head"><span>Computer</span><StateLabel state={sending ? 'working' : (agent?.state || 'ready')} /></div>
           <div className={cls('rail-screen', sending && 'working')}>
-            <div className="rail-screen-bar"><i/><i/><i/><span>Ripo Computer</span></div>
-            <div className="rail-screen-body">
-              {sending ? <><div className="rail-browser-lines"><b/><b/><b/><div><em/><em/><em/></div></div><span className="rail-cursor">↖</span></> : <div className="rail-idle"><Computer size={27}/><strong>Not in use</strong><span>{agent?.name || 'This bot'} will open it automatically when needed.</span></div>}
-            </div>
+            <LiveComputerPreview compact onOpen={onOpenDetails}/>
           </div>
           <button className="rail-link" onClick={onOpenDetails}>View computer <ChevronRight size={14}/></button>
         </section>
@@ -1209,6 +1349,18 @@ function ChatView({
         </section>
       </aside>
     </section>
+  );
+}
+
+function MobileTabBar({ view, homeOpen, onHome, onChat, onComputer, onFiles, onSettings }) {
+  return (
+    <nav className="mobile-tab-bar-v6" aria-label="Ripo Bot navigation">
+      <button className={cls(homeOpen && 'active')} onClick={onHome}><Home size={21}/><span>Home</span></button>
+      <button className={cls(!homeOpen && view==='chat' && 'active')} onClick={onChat}><MessageSquare size={21}/><span>Chat</span></button>
+      <button className={cls(!homeOpen && view==='computer' && 'active')} onClick={onComputer}><Computer size={21}/><span>Computer</span></button>
+      <button className={cls(!homeOpen && view==='files' && 'active')} onClick={onFiles}><Images size={21}/><span>Files</span></button>
+      <button className={cls(!homeOpen && view==='settings' && 'active')} onClick={onSettings}><Settings size={21}/><span>Settings</span></button>
+    </nav>
   );
 }
 
@@ -1492,6 +1644,14 @@ export default function App() {
         messages: payloadMessages,
         workspaceId: activeWorkspaceId,
         attachments: (options.attachments || []).map((file) => ({ id: file.id, name: file.name, type: file.type })),
+        availableAgents: agents.map((item) => ({
+          id: item.id,
+          name: item.name,
+          role: item.role,
+          description: item.description || '',
+          instructions: item.instructions || '',
+          isPrimary: Boolean(item.isPrimary)
+        })),
         allowAgentAdmin: Boolean(agent.isPrimary),
         allowRename: Boolean(agent.canRenameSelf)
       })
@@ -1545,6 +1705,16 @@ export default function App() {
         }
       }
     }
+    const delegatedMessages = Array.isArray(result.delegatedReplies)
+      ? result.delegatedReplies.map((item) => ({
+          id: uid('delegated'),
+          role: 'assistant',
+          content: item.content,
+          createdAt: new Date().toISOString(),
+          agentId: item.agentId,
+          delegated: true
+        }))
+      : [];
     const reply = {
       id: uid('assistant'), role: 'assistant', content: result.reply,
       createdAt: new Date().toISOString(), agentId: agent.id,
@@ -1554,10 +1724,21 @@ export default function App() {
     if (Array.isArray(result.generatedFiles) && result.generatedFiles.length) {
       setFiles((current) => [...result.generatedFiles, ...current.filter((file) => !result.generatedFiles.some((generated) => generated.id === file.id))]);
     }
+    if (Array.isArray(result.updatedFiles) && result.updatedFiles.length) {
+      setFiles((current) => {
+        const updates = new Map(result.updatedFiles.map((file)=>[file.id,file]));
+        return current.map((file)=>updates.has(file.id)?{...file,...updates.get(file.id)}:file);
+      });
+      setToast(`${result.updatedFiles.length} file${result.updatedFiles.length===1?'':'s'} edited`);
+    }
+    if (delegatedMessages.length) {
+      const names = [...new Set((result.delegatedReplies || []).map((item)=>item.agentName).filter(Boolean))];
+      if (names.length) setToast(`${names.join(', ')} joined the task`);
+    }
     if (result.usage || typeof result.coins === 'number') {
       setAccount((current) => current ? { ...current, usage: result.usage || current.usage, coins: typeof result.coins === 'number' ? result.coins : current.coins } : current);
     }
-    setConversations((current) => ({ ...current, [targetKey]: [...(current[targetKey] || []), reply] }));
+    setConversations((current) => ({ ...current, [targetKey]: [...(current[targetKey] || []), ...delegatedMessages, reply] }));
     setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: 'done' } : item));
     setTimeout(() => setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: 'ready' } : item)), 1200);
     return reply;
@@ -1639,6 +1820,10 @@ export default function App() {
         <section className="mobile-bot-home">
           <header className="mobile-home-head">
             <ProfilePicture account={account || { user: profile }} size="lg" onClick={() => navigate('settings')} />
+            <div className="mobile-brand-v6">
+              <Avatar agent={{id:'ripo-brand-v6',avatarSeed:'ripo-brand-v6',avatarShape:7,avatarColor:'#111111',avatarMotion:6}} size="xs"/>
+              <strong>Ripo Bot</strong>
+            </div>
             <div className="mobile-home-actions">
               <button onClick={() => setMobileSearchOpen((value) => !value)} aria-label="Search bots"><Search size={20}/></button>
               <button onClick={() => setModal('new-agent')} aria-label="Create bot"><Plus size={22}/></button>
@@ -1667,14 +1852,10 @@ export default function App() {
               <time />
             </button>)}
           </div>
-          <footer className="mobile-home-foot">
-            <button onClick={() => navigate('settings')}><Settings size={17}/><span>Settings</span></button>
-            <button onClick={() => navigate('files')}><Images size={17}/><span>Media</span></button>
-          </footer>
         </section>
         <div className="sidebar-top">
           <button className="sidebar-profile-orb" onClick={() => navigate('settings')} aria-label="Open settings">{(profile?.name || 'R').slice(0, 1).toUpperCase()}</button>
-          <div className="brand-lockup sidebar-brand"><span>Ripo Bot</span></div>
+          <div className="brand-lockup sidebar-brand mobile-brand-v6"><Avatar agent={{id:'ripo-brand-desktop',avatarSeed:'ripo-brand-v6',avatarShape:7,avatarColor:'#111111',avatarMotion:6}} size="xs"/><span>Ripo Bot</span></div>
           <div className="sidebar-top-actions">
             <button className="icon-button" onClick={() => setModal('new-agent')} aria-label="Create bot"><Plus size={18} /></button>
             <button className="icon-button sidebar-close" onClick={() => setMobileNav(false)}><X size={18} /></button>
@@ -1724,6 +1905,16 @@ export default function App() {
         {view === 'computer' && <ComputerView />}
         {view === 'settings' && <SettingsView profile={profile} cloudMode={cloudMode} theme={theme} accent={accent} onThemeChange={setTheme} onAccentChange={setAccent} onLogout={logout} onSwitchAccount={switchAccount} account={account} onRefreshAccount={refreshAccount} workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} onSelectWorkspace={selectWorkspace} onRefreshWorkspaces={() => refreshWorkspaces(activeWorkspaceId)} files={files} onDeleteFile={deleteFile} />}
       </main>
+
+      <MobileTabBar
+        view={view}
+        homeOpen={mobileNav}
+        onHome={()=>setMobileNav(true)}
+        onChat={()=>{setView('chat');setMobileNav(false);}}
+        onComputer={()=>navigate('computer')}
+        onFiles={()=>navigate('files')}
+        onSettings={()=>navigate('settings')}
+      />
 
       {modal === 'new-agent' && <AgentEditor onClose={() => setModal(null)} onSave={createAgent} />}
       {modal === 'edit-agent' && activeAgent && <AgentEditor initialAgent={activeAgent} onClose={() => setModal(null)} onSave={saveAgent} />}
