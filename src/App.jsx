@@ -64,6 +64,8 @@ import {
   TriangleAlert
 } from 'lucide-react';
 import { AVATAR_PRESETS, DEFAULT_CONVERSATIONS, QUICK_STARTS, STARTER_AGENTS } from './data.js';
+import { avatarVisual } from './avatar-visual.js';
+import { preferredRecorderMime, stopVoiceSession, voiceRateForAgent } from './voice-utils.js';
 
 const API_BASE = import.meta.env.DEV
   ? ''
@@ -148,32 +150,67 @@ function avatarSeed(agent, preset) {
   return raw.split('').reduce((sum, char, index) => (sum + char.charCodeAt(0) * (index + 3)) % 100003, 17);
 }
 
+function AvatarShapeSvg({ visual }) {
+  const shape = (() => {
+    switch (visual.shape) {
+      case 'circle':
+        return <circle cx="50" cy="50" r="42" />;
+      case 'rounded-square':
+        return <rect x="10" y="10" width="80" height="80" rx="23" />;
+      case 'cloud':
+        return <path d="M23 69C10 67 8 51 18 44C15 28 31 18 44 25C53 11 75 17 77 34C92 35 98 51 89 61C83 72 68 75 56 71C47 80 31 79 23 69Z" />;
+      case 'hexagon':
+        return <path d="M50 7L86 27L91 66L61 90L22 84L7 48L23 17Z" />;
+      case 'diamond':
+        return <path d="M50 6L91 43L75 88L27 91L7 50L27 14Z" />;
+      case 'capsule':
+        return <rect x="7" y="24" width="86" height="52" rx="26" />;
+      case 'drop':
+        return <path d="M52 5C68 26 87 39 87 60C87 79 72 92 52 92C31 92 15 79 15 59C15 39 34 25 52 5Z" />;
+      case 'flower':
+        return <path d="M50 8C61 8 67 17 68 27C79 19 91 26 92 38C94 48 87 55 78 59C88 65 87 78 79 85C70 93 60 88 53 80C48 91 34 94 25 86C17 79 19 68 28 60C15 58 9 47 14 36C19 25 31 23 40 29C40 18 41 8 50 8Z" />;
+      case 'pebble':
+        return <path d="M17 31C28 12 63 6 81 22C96 36 91 68 74 82C56 96 24 91 13 72C5 58 8 45 17 31Z" />;
+      case 'shield':
+        return <path d="M50 6L88 20V48C88 69 74 84 50 94C26 84 12 69 12 48V20L50 6Z" />;
+      case 'triangle':
+        return <path d="M49 8C53 8 57 11 60 17L91 73C96 82 90 91 79 91H21C10 91 4 82 9 73L40 17C43 11 46 8 49 8Z" />;
+      default:
+        return <path d="M17 30C27 13 49 9 65 16C82 12 94 27 91 45C97 61 86 79 70 82C58 95 35 93 26 80C9 76 3 57 12 43C9 38 11 34 17 30Z" />;
+    }
+  })();
+  const eyeWidths = [8, 7, 10, 6, 9];
+  const eyeHeights = [25, 20, 19, 28, 22];
+  const width = eyeWidths[visual.eyeStyle] || 8;
+  const height = eyeHeights[visual.eyeStyle] || 24;
+  const top = 50 - height / 2;
+  return (
+    <svg className="avatar-svg" viewBox="0 0 100 100" aria-hidden="true">
+      <g className={cls('avatar-shape-svg', `shape-${visual.shape}`)} fill="var(--avatar-color)">{shape}</g>
+      <g className={cls('avatar-face-svg', `eye-style-${visual.eyeStyle}`)} fill="#fff">
+        <rect x={38 - width / 2} y={top} width={width} height={height} rx={Math.min(width, height) / 2} transform={`rotate(${visual.eyeTilt} 38 50)`} />
+        <rect x={62 - width / 2} y={top} width={width} height={height} rx={Math.min(width, height) / 2} transform={`rotate(${-visual.eyeTilt} 62 50)`} />
+      </g>
+    </svg>
+  );
+}
+
 function Avatar({ agent, size = 'md', active = false, interactive = false, onClick }) {
   const preset = AVATAR_PRESETS.find((item) => item.id === agent?.avatar) || AVATAR_PRESETS[0];
   const state = agent?.state || 'ready';
-  const seed = avatarSeed(agent, preset);
-  const palette = ['#7b5cf2','#168cf7','#11c58c','#ff7a18','#f42f8f','#ff4b55','#11b9b0','#9b6b3f','#8461ff','#27b568','#ef3f49','#f3a72f'];
-  const color = agent?.avatarColor || palette[seed % palette.length];
-  const shape = Number.isFinite(Number(agent?.avatarShape)) ? Number(agent.avatarShape) % 12 : seed % 12;
-  const motion = Number.isFinite(Number(agent?.avatarMotion)) ? Number(agent.avatarMotion) % 6 : Math.floor(seed / 7) % 6;
-  const eyes = Math.floor(seed / 13) % 4;
+  const visual = avatarVisual({ ...agent, avatarSeed: agent?.avatarSeed || agent?.id || preset?.id });
   const Tag = interactive ? 'button' : 'span';
   return (
     <Tag
       type={interactive ? 'button' : undefined}
       onClick={interactive ? onClick : undefined}
-      className={cls('agent-avatar', `avatar-${size}`, `blob-shape-${shape}`, `motion-${motion}`, `eyes-${eyes}`, `state-${state}`, active && 'is-active', interactive && 'is-clickable')}
-      style={{ '--avatar-color': color, '--avatar-delay': `-${((seed % 23) / 5).toFixed(2)}s`, '--avatar-speed': `${(4.8 + (seed % 37) / 10).toFixed(1)}s` }}
+      className={cls('agent-avatar', `avatar-${size}`, `avatar-geometry-${visual.shape}`, `motion-${visual.motion}`, `state-${state}`, active && 'is-active', interactive && 'is-clickable')}
+      style={{ '--avatar-color': visual.color, '--avatar-delay': `${visual.delay.toFixed(2)}s`, '--avatar-speed': `${visual.speed.toFixed(1)}s` }}
       aria-label={interactive ? `Open ${agent?.name || 'bot'} details` : undefined}
       aria-hidden={interactive ? undefined : 'true'}
     >
       <span className="avatar-halo" />
-      <span className="avatar-core">
-        <span className="avatar-face">
-          <i className="avatar-eye avatar-eye-left" />
-          <i className="avatar-eye avatar-eye-right" />
-        </span>
-      </span>
+      <span className="avatar-core"><AvatarShapeSvg visual={visual} /></span>
       <span className="avatar-status-dot" />
     </Tag>
   );
