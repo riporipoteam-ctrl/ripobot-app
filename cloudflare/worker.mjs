@@ -778,7 +778,7 @@ async function describeImageAttachment(env, stored, userQuestion) {
       max_tokens: 1200,
       stream: false
     });
-    return String(result?.answer || result?.caption || result?.response || result?.result || '').trim().slice(0, 9000);
+    return String(result?.answer || result?.caption || result?.result?.answer || result?.result?.caption || result?.response || (typeof result?.result === 'string' ? result.result : '') || '').trim().slice(0, 9000);
   } catch (error) {
     return `[Vision analysis failed for ${stored.name}: ${error?.message || 'unavailable'}]`;
   }
