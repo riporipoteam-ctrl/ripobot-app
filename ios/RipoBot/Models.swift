@@ -158,6 +158,23 @@ struct FileUploadResponse: Codable {
     var file: RipoFile
 }
 
+struct InterAgentMessage: Codable, Hashable, Identifiable {
+    var id: String
+    var sourceAgentId: String
+    var sourceAgentName: String
+    var targetAgentId: String
+    var targetAgentName: String
+    var task: String
+    var reply: String?
+    var status: String?
+    var createdAt: Double
+}
+
+struct AgentMailboxResponse: Codable {
+    var workspaceId: String?
+    var messages: [InterAgentMessage]
+}
+
 struct DelegatedReply: Codable, Hashable {
     var agentId: String
     var agentName: String
@@ -172,6 +189,7 @@ struct ChatResponse: Codable {
     var generatedFiles: [RipoFile]?
     var updatedFiles: [RipoFile]?
     var delegatedReplies: [DelegatedReply]?
+    var interAgentMessages: [InterAgentMessage]?
     var attachmentFiles: [AttachmentRef]?
     var coins: Int?
 }
@@ -210,6 +228,7 @@ struct ChatRequest: Encodable {
         var content: String
     }
 
+    var agentId: String
     var agentName: String
     var agentRole: String
     var agentInstructions: String
