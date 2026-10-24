@@ -1417,6 +1417,7 @@ export default function App() {
     setFiles((current) => [...uploaded, ...current]);
     setToast(`${uploaded.length} file${uploaded.length === 1 ? '' : 's'} added`);
     refreshWorkspaces(activeWorkspaceId).catch(() => {});
+    return uploaded;
   }
 
   async function deleteFile(file) {
@@ -1631,7 +1632,7 @@ export default function App() {
 
       <main className="main-shell">
         <button className="mobile-menu-button" onClick={() => setMobileNav(true)} aria-label="Back to bots"><ArrowLeft size={20} /></button>
-        {view === 'chat' && <ChatView agent={activeAgent} team={activeTeam} agents={agents} messages={messages} sending={sending} onSend={sendMessage} onRename={renameAgent} onEdit={() => setModal('edit-agent')} onOpenDetails={() => setModal('bot-details')} onStartCall={() => setModal('voice-call')} files={files} onNavigateFiles={() => navigate('files')} />}
+        {view === 'chat' && <ChatView agent={activeAgent} team={activeTeam} agents={agents} messages={messages} sending={sending} onSend={sendMessage} onRename={renameAgent} onEdit={() => setModal('edit-agent')} onOpenDetails={() => setModal('bot-details')} onStartCall={() => setModal('voice-call')} onShowBots={() => setMobileNav(true)} onUploadFiles={uploadFiles} files={files} />}
         {view === 'files' && <FilesView files={files} onUpload={uploadFiles} cloudMode={cloudMode} />}
         {view === 'computer' && <ComputerView />}
         {view === 'settings' && <SettingsView profile={profile} cloudMode={cloudMode} theme={theme} accent={accent} onThemeChange={setTheme} onAccentChange={setAccent} onLogout={logout} onSwitchAccount={switchAccount} account={account} onRefreshAccount={refreshAccount} workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} onSelectWorkspace={selectWorkspace} onRefreshWorkspaces={() => refreshWorkspaces(activeWorkspaceId)} files={files} onDeleteFile={deleteFile} />}
