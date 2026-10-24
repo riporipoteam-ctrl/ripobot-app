@@ -1066,15 +1066,12 @@ async function handleVoiceTranscribe(request, env) {
   if (audio.size < 32) return json(request, 400, { error: 'The recording was empty.' });
   if (audio.size > 8 * 1024 * 1024) return json(request, 413, { error: 'Voice recordings are limited to 8 MB.' });
   const bytes = new Uint8Array(await audio.arrayBuffer());
-  const result = await env.AI.run('@cf/openai/whisper-large-v3-turbo', {
-    audio: Array.from(bytes),
-    task: 'transcribe',
-    vad_filter: true,
-    condition_on_previous_text: false
+  const result = await env.AI.run('@cf/openai/whisper', {
+    audio: [...bytes]
   });
   const textValue = String(result?.text || result?.transcription_info?.text || '').trim();
   if (!textValue) return json(request, 422, { error: 'I could not hear enough speech in that recording.' });
-  return json(request, 200, { text: textValue, provider: 'workers-ai', model: '@cf/openai/whisper-large-v3-turbo' });
+  return json(request, 200, { text: textValue, provider: 'workers-ai', model: '@cf/openai/whisper' });
 }
 
 async function handleVoiceSpeak(request, env) {
