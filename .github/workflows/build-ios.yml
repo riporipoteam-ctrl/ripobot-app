@@ -1,0 +1,69 @@
+name: Build Ripo Bot iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - ".github/workflows/build-ios.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate app icon
+        working-directory: ios
+        run: swift scripts/make_icon.swift
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build unsigned iPhone app
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project RipoBot.xcodeproj \
+            -scheme RipoBot \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned IPA
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release-iphoneos/Ripo Bot.app"
+          test -d "$APP"
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP" Payload/
+          /usr/bin/zip -qry "RipoBot-unsigned.ipa" Payload
+          test -s "RipoBot-unsigned.ipa"
+          ls -lh "RipoBot-unsigned.ipa"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: RipoBot-iOS-unsigned
+          path: ios/RipoBot-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
