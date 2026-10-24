@@ -511,26 +511,298 @@ function ComputerView() {
   );
 }
 
-function SettingsView({ profile, cloudMode, theme, onThemeChange, onLogout }) {
+function usePrivateAsset(path, version = '') {
+  const [src, setSrc] = useState('');
+  useEffect(() => {
+    if (!path) { setSrc(''); return undefined; }
+    let alive = true;
+    let objectUrl = '';
+    fetch(`${API_BASE}${path}`, { headers: storedToken() ? { Authorization: `Bearer ${storedToken()}` } : {} })
+      .then((response) => { if (!response.ok) throw new Error('asset'); return response.blob(); })
+      .then((blob) => {
+        if (!alive) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => {});
+    return () => { alive = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [path, version]);
+  return src;
+}
+
+function ProfilePicture({ account, size = 'lg', version = '', onClick }) {
+  const src = usePrivateAsset(account?.user?.avatarUrl, version);
+  const initials = (account?.user?.name || account?.user?.email || 'R').slice(0, 1).toUpperCase();
   return (
-    <section className="content-page settings-page">
-      <header className="page-heading"><div><span className="eyebrow">Ripo Bot</span><h1>Settings</h1><p>Appearance, account, model, storage, and agent runtime.</p></div></header>
-      <div className="settings-stack">
-        <article className="settings-card appearance-card">
-          <div className="settings-icon"><Circle size={19} /></div>
-          <div className="settings-copy"><strong>Appearance</strong><span>Light is the default. Choose dark or follow your device whenever you want.</span></div>
-          <div className="appearance-segmented" role="group" aria-label="Appearance">
-            {['light', 'dark', 'system'].map((value) => (
-              <button key={value} className={cls(theme === value && 'active')} onClick={() => onThemeChange(value)}>
-                {value === 'light' ? 'Light' : value === 'dark' ? 'Dark' : 'System'}
-              </button>
-            ))}
+    <button type="button" className={cls('account-photo', `account-photo-${size}`)} onClick={onClick} disabled={!onClick}>
+      {src ? <img src={src} alt="" /> : <span>{initials}</span>}
+    </button>
+  );
+}
+
+function UsageMeter({ label, data, subtitle }) {
+  if (!data) return (
+    <div className="usage-meter unlimited-meter">
+      <div className="usage-meter-head"><strong>{label}</strong><span>Unlimited window</span></div>
+      <div className="usage-track"><i style={{ width: '100%' }} /></div>
+      <small>{subtitle}</small>
+    </div>
+  );
+  return (
+    <div className="usage-meter">
+      <div className="usage-meter-head"><strong>{label}</strong><span>{data.remainingPercent}% left</span></div>
+      <div className="usage-track"><i style={{ width: `${data.remainingPercent}%` }} /></div>
+      <small>{subtitle || `${Math.max(0, data.limit - data.used).toLocaleString()} tokens remaining`}</small>
+    </div>
+  );
+}
+
+function SecureMedia({ file }) {
+  const src = usePrivateAsset(`/api/files/${encodeURIComponent(file.id)}`, file.id);
+  if (!src) return <div className="media-thumb media-loading"><LoaderCircle className="spin" size={18} /></div>;
+  if (String(file.type || '').startsWith('video/')) return <video className="media-thumb" src={src} muted controls playsInline />;
+  return <img className="media-thumb" src={src} alt={file.name || 'Workspace media'} />;
+}
+
+function SettingsView({
+  profile,
+  cloudMode,
+  theme,
+  accent,
+  onThemeChange,
+  onAccentChange,
+  onLogout,
+  onSwitchAccount,
+  account,
+  onRefreshAccount,
+  workspaces,
+  activeWorkspaceId,
+  onSelectWorkspace,
+  onRefreshWorkspaces,
+  files,
+  onDeleteFile
+}) {
+  const [page, setPage] = useState('main');
+  const [busy, setBusy] = useState(false);
+  const [avatarVersion, setAvatarVersion] = useState(0);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const avatarInput = useRef(null);
+  const isAdmin = account?.role === 'admin';
+
+  useEffect(() => {
+    if (page === 'admin' && isAdmin) {
+      api('/api/admin/users').then((data) => setAdminUsers(data.users || [])).catch(() => setAdminUsers([]));
+    }
+  }, [page, isAdmin]);
+
+  async function uploadAvatar(event) {
+    const chosen = event.target.files?.[0];
+    if (!chosen) return;
+    setBusy(true);
+    try {
+      const body = new FormData(); body.append('file', chosen);
+      await api('/api/account/avatar', { method: 'POST', body });
+      setAvatarVersion((value) => value + 1);
+      await onRefreshAccount?.();
+    } finally { setBusy(false); event.target.value = ''; }
+  }
+
+  async function renameAccount() {
+    const next = window.prompt('Profile name', account?.user?.name || profile?.name || '');
+    if (!next?.trim()) return;
+    setBusy(true);
+    try { await api('/api/account', { method: 'PUT', body: JSON.stringify({ name: next.trim() }) }); await onRefreshAccount?.(); }
+    finally { setBusy(false); }
+  }
+
+  async function claimDaily() {
+    setBusy(true);
+    try { await api('/api/coins/daily', { method: 'POST', body: '{}' }); await onRefreshAccount?.(); }
+    catch (error) { alert(error.message || 'Could not claim coins.'); }
+    finally { setBusy(false); }
+  }
+
+  async function upgrade() {
+    setBusy(true);
+    try { await api('/api/plans/upgrade', { method: 'POST', body: '{}' }); await onRefreshAccount?.(); }
+    catch (error) { alert(error.message || 'Could not upgrade.'); }
+    finally { setBusy(false); }
+  }
+
+  async function createWorkspace() {
+    const name = window.prompt('Workspace name', 'New Workspace');
+    if (!name?.trim()) return;
+    setBusy(true);
+    try { await api('/api/workspaces', { method: 'POST', body: JSON.stringify({ name: name.trim() }) }); await onRefreshWorkspaces?.(); }
+    catch (error) { alert(error.message || 'Could not create workspace.'); }
+    finally { setBusy(false); }
+  }
+
+  async function renameWorkspace(workspace) {
+    const name = window.prompt('Rename workspace', workspace.name);
+    if (!name?.trim()) return;
+    setBusy(true);
+    try { await api(`/api/workspaces/${encodeURIComponent(workspace.id)}/rename`, { method: 'PUT', body: JSON.stringify({ name: name.trim() }) }); await onRefreshWorkspaces?.(); }
+    finally { setBusy(false); }
+  }
+
+  async function adminAction(user, action, payload = {}) {
+    setBusy(true);
+    try {
+      await api(`/api/admin/users/${encodeURIComponent(user.id)}/action`, { method: 'POST', body: JSON.stringify({ action, ...payload }) });
+      const data = await api('/api/admin/users'); setAdminUsers(data.users || []);
+    } catch (error) { alert(error.message || 'Admin action failed.'); }
+    finally { setBusy(false); }
+  }
+
+  const activeWorkspace = workspaces.find((item) => item.id === activeWorkspaceId) || workspaces[0];
+  const media = files.filter((file) => /^image\//.test(file.type || '') || /^video\//.test(file.type || ''));
+
+  const Back = ({ title }) => (
+    <header className="settings-subheader">
+      <button className="settings-back" onClick={() => setPage('main')}><ArrowLeft size={18} /></button>
+      <h1>{title}</h1>
+      <span />
+    </header>
+  );
+
+  if (page === 'appearance') return (
+    <section className="settings-v4 subpage">
+      <Back title="Appearance" />
+      <div className="settings-page-body narrow-settings">
+        <div className="settings-section-card">
+          <h2>Mode</h2><p>Light is the default. Dark keeps the same layout and spacing.</p>
+          <div className="theme-preview-grid">
+            {['light','dark','system'].map((value) => <button key={value} className={cls('theme-preview', theme === value && 'selected')} onClick={() => onThemeChange(value)}><span className={`theme-mini theme-mini-${value}`}><i /><i /><i /></span><strong>{value[0].toUpperCase()+value.slice(1)}</strong></button>)}
           </div>
+        </div>
+        <div className="settings-section-card">
+          <h2>Theme color</h2><p>Pick the accent Ripo Bot uses for active states, usage, and highlights.</p>
+          <div className="accent-grid">{['#111111','#7b5cf2','#168cf7','#11c58c','#ff7a18','#f42f8f','#e53f49','#00a8a8'].map((color) => <button key={color} className={cls('accent-choice', accent === color && 'selected')} style={{ '--choice': color }} onClick={() => onAccentChange(color)} aria-label={color}><i /></button>)}</div>
+        </div>
+      </div>
+    </section>
+  );
+
+  if (page === 'workspaces') return (
+    <section className="settings-v4 subpage">
+      <Back title="Workspaces" />
+      <div className="settings-page-body">
+        <div className="workspace-page-head"><div><h2>Your workspaces</h2><p>Each workspace keeps its own bots, conversations, teams, and media.</p></div><button className="primary-button" onClick={createWorkspace} disabled={busy}><Plus size={16}/>New workspace</button></div>
+        <div className="workspace-grid-v4">
+          {workspaces.map((workspace) => <article key={workspace.id} className={cls('workspace-tile', workspace.id === activeWorkspaceId && 'active')}>
+            <button className="workspace-open" onClick={() => onSelectWorkspace(workspace.id)}>
+              <span className="workspace-icon"><BriefcaseBusiness size={20}/></span>
+              <div><strong>{workspace.name}</strong><span>{workspace.botCount || 0} bots · {Math.round((workspace.storage?.used || 0)/1024/1024)} MB used</span></div>
+              <ChevronRight size={17}/>
+            </button>
+            <div className="workspace-tile-actions"><button onClick={() => renameWorkspace(workspace)}><Pencil size={14}/> Rename</button></div>
+          </article>)}
+        </div>
+        {activeWorkspace && <div className="workspace-stats-card">
+          <div className="workspace-stat"><strong>{activeWorkspace.botCount || 0}</strong><span>Bots</span></div>
+          <div className="workspace-stat"><strong>{(account?.usage?.weekly?.used || 0).toLocaleString()}</strong><span>AI tokens this week</span></div>
+          <div className="workspace-stat"><strong>{Math.round((activeWorkspace.storage?.used || 0)/1024/1024)} MB</strong><span>Cloud storage</span></div>
+          <div className="workspace-stat"><strong>{media.length}</strong><span>Media items</span></div>
+        </div>}
+        <div className="media-gallery-section">
+          <div className="workspace-page-head"><div><h2>Media gallery</h2><p>Images and videos uploaded to or created inside this workspace.</p></div></div>
+          {media.length ? <div className="media-gallery">{media.map((file) => <article key={file.id} className="media-item"><SecureMedia file={file}/><div><span title={file.name}>{file.name}</span><button onClick={() => onDeleteFile(file)}><Trash2 size={14}/></button></div></article>)}</div> : <div className="settings-empty"><Images size={28}/><strong>No media yet</strong><span>Images and videos you send to bots will appear here.</span></div>}
+        </div>
+      </div>
+    </section>
+  );
+
+  if (page === 'plans') return (
+    <section className="settings-v4 subpage">
+      <Back title="Plans" />
+      <div className="settings-page-body narrow-settings">
+        <div className="plan-hero"><Crown size={28}/><h2>Ripo Bot {account?.plan === 'plus' ? 'Plus' : 'Free'}</h2><p>Upgrade with Ripo Coins — no card or real-money checkout in this version.</p><div className="coin-balance"><Coins size={18}/>{account?.coins || 0} Ripo Coins</div></div>
+        <div className="plan-grid">
+          <article className={cls('plan-card', account?.plan === 'free' && 'current')}><span className="plan-pill">Free</span><h3>Ripo Bot Free</h3><p>For everyday bot work.</p><ul><li>3-hour + weekly usage windows</li><li>1 workspace</li><li>250 MB zero-cost cloud storage</li><li>Web, computer, files, voice, image tools</li></ul>{account?.plan === 'free' && <span className="current-plan-label">Current plan</span>}</article>
+          <article className={cls('plan-card plus-plan', account?.plan === 'plus' && 'current')}><span className="plan-pill"><Crown size={13}/>Plus</span><h3>Ripo Bot Plus</h3><p>More room for heavier work.</p><ul><li>No 3-hour app usage window</li><li>Higher weekly usage</li><li>2 workspaces</li><li>750 MB cloud storage on the zero-cost backend</li><li>Early feature access</li></ul>{account?.plan === 'plus' ? <span className="current-plan-label">Current plan</span> : <button className="primary-button" onClick={upgrade} disabled={busy}><Coins size={15}/>1200 coins · 30 days</button>}</article>
+        </div>
+        <div className="plan-note"><ShieldCheck size={17}/><span>The larger 500 GB target you asked for cannot honestly be hosted on the current free-only KV backend. This page shows the storage the live infrastructure can actually enforce without charging you.</span></div>
+        {isAdmin && <button className="settings-nav-row admin-row" onClick={() => setPage('admin')}><span className="settings-row-icon"><Shield size={18}/></span><span><strong>Admin console</strong><small>Users, plans, coins, storage, bans, warnings, admins</small></span><ChevronRight size={17}/></button>}
+      </div>
+    </section>
+  );
+
+  if (page === 'plugins') {
+    const plugins = [
+      ['web','Web Search','Fresh public information and sources.',<Globe2 size={22}/>,'Built in'],
+      ['browser','Browser Run','Render and read JavaScript websites when a bot needs them.',<Computer size={22}/>,'Built in'],
+      ['files','Workspace Files','Read uploaded files and save generated work.',<Folder size={22}/>,'Built in'],
+      ['images','Image Studio','Generate images with FLUX.2 [klein] on Workers AI.',<Images size={22}/>,'Built in'],
+      ['voice','Voice Calls','Talk to bots using your device speech recognition and system voices.',<Mic size={22}/>,'Device'],
+    ];
+    const external = [
+      ['gmail','Gmail','Requires Google OAuth before a website can safely access your mailbox.',<Mail size={22}/>],
+      ['calendar','Google Calendar','Requires Google OAuth for real calendar actions.',<CalendarDays size={22}/>],
+      ['github','GitHub','Requires OAuth or an authenticated app connection for private account actions.',<Github size={22}/>],
+    ];
+    return <section className="settings-v4 subpage"><Back title="Plugins"/><div className="settings-page-body">
+      <div className="workspace-page-head"><div><h2>Connected tools</h2><p>These work immediately without you creating API keys.</p></div></div>
+      <div className="plugin-grid">{plugins.map(([id,name,desc,icon,status]) => <article className="plugin-card" key={id}><span className={`plugin-logo plugin-${id}`}>{icon}</span><div><strong>{name}</strong><p>{desc}</p></div><span className="plugin-status connected"><Check size={13}/>{status}</span></article>)}</div>
+      <div className="workspace-page-head plugin-external-head"><div><h2>External accounts</h2><p>I’m not faking “connected” buttons: these services require the provider’s OAuth authorization before Ripo Bot can safely access them.</p></div></div>
+      <div className="plugin-grid">{external.map(([id,name,desc,icon]) => <article className="plugin-card muted-plugin" key={id}><span className={`plugin-logo plugin-${id}`}>{icon}</span><div><strong>{name}</strong><p>{desc}</p></div><span className="plugin-status">OAuth required</span></article>)}</div>
+    </div></section>;
+  }
+
+  if (page === 'admin' && isAdmin) return (
+    <section className="settings-v4 subpage">
+      <Back title="Admin" />
+      <div className="settings-page-body admin-console">
+        <div className="admin-banner"><Shield size={24}/><div><strong>Ripo Bot Admin</strong><span>Server-side access is restricted to admins. The owner email is always protected.</span></div></div>
+        <div className="admin-user-list">{adminUsers.map((user) => <article className="admin-user" key={user.id}>
+          <div className="admin-user-main"><span className="admin-avatar">{(user.name || user.email).slice(0,1).toUpperCase()}</span><div><strong>{user.name}</strong><span>{user.email}</span><small>{user.plan} · {user.coins} coins · {user.warnings} warnings</small></div><span className={cls('role-chip', user.role === 'admin' && 'admin')}>{user.role}</span></div>
+          <div className="admin-actions">
+            <button onClick={() => { const amount=Number(window.prompt('Coins to add','100')); if(amount) adminAction(user,'addCoins',{amount}); }}><Coins size={14}/>Coins</button>
+            <button onClick={() => adminAction(user,'setPlan',{plan:user.plan === 'plus' ? 'free':'plus',days:30})}><Crown size={14}/>{user.plan === 'plus' ? 'Make Free':'Give Plus'}</button>
+            <button onClick={() => { const mb=Number(window.prompt('Extra storage MB','100')); if(mb>=0) adminAction(user,'setStorageBonus',{bytes:mb*1024*1024}); }}><HardDrive size={14}/>Storage</button>
+            <button onClick={() => adminAction(user,'warn')}><TriangleAlert size={14}/>Warn</button>
+            <button onClick={() => adminAction(user,user.bannedUntil ? 'unban':'ban',{hours:24})}><Ban size={14}/>{user.bannedUntil ? 'Unban':'Ban'}</button>
+            <button onClick={() => adminAction(user,'setAdmin',{enabled:user.role !== 'admin'})}><Shield size={14}/>{user.role === 'admin' ? 'Remove admin':'Make admin'}</button>
+          </div>
+        </article>)}</div>
+      </div>
+    </section>
+  );
+
+  return (
+    <section className="settings-v4">
+      <header className="settings-main-header"><h1>Settings</h1></header>
+      <div className="settings-page-body narrow-settings">
+        <article className="account-hero-card">
+          <input ref={avatarInput} type="file" accept="image/*" hidden onChange={uploadAvatar}/>
+          <ProfilePicture account={account || { user: profile }} size="xl" version={avatarVersion} onClick={() => avatarInput.current?.click()}/>
+          <div className="account-copy"><strong>{account?.user?.name || profile?.name || 'Ripo Bot user'}</strong><span>{account?.user?.email || profile?.email || ''}</span><button onClick={renameAccount}><Pencil size={13}/>Edit profile</button></div>
+          <span className={cls('plan-badge', account?.plan === 'plus' && 'plus')}><Crown size={13}/>{account?.plan === 'plus' ? 'Plus':'Free'}</span>
         </article>
-        <article className="settings-card"><div className="settings-icon"><UserRound size={19} /></div><div className="settings-copy"><strong>{profile?.name || 'Ripo Bot user'}</strong><span>{profile?.email || 'No email'}</span></div><span className={cls('badge', cloudMode ? 'badge-success' : 'badge-muted')}>{cloudMode ? 'Cloud account' : 'Device mode'}</span></article>
-        <article className="settings-card"><div className="settings-icon"><Sparkles size={19} /></div><div className="settings-copy"><strong>Ripo model route</strong><span>Cloudflare AI is live. Hugging Face can become the primary route when its server-side token and model are configured.</span></div><span className="badge badge-success">Live</span></article>
-        <article className="settings-card"><div className="settings-icon"><HardDrive size={19} /></div><div className="settings-copy"><strong>Workspace persistence</strong><span>{cloudMode ? 'D1 account data + Workers KV free file storage.' : 'Saved in this browser until cloud storage is available.'}</span></div></article>
-        <button className="danger-button" onClick={onLogout}><LogOut size={16} /> Sign out</button>
+
+        <article className="usage-card-v4">
+          <div className="settings-card-title"><Gauge size={18}/><div><strong>Usage</strong><span>Remaining allowance resets automatically.</span></div></div>
+          <UsageMeter label="3-hour usage" data={account?.usage?.threeHour || null} subtitle={account?.plan === 'plus' ? 'Plus has no 3-hour Ripo Bot limit.' : undefined}/>
+          <UsageMeter label="Weekly usage" data={account?.usage?.weekly}/>
+        </article>
+
+        <article className="coins-card">
+          <div className="coin-orb"><Coins size={21}/></div><div><strong>{account?.coins || 0} Ripo Coins</strong><span>Earn 2 coins for successful bot turns, up to 50/day.</span></div><button className="secondary-button" onClick={claimDaily} disabled={busy}>Daily +25</button>
+        </article>
+
+        <div className="settings-nav-group">
+          <button className="settings-nav-row" onClick={() => setPage('appearance')}><span className="settings-row-icon"><Palette size={18}/></span><span><strong>Appearance</strong><small>Light, dark, system, and accent theme</small></span><ChevronRight size={17}/></button>
+          <button className="settings-nav-row" onClick={() => setPage('workspaces')}><span className="settings-row-icon"><BriefcaseBusiness size={18}/></span><span><strong>Workspaces</strong><small>{workspaces.length} workspace{workspaces.length === 1 ? '' : 's'} · bots, storage, media</small></span><ChevronRight size={17}/></button>
+          <button className="settings-nav-row" onClick={() => setPage('plans')}><span className="settings-row-icon"><WalletCards size={18}/></span><span><strong>Plans</strong><small>Free, Plus, Ripo Coins, limits</small></span><ChevronRight size={17}/></button>
+          <button className="settings-nav-row" onClick={() => setPage('plugins')}><span className="settings-row-icon"><Plug size={18}/></span><span><strong>Plugins</strong><small>Built-in tools and external connections</small></span><ChevronRight size={17}/></button>
+          {isAdmin && <button className="settings-nav-row admin-row" onClick={() => setPage('admin')}><span className="settings-row-icon"><Shield size={18}/></span><span><strong>Admin</strong><small>Manage users, plans, coins and access</small></span><ChevronRight size={17}/></button>}
+        </div>
+
+        <div className="settings-nav-group account-actions">
+          <button className="settings-nav-row" onClick={onSwitchAccount}><span className="settings-row-icon"><UserPlus size={18}/></span><span><strong>Switch account</strong><small>Sign in with another Ripo Bot account</small></span><ChevronRight size={17}/></button>
+          <button className="settings-nav-row danger-row" onClick={onLogout}><span className="settings-row-icon"><LogOut size={18}/></span><span><strong>Log out</strong></span></button>
+        </div>
+        <div className="settings-version"><strong>Ripo Bot</strong><span>Version 4.0 · Web</span></div>
       </div>
     </section>
   );
