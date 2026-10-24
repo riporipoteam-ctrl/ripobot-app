@@ -1229,32 +1229,110 @@ async function runToolActions(request, env, user, actions, workspaceId) {
   return { toolResults, generatedFiles, updatedFiles };
 }
 
-async function runDelegations(env, roster, actions, userText, attachmentContext) {
+async function runDelegations(
+  env,
+  user,
+  workspace,
+  sourceAgent,
+  roster,
+  actions,
+  userText,
+  attachmentContext,
+  depth = 0,
+  visitedAgentIds = new Set(),
+  budget = { count: 0 }
+) {
   const replies = [];
-  const seen = new Set();
+  const exchanges = [];
+  if (depth > 1 || budget.count >= 5) return { replies, exchanges };
+
+  const availableBots = roster
+    .filter((agent) => agent.id !== sourceAgent.id)
+    .map((agent) => `- ${agent.name} — ${agent.role}`)
+    .join('\n');
+
   for (const action of actions.slice(0, 3)) {
+    if (budget.count >= 5) break;
+    if (!(action.type === 'message_agent' || action.type === 'delegate_agent')) continue;
+
     const requested = String(action.targetName || action.agentName || '').trim().toLowerCase();
     const target = roster.find((agent) => agent.name.toLowerCase() === requested || agent.id.toLowerCase() === requested);
-    if (!target || target.isCurrent || seen.has(target.id)) continue;
-    seen.add(target.id);
+    if (!target || target.id === sourceAgent.id || visitedAgentIds.has(target.id)) continue;
+
     const task = String(action.task || action.message || userText || '').trim().slice(0, 5000);
+    if (!task) continue;
+
     const system = [
       BASE_PROMPT,
       `Identity rule: your name is "${target.name}". You are NOT Ripo Bot unless that exact string is your assigned name.`,
       `Your role is: ${target.role}.`,
       target.description ? `Description: ${target.description}` : '',
       target.instructions ? `Bot-specific instructions: ${target.instructions}` : '',
+      `You received an internal task from "${sourceAgent.name}" (${sourceAgent.role || 'AI bot'}). Complete that task directly.`,
       attachmentContext?.text || '',
-      'You are collaborating with the main bot. Answer the delegated task directly and return useful work, not a greeting.'
+      availableBots ? `Other bots available in this workspace:\n${availableBots}` : '',
+      'Any bot may coordinate with another existing bot when another specialty is genuinely useful. To send another bot a task, emit <ripo_action>{"type":"message_agent","targetName":"Bot name","message":"specific task"}</ripo_action>. To explicitly delegate work, emit <ripo_action>{"type":"delegate_agent","targetName":"Bot name","task":"specific task"}</ripo_action>. Do not message yourself. Do not create loops. Prefer completing the task yourself unless another bot adds real value.'
     ].filter(Boolean).join('\n\n');
+
     const requestMessages = [{ role: 'system', content: system }, { role: 'user', content: task }];
     let result = null;
     try { result = await callHuggingFace(requestMessages, env); } catch {}
     if (!result) { try { result = await callWorkersAI(requestMessages, env); } catch {} }
     if (!result) { try { result = await callBackup(requestMessages); } catch {} }
-    if (result?.reply) replies.push({ agentId: target.id, agentName: target.name, content: result.reply, provider: result.provider, model: result.model });
+    if (!result?.reply) continue;
+
+    const parsedTarget = extractActions(result.reply);
+    const cleanReply = parsedTarget.reply || result.reply;
+    const createdAt = Date.now();
+    const exchange = {
+      id: crypto.randomUUID(),
+      sourceAgentId: sourceAgent.id,
+      sourceAgentName: sourceAgent.name,
+      targetAgentId: target.id,
+      targetAgentName: target.name,
+      task,
+      reply: cleanReply,
+      status: 'completed',
+      createdAt
+    };
+    await persistAgentExchange(env, user.id, workspace.id, exchange);
+    exchanges.push(exchange);
+    replies.push({
+      agentId: target.id,
+      agentName: target.name,
+      content: cleanReply,
+      provider: result.provider,
+      model: result.model,
+      sourceAgentId: sourceAgent.id,
+      sourceAgentName: sourceAgent.name,
+      mailboxId: exchange.id
+    });
+    budget.count += 1;
+
+    const nestedActions = parsedTarget.actions.filter((nested) => nested.type === 'message_agent' || nested.type === 'delegate_agent');
+    if (nestedActions.length && depth < 1 && budget.count < 5) {
+      const nextVisited = new Set(visitedAgentIds);
+      nextVisited.add(sourceAgent.id);
+      nextVisited.add(target.id);
+      const nested = await runDelegations(
+        env,
+        user,
+        workspace,
+        target,
+        roster,
+        nestedActions,
+        task,
+        attachmentContext,
+        depth + 1,
+        nextVisited,
+        budget
+      );
+      replies.push(...nested.replies);
+      exchanges.push(...nested.exchanges);
+    }
   }
-  return replies;
+
+  return { replies, exchanges };
 }
 
 async function handleChat(request, env) {
@@ -1273,6 +1351,7 @@ async function handleChat(request, env) {
   catch (error) { return json(request, 400, { error: error.message }); }
 
   const agentName = String(body.agentName || 'Ripo Bot').slice(0, 80);
+  const agentId = String(body.agentId || '').trim().slice(0, 100);
   const agentRole = String(body.agentRole || 'AI bot').slice(0, 120);
   const agentInstructions = String(body.agentInstructions || '').slice(0, 2200);
   const allowAgentAdmin = Boolean(body.allowAgentAdmin);
@@ -1280,6 +1359,16 @@ async function handleChat(request, env) {
   const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content || '';
   const workspace = await resolveWorkspace(env, auth.user, body.workspaceId);
   const roster = normalizeAvailableAgents(body.availableAgents, agentName);
+  const currentRosterAgent = roster.find((candidate) => candidate.isCurrent) || roster.find((candidate) => candidate.id === agentId);
+  const sourceAgent = currentRosterAgent || {
+    id: agentId || `agent:${agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    name: agentName,
+    role: agentRole,
+    description: '',
+    instructions: agentInstructions,
+    isPrimary: allowAgentAdmin,
+    isCurrent: true
+  };
   const attachmentContext = await buildAttachmentContext(env, auth.user, body.attachments, lastUser);
   let sources = [];
   if (shouldAutoSearch(lastUser)) sources = await searchWeb(lastUser, env);
@@ -1295,13 +1384,15 @@ async function handleChat(request, env) {
     'To overwrite an attached text/code file, emit <ripo_action>{"type":"rewrite_file","fileId":"attached-file-id","content":"complete replacement file contents"}</ripo_action>.',
     'Use tools only when they are needed. Tool actions are hidden and their results are returned before your final answer.'
   ];
+  if (roster.length > 1) {
+    capabilities.push('Any bot may coordinate with another existing bot. To send another bot a message or task, emit <ripo_action>{"type":"message_agent","targetName":"Bot name","message":"specific message or task"}</ripo_action>. The target bot will actually run the task, reply, and the exchange will be saved in both bot histories.');
+    capabilities.push('To explicitly delegate a task to another bot, emit <ripo_action>{"type":"delegate_agent","targetName":"Bot name","task":"specific task"}</ripo_action>. Use this when the user asks you to tell, ask, message, bring in, or hand work to another bot, or when another specialty materially improves the result.');
+  }
   if (allowAgentAdmin) {
-    capabilities.push('You are the main bot and may coordinate other bots without waiting for the user to manually invite them.');
-    capabilities.push('To bring an existing specialist into the current task, emit <ripo_action>{"type":"delegate_agent","targetName":"Existing bot name","task":"specific task for that bot"}</ripo_action>. Use this whenever the user asks you to add, use, bring in, ask, or collaborate with another bot.');
+    capabilities.push('You are the main bot and may create or organize bots without waiting for the user to manually invite them.');
     capabilities.push('To create a specialist bot when the requested specialist does not already exist, emit <ripo_action>{"type":"create_agent","name":"Name","role":"Role","description":"Short description","instructions":"Instructions","avatar":"nova"}</ripo_action>.');
     capabilities.push('To form a persistent team, emit <ripo_action>{"type":"create_team","name":"Team name","memberNames":["Agent One","Agent Two"]}</ripo_action>.');
     capabilities.push('To rename another bot, emit <ripo_action>{"type":"rename_agent","targetName":"Current bot name","name":"New name"}</ripo_action>.');
-    capabilities.push('To leave a note in another bot chat, emit <ripo_action>{"type":"message_agent","targetName":"Bot name","message":"Message"}</ripo_action>.');
   }
   if (allowRename) capabilities.push('If your own role changes substantially and a better short name is useful, you may put [[rename:New Name]] at the start of the reply. Do this rarely.');
 
@@ -1328,11 +1419,11 @@ async function handleChat(request, env) {
   if (!result) return json(request, 502, { error: `${agentName} could not reach an AI model.` });
 
   let parsed = extractActions(result.reply);
-  const immediateActions = parsed.actions.filter((action) => ['create_agent','create_team','rename_agent','message_agent'].includes(action.type));
+  const immediateActions = parsed.actions.filter((action) => ['create_agent','create_team','rename_agent'].includes(action.type));
   const toolActions = parsed.actions.filter((action) => ['web_search','browser_open','browser_click','browser_type','browser_scroll','browser_key','computer_exec','generate_image','edit_image','rewrite_file'].includes(action.type));
-  const delegateActions = parsed.actions.filter((action) => action.type === 'delegate_agent');
+  const delegateActions = parsed.actions.filter((action) => action.type === 'message_agent' || action.type === 'delegate_agent');
 
-  if (allowAgentAdmin && !delegateActions.length && roster.length > 1) {
+  if (!delegateActions.length && roster.length > 1) {
     const lowered = lastUser.toLowerCase();
     const wantsCollab = /\b(add|bring|invite|use|ask|tell|delegate|collaborate|work with|help from|get)\b/.test(lowered) && /\b(bot|bots|agent|agents|team)\b/.test(lowered);
     const named = roster.filter((candidate) => !candidate.isCurrent && lowered.includes(candidate.name.toLowerCase()));
@@ -1367,9 +1458,21 @@ async function handleChat(request, env) {
   let generatedFiles = [];
   let updatedFiles = [];
   let delegatedReplies = [];
+  let interAgentMessages = [];
 
   if (delegateActions.length) {
-    delegatedReplies = await runDelegations(env, roster, delegateActions, lastUser, attachmentContext);
+    const coordination = await runDelegations(
+      env,
+      auth.user,
+      workspace,
+      sourceAgent,
+      roster,
+      delegateActions,
+      lastUser,
+      attachmentContext
+    );
+    delegatedReplies = coordination.replies;
+    interAgentMessages = coordination.exchanges;
   }
 
   if (toolActions.length) {
@@ -1412,6 +1515,7 @@ async function handleChat(request, env) {
     generatedFiles,
     updatedFiles,
     delegatedReplies,
+    interAgentMessages,
     attachmentFiles: attachmentContext.files,
     usage,
     coins: Number(freshMeta.coins || 0)
