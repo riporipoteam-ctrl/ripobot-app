@@ -266,14 +266,14 @@ function AuthScreen({ onAuthenticated }) {
 
   if (!showForm) {
     const floaters = [
-      {id:'welcome-a',avatar:'ripo',avatarSeed:'welcome-a',avatarColor:'#11c58c'},
-      {id:'welcome-b',avatar:'nova',avatarSeed:'welcome-b',avatarColor:'#f42f8f'},
-      {id:'welcome-c',avatar:'mint',avatarSeed:'welcome-c',avatarColor:'#7b5cf2'},
-      {id:'welcome-d',avatar:'wave',avatarSeed:'welcome-d',avatarColor:'#168cf7'},
-      {id:'welcome-e',avatar:'ember',avatarSeed:'welcome-e',avatarColor:'#ff7a18'},
-      {id:'welcome-f',avatar:'mono',avatarSeed:'welcome-f',avatarColor:'#9b6b3f'},
-      {id:'welcome-g',avatar:'pixel',avatarSeed:'welcome-g',avatarColor:'#ef3f49'},
-      {id:'welcome-h',avatar:'orbit',avatarSeed:'welcome-h',avatarColor:'#11b9b0'}
+      {id:'welcome-a',avatar:'ripo',avatarSeed:'welcome-a',avatarShape:2,avatarMotion:5,avatarColor:'#11c58c'},
+      {id:'welcome-b',avatar:'nova',avatarSeed:'welcome-b',avatarShape:0,avatarMotion:1,avatarColor:'#f42f8f'},
+      {id:'welcome-c',avatar:'mint',avatarSeed:'welcome-c',avatarShape:5,avatarMotion:6,avatarColor:'#7b5cf2'},
+      {id:'welcome-d',avatar:'wave',avatarSeed:'welcome-d',avatarShape:1,avatarMotion:3,avatarColor:'#168cf7'},
+      {id:'welcome-e',avatar:'ember',avatarSeed:'welcome-e',avatarShape:3,avatarMotion:7,avatarColor:'#ff7a18'},
+      {id:'welcome-f',avatar:'mono',avatarSeed:'welcome-f',avatarShape:8,avatarMotion:2,avatarColor:'#9b6b3f'},
+      {id:'welcome-g',avatar:'pixel',avatarSeed:'welcome-g',avatarShape:10,avatarMotion:4,avatarColor:'#ef3f49'},
+      {id:'welcome-h',avatar:'orbit',avatarSeed:'welcome-h',avatarShape:6,avatarMotion:0,avatarColor:'#11b9b0'}
     ];
     return <main className="welcome-v4">
       <div className="welcome-floaters">{floaters.map((agent,index)=><span key={agent.id} className={`welcome-floater floater-${index}`}><Avatar agent={agent} size={index%3===0?'lg':'md'}/></span>)}</div>
@@ -310,7 +310,7 @@ function Onboarding({ profile, onDone }) {
 
   function randomize() {
     const colors=['#111111','#7b5cf2','#168cf7','#11c58c','#ff7a18','#f42f8f','#ef3f49','#11b9b0'];
-    setAvatarConfig({avatarSeed:uid('avatar'),avatarColor:colors[Math.floor(Math.random()*colors.length)],avatarShape:Math.floor(Math.random()*12),avatarMotion:Math.floor(Math.random()*6)});
+    setAvatarConfig({avatarSeed:uid('avatar'),avatarColor:colors[Math.floor(Math.random()*colors.length)],avatarShape:Math.floor(Math.random()*AVATAR_SHAPES.length),avatarMotion:Math.floor(Math.random()*8)});
   }
   function finish() { onDone({displayName:displayName.trim()||'Ripo Bot user',goal:'everything',starter,mainRole:role.trim()||'Chief of Staff',mainAvatar:avatarConfig}); }
 
