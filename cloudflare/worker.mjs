@@ -1081,19 +1081,38 @@ async function handleVoiceSpeak(request, env) {
   const textValue = String(body.text || '').trim().slice(0, 1200);
   if (!textValue) return json(request, 400, { error: 'Add text to speak.' });
   const lang = String(body.lang || 'en').toLowerCase().slice(0, 8) || 'en';
-  const generated = await env.AI.run('@cf/myshell-ai/melotts', { prompt: textValue, lang }, { returnRawResponse: true });
+  const generated = await env.AI.run('@cf/myshell-ai/melotts', { prompt: textValue, lang });
   if (generated instanceof Response) {
-    const headers = new Headers(generated.headers);
-    const cors = corsHeaders(request);
-    Object.entries(cors).forEach(([key, value]) => headers.set(key, value));
-    headers.set('Content-Type', headers.get('Content-Type') || 'audio/mpeg');
-    headers.set('Cache-Control', 'no-store');
-    return new Response(generated.body, { status: generated.status, headers });
+    const type = generated.headers.get('Content-Type') || '';
+    if (!type.includes('application/json')) {
+      const headers = new Headers(generated.headers);
+      Object.entries(corsHeaders(request)).forEach(([key, value]) => headers.set(key, value));
+      headers.set('Content-Type', type || 'audio/mpeg');
+      headers.set('Cache-Control', 'no-store');
+      return new Response(generated.body, { status: generated.status, headers });
+    }
+    const payload = await generated.json().catch(() => ({}));
+    const encoded = payload?.audio || payload?.result?.audio;
+    if (typeof encoded === 'string') {
+      const raw = encoded.replace(/^data:audio\/[^;]+;base64,/, '');
+      return new Response(base64ToBytes(raw), { status: 200, headers: { ...corsHeaders(request), 'Content-Type': 'audio/mpeg' } });
+    }
   }
-  const audio = generated?.audio;
+  const audio = generated?.audio || generated?.result?.audio;
+  if (audio instanceof ArrayBuffer) {
+    return new Response(audio, { status: 200, headers: { ...corsHeaders(request), 'Content-Type': 'audio/mpeg' } });
+  }
+  if (ArrayBuffer.isView(audio)) {
+    return new Response(audio, { status: 200, headers: { ...corsHeaders(request), 'Content-Type': 'audio/mpeg' } });
+  }
   if (typeof audio === 'string') {
-    const bytes = base64ToBytes(audio.replace(/^data:audio\/[^;]+;base64,/, ''));
-    return new Response(bytes, { status: 200, headers: { ...corsHeaders(request), 'Content-Type': 'audio/mpeg' } });
+    const raw = audio.replace(/^data:audio\/[^;]+;base64,/, '');
+    try {
+      return new Response(base64ToBytes(raw), { status: 200, headers: { ...corsHeaders(request), 'Content-Type': 'audio/mpeg' } });
+    } catch {
+      const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0) & 255);
+      return new Response(bytes, { status: 200, headers: { ...corsHeaders(request), 'Content-Type': 'audio/mpeg' } });
+    }
   }
   return json(request, 502, { error: 'The voice model did not return audio.' });
 }
