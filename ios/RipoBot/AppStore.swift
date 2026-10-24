@@ -90,6 +90,9 @@ final class AppStore: ObservableObject {
         agents = (cloudState.agents?.isEmpty == false ? cloudState.agents! : [.ripo])
         if !agents.contains(where: { $0.id == "ripo" }) { agents.insert(.ripo, at: 0) }
         conversations = cloudState.conversations ?? [:]
+        if let mailbox = try? await api.agentMailbox(workspaceId: workspaceId) {
+            mergeAgentMailbox(mailbox.messages)
+        }
         teams = cloudState.teams ?? []
         archivedChats = cloudState.archivedChats ?? []
         selectedAgentId = agents.contains(where: { $0.id == selectedAgentId }) ? selectedAgentId : (agents.first?.id ?? "ripo")
@@ -100,6 +103,7 @@ final class AppStore: ObservableObject {
     func selectAgent(_ agent: Agent) {
         selectedAgentId = agent.id
         selectedTab = .chat
+        Task { await refreshAgentMailbox() }
     }
 
     func send(_ text: String, attachments: [AttachmentRef] = []) async {
@@ -124,6 +128,7 @@ final class AppStore: ObservableObject {
                 )
             }
             let request = ChatRequest(
+                agentId: agent.id,
                 agentName: agent.name,
                 agentRole: agent.role,
                 agentInstructions: agent.instructions ?? "",
@@ -136,20 +141,24 @@ final class AppStore: ObservableObject {
             )
             let response = try await api.chat(request)
 
-            for delegated in response.delegatedReplies ?? [] {
-                conversations[agent.id, default: []].append(
-                    ChatMessage(
-                        id: "ios-delegated-\(UUID().uuidString)",
-                        role: "assistant",
-                        content: delegated.content,
-                        createdAt: ISO8601DateFormatter().string(from: Date()),
-                        agentId: delegated.agentId,
-                        attachments: nil,
-                        sources: nil,
-                        generatedFiles: nil,
-                        delegated: true
+            if let exchanges = response.interAgentMessages, !exchanges.isEmpty {
+                mergeAgentMailbox(exchanges)
+            } else {
+                for delegated in response.delegatedReplies ?? [] {
+                    conversations[agent.id, default: []].append(
+                        ChatMessage(
+                            id: "ios-delegated-\(UUID().uuidString)",
+                            role: "assistant",
+                            content: delegated.content,
+                            createdAt: ISO8601DateFormatter().string(from: Date()),
+                            agentId: delegated.agentId,
+                            attachments: nil,
+                            sources: nil,
+                            generatedFiles: nil,
+                            delegated: true
+                        )
                     )
-                )
+                }
             }
 
             let assistant = ChatMessage(
@@ -189,6 +198,72 @@ final class AppStore: ObservableObject {
             )
         }
         sending = false
+    }
+
+    func refreshAgentMailbox() async {
+        guard let mailbox = try? await api.agentMailbox(workspaceId: workspaceId) else { return }
+        mergeAgentMailbox(mailbox.messages)
+    }
+
+    func mergeAgentMailbox(_ exchanges: [InterAgentMessage]) {
+        func iso(_ milliseconds: Double) -> String {
+            ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: milliseconds / 1000))
+        }
+
+        func appendUnique(thread: String, message: ChatMessage) {
+            if conversations[thread, default: []].contains(where: { $0.id == message.id }) { return }
+            conversations[thread, default: []].append(message)
+        }
+
+        for exchange in exchanges {
+            let createdAt = iso(exchange.createdAt)
+            let incoming = ChatMessage(
+                id: "mailbox:\(exchange.id):request",
+                role: "assistant",
+                content: "Task from \(exchange.sourceAgentName): \(exchange.task)",
+                createdAt: createdAt,
+                agentId: exchange.sourceAgentId,
+                attachments: nil,
+                sources: nil,
+                generatedFiles: nil,
+                delegated: true
+            )
+            appendUnique(thread: exchange.targetAgentId, message: incoming)
+
+            if let reply = exchange.reply, !reply.isEmpty {
+                let targetReply = ChatMessage(
+                    id: "mailbox:\(exchange.id):reply",
+                    role: "assistant",
+                    content: reply,
+                    createdAt: createdAt,
+                    agentId: exchange.targetAgentId,
+                    attachments: nil,
+                    sources: nil,
+                    generatedFiles: nil,
+                    delegated: true
+                )
+                appendUnique(thread: exchange.targetAgentId, message: targetReply)
+
+                let sourceReply = ChatMessage(
+                    id: "mailbox:\(exchange.id):source-reply",
+                    role: "assistant",
+                    content: reply,
+                    createdAt: createdAt,
+                    agentId: exchange.targetAgentId,
+                    attachments: nil,
+                    sources: nil,
+                    generatedFiles: nil,
+                    delegated: true
+                )
+                appendUnique(thread: exchange.sourceAgentId, message: sourceReply)
+            }
+        }
+
+        for key in conversations.keys {
+            conversations[key]?.sort {
+                ($0.createdAt ?? "") < ($1.createdAt ?? "")
+            }
+        }
     }
 
     func saveWorkspace() async throws {
