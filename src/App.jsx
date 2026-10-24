@@ -139,6 +139,60 @@ function cls(...parts) {
   return parts.filter(Boolean).join(' ');
 }
 
+function mergeAgentMailboxIntoConversations(current, exchanges, mirrorThreadKey = '', currentSourceAgentId = '') {
+  const next = {};
+  for (const [key, value] of Object.entries(current || {})) next[key] = Array.isArray(value) ? [...value] : [];
+  const seen = new Set(Object.values(next).flat().map((message) => message?.id).filter(Boolean));
+
+  const pushUnique = (threadKey, message) => {
+    if (!threadKey || !message?.id || seen.has(message.id)) return;
+    if (!next[threadKey]) next[threadKey] = [];
+    next[threadKey].push(message);
+    seen.add(message.id);
+  };
+
+  for (const exchange of Array.isArray(exchanges) ? exchanges : []) {
+    if (!exchange?.id || !exchange?.targetAgentId || !exchange?.sourceAgentId) continue;
+    const createdAt = exchange.createdAt ? new Date(Number(exchange.createdAt)).toISOString() : new Date().toISOString();
+    pushUnique(exchange.targetAgentId, {
+      id: `mailbox:${exchange.id}:request`,
+      role: 'assistant',
+      content: `Task from ${exchange.sourceAgentName}: ${exchange.task}`,
+      createdAt,
+      agentId: exchange.sourceAgentId,
+      botMessage: true,
+      mailboxId: exchange.id
+    });
+    if (exchange.reply) {
+      const targetReply = {
+        id: `mailbox:${exchange.id}:reply`,
+        role: 'assistant',
+        content: exchange.reply,
+        createdAt,
+        agentId: exchange.targetAgentId,
+        botMessage: true,
+        mailboxId: exchange.id
+      };
+      pushUnique(exchange.targetAgentId, targetReply);
+      pushUnique(exchange.sourceAgentId, {
+        ...targetReply,
+        id: `mailbox:${exchange.id}:source-reply`
+      });
+      if (mirrorThreadKey && currentSourceAgentId === exchange.sourceAgentId && mirrorThreadKey !== exchange.sourceAgentId) {
+        pushUnique(mirrorThreadKey, {
+          ...targetReply,
+          id: `mailbox:${exchange.id}:mirror-reply`
+        });
+      }
+    }
+  }
+
+  for (const key of Object.keys(next)) {
+    next[key].sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+  }
+  return next;
+}
+
 function formatTime(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -1426,7 +1480,9 @@ export default function App() {
       const state = await api(`/api/state?workspaceId=${encodeURIComponent(workspaceId)}`);
       const nextAgents = diversifyLegacyAgents(state?.agents?.length ? state.agents : [STARTER_AGENTS[0]]);
       setAgents(nextAgents);
-      setConversations(state?.conversations && Object.keys(state.conversations).length ? state.conversations : { ripo: DEFAULT_CONVERSATIONS.ripo });
+      const baseConversations = state?.conversations && Object.keys(state.conversations).length ? state.conversations : { ripo: DEFAULT_CONVERSATIONS.ripo };
+      const mailbox = await api(`/api/agent-mailbox?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ messages: [] }));
+      setConversations(mergeAgentMailboxIntoConversations(baseConversations, mailbox?.messages || []));
       setTeams(Array.isArray(state?.teams) ? state.teams : []);
       setArchivedChats(Array.isArray(state?.archivedChats) ? state.archivedChats : []);
       if (typeof state?.onboarded === 'boolean') setOnboarded(state.onboarded);
@@ -1463,6 +1519,19 @@ export default function App() {
   useEffect(() => { writeLocal(LOCAL_KEYS.onboarded, onboarded); }, [onboarded]);
   useEffect(() => { writeLocal(LOCAL_KEYS.archivedChats, archivedChats); }, [archivedChats]);
   useEffect(() => { if (activeWorkspaceId) writeLocal(LOCAL_KEYS.activeWorkspace, activeWorkspaceId); }, [activeWorkspaceId]);
+  useEffect(() => {
+    if (!cloudMode || !auth || !activeWorkspaceId) return undefined;
+    let alive = true;
+    const pullMailbox = async () => {
+      const mailbox = await api(`/api/agent-mailbox?workspaceId=${encodeURIComponent(activeWorkspaceId)}`).catch(() => null);
+      if (alive && mailbox?.messages?.length) {
+        setConversations((current) => mergeAgentMailboxIntoConversations(current, mailbox.messages));
+      }
+    };
+    pullMailbox();
+    const timer = setInterval(pullMailbox, 12000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [cloudMode, auth, activeWorkspaceId]);
   useEffect(() => {
     writeLocal(LOCAL_KEYS.accent, accent);
     document.documentElement.style.setProperty('--user-accent', accent);
@@ -1638,6 +1707,7 @@ export default function App() {
     const result = await api('/api/chat', {
       method: 'POST',
       body: JSON.stringify({
+        agentId: agent.id,
         agentName: agent.name,
         agentRole: agent.role,
         agentInstructions: agent.instructions || '',
@@ -1685,14 +1755,6 @@ export default function App() {
           setConversations((current) => current[newAgent.id] ? current : { ...current, [newAgent.id]: [] });
           setToast(`${newAgent.name} joined your team`);
         }
-        if (action.type === 'message_agent' && agent.isPrimary && action.targetName && action.message) {
-          const target = agents.find((item) => item.name.toLowerCase() === String(action.targetName).toLowerCase());
-          if (target) {
-            const handoff = { id: uid('handoff'), role: 'assistant', content: `Message from ${agent.name}: ${String(action.message).slice(0, 2000)}`, createdAt: new Date().toISOString(), agentId: agent.id };
-            setConversations((current) => ({ ...current, [target.id]: [...(current[target.id] || []), handoff] }));
-            setToast(`${agent.name} messaged ${target.name}`);
-          }
-        }
         if (action.type === 'create_team' && agent.isPrimary && action.name && Array.isArray(action.memberNames)) {
           const wanted = action.memberNames.map((name) => String(name).toLowerCase());
           const memberIds = agents.filter((item) => wanted.includes(item.name.toLowerCase())).map((item) => item.id);
@@ -1705,7 +1767,8 @@ export default function App() {
         }
       }
     }
-    const delegatedMessages = Array.isArray(result.delegatedReplies)
+    const interAgentMessages = Array.isArray(result.interAgentMessages) ? result.interAgentMessages : [];
+    const delegatedMessages = !interAgentMessages.length && Array.isArray(result.delegatedReplies)
       ? result.delegatedReplies.map((item) => ({
           id: uid('delegated'),
           role: 'assistant',
@@ -1731,14 +1794,20 @@ export default function App() {
       });
       setToast(`${result.updatedFiles.length} file${result.updatedFiles.length===1?'':'s'} edited`);
     }
-    if (delegatedMessages.length) {
-      const names = [...new Set((result.delegatedReplies || []).map((item)=>item.agentName).filter(Boolean))];
-      if (names.length) setToast(`${names.join(', ')} joined the task`);
+    if (interAgentMessages.length || delegatedMessages.length) {
+      const names = [...new Set([
+        ...interAgentMessages.map((item) => item.targetAgentName),
+        ...(result.delegatedReplies || []).map((item) => item.agentName)
+      ].filter(Boolean))];
+      if (names.length) setToast(`${names.join(', ')} replied to ${agent.name}`);
     }
     if (result.usage || typeof result.coins === 'number') {
       setAccount((current) => current ? { ...current, usage: result.usage || current.usage, coins: typeof result.coins === 'number' ? result.coins : current.coins } : current);
     }
-    setConversations((current) => ({ ...current, [targetKey]: [...(current[targetKey] || []), ...delegatedMessages, reply] }));
+    setConversations((current) => {
+      const merged = mergeAgentMailboxIntoConversations(current, interAgentMessages, targetKey, agent.id);
+      return { ...merged, [targetKey]: [...(merged[targetKey] || []), ...delegatedMessages, reply] };
+    });
     setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: 'done' } : item));
     setTimeout(() => setAgents((current) => current.map((item) => item.id === agent.id ? { ...item, state: 'ready' } : item)), 1200);
     return reply;
