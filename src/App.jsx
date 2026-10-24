@@ -1177,6 +1177,7 @@ export default function App() {
   const [activeAgentId, setActiveAgentId] = useState('ripo');
   const [activeTeamId, setActiveTeamId] = useState(null);
   const [mobileNav, setMobileNav] = useState(true);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [theme, setTheme] = useState(() => readLocal(LOCAL_KEYS.theme, 'light'));
   const [accent, setAccent] = useState(() => readLocal(LOCAL_KEYS.accent, '#111111'));
   const [account, setAccount] = useState(null);
@@ -1585,6 +1586,42 @@ export default function App() {
   return (
     <div className="app-shell" data-theme={theme}>
       <aside className={cls('sidebar', mobileNav && 'mobile-open')}>
+        <section className="mobile-bot-home">
+          <header className="mobile-home-head">
+            <ProfilePicture account={account || { user: profile }} size="lg" onClick={() => navigate('settings')} />
+            <div className="mobile-home-actions">
+              <button onClick={() => setMobileSearchOpen((value) => !value)} aria-label="Search bots"><Search size={20}/></button>
+              <button onClick={() => setModal('new-agent')} aria-label="Create bot"><Plus size={22}/></button>
+            </div>
+          </header>
+          {mobileSearchOpen && <div className="mobile-home-search"><Search size={16}/><input value={searchText} onChange={(event)=>setSearchText(event.target.value)} placeholder="Search bots" autoFocus /></div>}
+          <div className="mobile-featured-bots">
+            {visibleAgents.slice(0,3).map((agent) => <button key={agent.id} onClick={() => openAgent(agent.id)}>
+              <Avatar agent={agent} size="lg" />
+              <span>{agent.role || agent.name}</span>
+            </button>)}
+          </div>
+          <div className="mobile-bot-feed">
+            {visibleAgents.map((agent) => {
+              const thread = conversations[agent.id] || [];
+              const last = [...thread].reverse().find((message) => message.role !== 'system');
+              return <button key={agent.id} className="mobile-bot-row" onClick={() => openAgent(agent.id)}>
+                <Avatar agent={agent} size="sm" />
+                <span className="mobile-bot-copy"><strong>{agent.name}</strong><small>{last?.content || agent.description || agent.role}</small></span>
+                <time>{last?.createdAt ? formatTime(last.createdAt) : ''}</time>
+              </button>;
+            })}
+            {teams.map((team) => <button key={team.id} className="mobile-bot-row" onClick={() => openTeam(team.id)}>
+              <span className="mobile-team-orb"><Users size={18}/></span>
+              <span className="mobile-bot-copy"><strong>{team.name}</strong><small>{team.members.length} bots working together</small></span>
+              <time />
+            </button>)}
+          </div>
+          <footer className="mobile-home-foot">
+            <button onClick={() => navigate('settings')}><Settings size={17}/><span>Settings</span></button>
+            <button onClick={() => navigate('files')}><Images size={17}/><span>Media</span></button>
+          </footer>
+        </section>
         <div className="sidebar-top">
           <button className="sidebar-profile-orb" onClick={() => navigate('settings')} aria-label="Open settings">{(profile?.name || 'R').slice(0, 1).toUpperCase()}</button>
           <div className="brand-lockup sidebar-brand"><span>Ripo Bot</span></div>
