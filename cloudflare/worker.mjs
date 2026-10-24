@@ -63,7 +63,7 @@ const ZERO_KEY_PLUGIN_CATALOG = [
     category: 'Developer',
     description: 'Search public npm packages and inspect package metadata without signing in.',
     homepage: 'https://www.npmjs.com/',
-    logo: 'https://static.npmjs.com/images/avatars/Car.png',
+    logo: 'https://www.npmjs.com/favicon.ico',
     accent: '#cb3837',
     zeroKey: true,
     actions: [
@@ -1683,7 +1683,6 @@ async function handleChat(request, env) {
     'To create a new image, emit <ripo_action>{"type":"generate_image","prompt":"detailed image prompt"}</ripo_action>.',
     'To edit an attached image, emit <ripo_action>{"type":"edit_image","fileId":"attached-file-id","prompt":"describe the exact edit"}</ripo_action>.',
     'To overwrite an attached text/code file, emit <ripo_action>{"type":"rewrite_file","fileId":"attached-file-id","content":"complete replacement file contents"}</ripo_action>.',
-    pluginContext.prompt,
     'Use tools only when they are needed. Tool actions are hidden and their results are returned before your final answer.'
   ];
   if (roster.length > 1) {
@@ -2299,7 +2298,7 @@ export default {
     }
 
     try {
-      if (url.pathname === '/api/health' && request.method === 'GET') return json(request, 200, { status: 'ok', app: 'ripobot', version: 5 });
+      if (url.pathname === '/api/health' && request.method === 'GET') return json(request, 200, { status: 'ok', app: 'ripobot', version: 8 });
       if (url.pathname === '/api/config' && request.method === 'GET') return json(request, 200, {
         primaryModel: env.HF_MODEL || DEFAULT_MODEL,
         huggingFaceConfigured: Boolean(env.HF_TOKEN),
