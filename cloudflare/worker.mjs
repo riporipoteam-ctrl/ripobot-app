@@ -665,6 +665,8 @@ async function handleFileUpload(request, env) {
   const auth = await requireUser(request, env); if (auth.error) return auth.error;
   if (!env.FILES) return json(request, 503, { error: 'Free KV file storage is not provisioned.' });
   const form = await request.formData();
+  const workspace = await resolveWorkspace(env, auth.user, String(form.get('workspaceId') || ''));
+  const meta = await ensureUserMeta(env, auth.user);
   const file = form.get('file');
   if (!(file instanceof File)) return json(request, 400, { error: 'Attach a file.' });
   if (file.size > 20 * 1024 * 1024) return json(request, 413, { error: 'Files are limited to 20 MB on the free storage plan.' });
