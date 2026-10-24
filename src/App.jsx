@@ -227,7 +227,7 @@ function AuthScreen({ onAuthenticated }) {
         method: 'POST',
         body: JSON.stringify(payload)
       });
-      onAuthenticated({ profile: data.user, cloud: true, token: data.token, expiresAt: data.expiresAt });
+      onAuthenticated({ profile: data.user, cloud: true, token: data.token, expiresAt: data.expiresAt, account: data });
     } catch (err) {
       if ([404, 501, 503].includes(err.status)) {
         setError('Cloud accounts are not provisioned on this deployment yet. You can continue in device mode below.');
@@ -1433,7 +1433,7 @@ export default function App() {
             <button className="icon-button sidebar-close" onClick={() => setMobileNav(false)}><X size={18} /></button>
           </div>
         </div>
-        <button className="new-task-button" onClick={() => { openAgent('ripo'); setConversations((current) => ({ ...current, ripo: [] })); }}><Plus size={17} /><span>New task</span><kbd>⌘ N</kbd></button>
+        <button className="new-task-button" onClick={newTask}><Plus size={17} /><span>New task</span><kbd>⌘ N</kbd></button>
         <div className="sidebar-search"><Search size={15} /><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search bots" /><kbd>⌘ K</kbd></div>
 
         <nav className="sidebar-nav primary-nav">
@@ -1456,24 +1456,33 @@ export default function App() {
           </div>
         </div>
 
+        {archivedChats.length > 0 && <div className="sidebar-section recent-section">
+          <div className="section-label"><span>Recent</span><small>{archivedChats.length}</small></div>
+          <div className="recent-chat-list">
+            {archivedChats.slice(0, 8).map((chat) => <button key={chat.id} onClick={() => openArchive(chat)}><MessageSquare size={14}/><span><strong>{chat.title || 'Saved chat'}</strong><small>{new Date(chat.createdAt).toLocaleDateString()}</small></span></button>)}
+          </div>
+        </div>}
+
         <div className="sidebar-footer">
           <button className={cls('sync-indicator', syncState === 'local' && 'local')}><Cloud size={14} /><span>{cloudMode ? (syncState === 'saving' ? 'Saving…' : syncState === 'local' ? 'Saved locally' : 'Synced') : 'Device mode'}</span></button>
-          <button className={cls('profile-button', view === 'settings' && 'active')} onClick={() => navigate('settings')}><span className="profile-avatar">{(profile?.name || 'R').slice(0, 1).toUpperCase()}</span><span><strong>{profile?.name || 'Ripo user'}</strong><small>{cloudMode ? 'Cloud workspace' : 'This device'}</small></span><Settings size={15} /></button>
+          <button className={cls('profile-button', view === 'settings' && 'active')} onClick={() => navigate('settings')}><span className="profile-avatar">{(profile?.name || 'R').slice(0, 1).toUpperCase()}</span><span><strong>{profile?.name || 'Ripo user'}</strong><small>{account?.plan === 'plus' ? 'Plus · cloud workspace' : cloudMode ? 'Free · cloud workspace' : 'This device'}</small></span><Settings size={15} /></button>
         </div>
       </aside>
       {mobileNav && <div className="mobile-scrim" onClick={() => setMobileNav(false)} />}
 
       <main className="main-shell">
         <button className="mobile-menu-button" onClick={() => setMobileNav(true)} aria-label="Back to bots"><ArrowLeft size={20} /></button>
-        {view === 'chat' && <ChatView agent={activeAgent} team={activeTeam} agents={agents} messages={messages} sending={sending} onSend={sendMessage} onRename={renameAgent} onEdit={() => setModal('edit-agent')} files={files} onNavigateFiles={() => navigate('files')} />}
+        {view === 'chat' && <ChatView agent={activeAgent} team={activeTeam} agents={agents} messages={messages} sending={sending} onSend={sendMessage} onRename={renameAgent} onEdit={() => setModal('edit-agent')} onOpenDetails={() => setModal('bot-details')} onStartCall={() => setModal('voice-call')} files={files} onNavigateFiles={() => navigate('files')} />}
         {view === 'files' && <FilesView files={files} onUpload={uploadFiles} cloudMode={cloudMode} />}
         {view === 'computer' && <ComputerView />}
-        {view === 'settings' && <SettingsView profile={profile} cloudMode={cloudMode} theme={theme} onThemeChange={setTheme} onLogout={logout} />}
+        {view === 'settings' && <SettingsView profile={profile} cloudMode={cloudMode} theme={theme} accent={accent} onThemeChange={setTheme} onAccentChange={setAccent} onLogout={logout} onSwitchAccount={switchAccount} account={account} onRefreshAccount={refreshAccount} workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} onSelectWorkspace={selectWorkspace} onRefreshWorkspaces={() => refreshWorkspaces(activeWorkspaceId)} files={files} onDeleteFile={deleteFile} />}
       </main>
 
       {modal === 'new-agent' && <AgentEditor onClose={() => setModal(null)} onSave={createAgent} />}
       {modal === 'edit-agent' && activeAgent && <AgentEditor initialAgent={activeAgent} onClose={() => setModal(null)} onSave={saveAgent} />}
       {modal === 'new-team' && <TeamEditor agents={agents} onClose={() => setModal(null)} onSave={createTeam} />}
+      {modal === 'bot-details' && activeAgent && <BotDetails agent={activeAgent} files={files} onClose={() => setModal(null)} onEdit={() => setModal('edit-agent')} onOpenComputer={() => { setModal(null); navigate('computer'); }} />}
+      {modal === 'voice-call' && activeAgent && <VoiceCall agents={agents} initialAgent={activeAgent} onClose={() => setModal(null)} onTurn={sendVoiceTurn} />}
       {toast && <div className="toast"><CheckCircle2 size={16} />{toast}</div>}
     </div>
   );
