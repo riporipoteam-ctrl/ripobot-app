@@ -5,6 +5,7 @@
   "compatibility_date": "2026-10-24",
   "workers_dev": true,
   "ai": { "binding": "AI" },
+  "browser": { "binding": "BROWSER" },
   "d1_databases": [
     {
       "binding": "DB",
