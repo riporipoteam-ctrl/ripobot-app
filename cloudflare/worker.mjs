@@ -3,6 +3,15 @@ const MAX_BODY = 96 * 1024;
 const MAX_MESSAGES = 20;
 const RATE_LIMIT = 24;
 const SESSION_DAYS = 30;
+const ADMIN_EMAIL = 'ripo.ripoteam@gmail.com';
+const COINS_PER_CHAT = 2;
+const DAILY_COIN_REWARD = 25;
+const PLUS_COIN_COST = 1200;
+const PLUS_DAYS = 30;
+const PLAN_LIMITS = {
+  free: { threeHourTokens: 45_000, weeklyTokens: 300_000, storageBytes: 250 * 1024 * 1024, workspaceLimit: 1 },
+  plus: { threeHourTokens: null, weeklyTokens: 1_500_000, storageBytes: 750 * 1024 * 1024, workspaceLimit: 2 }
+};
 const rateWindows = new Map();
 
 const allowedOrigins = new Set([
@@ -136,6 +145,62 @@ async function ensureSchema(env) {
       state_json TEXT NOT NULL,
       updated_at INTEGER NOT NULL,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_meta (
+      user_id TEXT PRIMARY KEY,
+      role TEXT NOT NULL DEFAULT 'user',
+      plan TEXT NOT NULL DEFAULT 'free',
+      plan_expires_at INTEGER,
+      coins INTEGER NOT NULL DEFAULT 100,
+      warnings INTEGER NOT NULL DEFAULT 0,
+      banned_until INTEGER,
+      storage_bonus_bytes INTEGER NOT NULL DEFAULT 0,
+      daily_claim_at INTEGER,
+      avatar_key TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS usage_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tokens INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_usage_user_created ON usage_events(user_id, created_at)`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS coin_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_coin_user_created ON coin_events(user_id, created_at)`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS workspaces (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id, created_at)`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS workspace_v4_state (
+      workspace_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      state_json TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS file_workspaces (
+      file_id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     )`)
   ]);
   return true;
@@ -189,8 +254,11 @@ async function handleRegister(request, env) {
   const now = Date.now();
   await env.DB.prepare('INSERT INTO users (id, email, display_name, password_hash, password_salt, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)')
     .bind(userId, email, name, passwordHash, bytesToBase64(salt), now).run();
+  const createdUser = { id: userId, email, name };
+  await ensureUserMeta(env, createdUser);
+  await ensureDefaultWorkspace(env, createdUser);
   const session = await issueSession(env, userId);
-  return json(request, 201, { user: { id: userId, email, name }, ...session });
+  return json(request, 201, { ...(await accountPayload(env, createdUser)), ...session });
 }
 
 async function handleLogin(request, env) {
@@ -204,15 +272,19 @@ async function handleLogin(request, env) {
   if (!user) return json(request, 401, { error: 'Email or password is incorrect.' });
   const actual = await hashPassword(password, base64ToBytes(user.password_salt));
   if (actual !== user.password_hash) return json(request, 401, { error: 'Email or password is incorrect.' });
+  const loginUser = { id: user.id, email: user.email, name: user.name };
+  await ensureUserMeta(env, loginUser);
+  await ensureDefaultWorkspace(env, loginUser);
   const session = await issueSession(env, user.id);
-  return json(request, 200, { user: { id: user.id, email: user.email, name: user.name }, ...session });
+  return json(request, 200, { ...(await accountPayload(env, loginUser)), ...session });
 }
 
 async function handleSession(request, env) {
   if (!env.DB) return json(request, 200, { user: null, cloud: false });
   await ensureSchema(env);
   const user = await getAuthUser(request, env);
-  return json(request, 200, { user: user ? { id: user.id, email: user.email, name: user.name } : null, cloud: Boolean(user) });
+  if (!user) return json(request, 200, { user: null, cloud: false });
+  return json(request, 200, { ...(await accountPayload(env, user)), cloud: true });
 }
 
 async function handleLogout(request, env) {
@@ -234,37 +306,341 @@ async function requireUser(request, env) {
   return { user };
 }
 
+
+function effectivePlan(meta) {
+  if (meta?.plan === 'plus' && (!meta.plan_expires_at || Number(meta.plan_expires_at) > Date.now())) return 'plus';
+  return 'free';
+}
+
+async function ensureUserMeta(env, user) {
+  const now = Date.now();
+  const role = String(user?.email || '').toLowerCase() === ADMIN_EMAIL ? 'admin' : 'user';
+  await env.DB.prepare(`INSERT INTO user_meta
+    (user_id, role, plan, coins, warnings, storage_bonus_bytes, created_at, updated_at)
+    VALUES (?1, ?2, 'free', 100, 0, 0, ?3, ?3)
+    ON CONFLICT(user_id) DO UPDATE SET
+      role = CASE WHEN ?2 = 'admin' THEN 'admin' ELSE user_meta.role END,
+      updated_at = ?3`)
+    .bind(user.id, role, now).run();
+  const meta = await env.DB.prepare('SELECT * FROM user_meta WHERE user_id = ?1').bind(user.id).first();
+  if (meta?.plan === 'plus' && meta.plan_expires_at && Number(meta.plan_expires_at) <= now) {
+    await env.DB.prepare("UPDATE user_meta SET plan = 'free', plan_expires_at = NULL, updated_at = ?2 WHERE user_id = ?1")
+      .bind(user.id, now).run();
+    return { ...meta, plan: 'free', plan_expires_at: null };
+  }
+  return meta;
+}
+
+async function ensureDefaultWorkspace(env, user) {
+  let workspace = await env.DB.prepare('SELECT * FROM workspaces WHERE user_id = ?1 ORDER BY created_at ASC LIMIT 1').bind(user.id).first();
+  if (workspace) return workspace;
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  await env.DB.prepare('INSERT INTO workspaces (id, user_id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)')
+    .bind(id, user.id, 'My Workspace', now).run();
+  const legacy = await env.DB.prepare('SELECT state_json FROM workspace_state WHERE user_id = ?1').bind(user.id).first();
+  if (legacy?.state_json) {
+    await env.DB.prepare('INSERT INTO workspace_v4_state (workspace_id, user_id, state_json, updated_at) VALUES (?1, ?2, ?3, ?4)')
+      .bind(id, user.id, legacy.state_json, now).run();
+  }
+  return { id, user_id: user.id, name: 'My Workspace', created_at: now, updated_at: now };
+}
+
+async function resolveWorkspace(env, user, requestedId) {
+  await ensureDefaultWorkspace(env, user);
+  if (requestedId) {
+    const chosen = await env.DB.prepare('SELECT * FROM workspaces WHERE id = ?1 AND user_id = ?2').bind(requestedId, user.id).first();
+    if (chosen) return chosen;
+  }
+  return env.DB.prepare('SELECT * FROM workspaces WHERE user_id = ?1 ORDER BY created_at ASC LIMIT 1').bind(user.id).first();
+}
+
+function estimateTokens(messages, reply = '') {
+  const chars = (messages || []).reduce((sum, message) => sum + String(message?.content || '').length, 0) + String(reply || '').length;
+  return Math.max(1, Math.ceil(chars / 4));
+}
+
+async function usageSnapshot(env, user, meta) {
+  const now = Date.now();
+  const plan = effectivePlan(meta);
+  const limits = PLAN_LIMITS[plan];
+  const threeHourStart = now - 3 * 60 * 60 * 1000;
+  const weekStart = now - 7 * 24 * 60 * 60 * 1000;
+  const row = await env.DB.prepare(`SELECT
+    COALESCE(SUM(CASE WHEN created_at >= ?2 THEN tokens ELSE 0 END), 0) AS three_hour,
+    COALESCE(SUM(CASE WHEN created_at >= ?3 THEN tokens ELSE 0 END), 0) AS weekly
+    FROM usage_events WHERE user_id = ?1`).bind(user.id, threeHourStart, weekStart).first();
+  const threeUsed = Number(row?.three_hour || 0);
+  const weekUsed = Number(row?.weekly || 0);
+  const threeLimit = limits.threeHourTokens;
+  const weeklyLimit = limits.weeklyTokens;
+  const remainingPct = (used, limit) => limit == null ? null : Math.max(0, Math.min(100, Math.round((1 - used / limit) * 100)));
+  return {
+    plan,
+    threeHour: threeLimit == null ? null : { used: threeUsed, limit: threeLimit, remainingPercent: remainingPct(threeUsed, threeLimit), resetsAt: threeHourStart + 3 * 60 * 60 * 1000 },
+    weekly: { used: weekUsed, limit: weeklyLimit, remainingPercent: remainingPct(weekUsed, weeklyLimit), resetsAt: weekStart + 7 * 24 * 60 * 60 * 1000 }
+  };
+}
+
+async function recordUsage(env, user, tokens) {
+  const now = Date.now();
+  await env.DB.prepare('INSERT INTO usage_events (id, user_id, tokens, kind, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
+    .bind(crypto.randomUUID(), user.id, Math.max(1, Number(tokens || 1)), 'chat', now).run();
+  const dayStart = new Date(now); dayStart.setUTCHours(0, 0, 0, 0);
+  const earned = await env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM coin_events WHERE user_id = ?1 AND reason = 'chat' AND created_at >= ?2")
+    .bind(user.id, dayStart.getTime()).first();
+  if (Number(earned?.total || 0) < 50) {
+    await env.DB.batch([
+      env.DB.prepare('UPDATE user_meta SET coins = coins + ?2, updated_at = ?3 WHERE user_id = ?1').bind(user.id, COINS_PER_CHAT, now),
+      env.DB.prepare('INSERT INTO coin_events (id, user_id, amount, reason, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
+        .bind(crypto.randomUUID(), user.id, COINS_PER_CHAT, 'chat', now)
+    ]);
+  }
+}
+
+async function storageSnapshot(env, user, meta, workspaceId = null) {
+  let row;
+  if (workspaceId) {
+    row = await env.DB.prepare(`SELECT COALESCE(SUM(files.size),0) AS used
+      FROM files LEFT JOIN file_workspaces fw ON fw.file_id = files.id
+      WHERE files.user_id = ?1 AND fw.workspace_id = ?2`).bind(user.id, workspaceId).first();
+  } else {
+    row = await env.DB.prepare('SELECT COALESCE(SUM(size),0) AS used FROM files WHERE user_id = ?1').bind(user.id).first();
+  }
+  const plan = effectivePlan(meta);
+  const limit = PLAN_LIMITS[plan].storageBytes + Number(meta?.storage_bonus_bytes || 0);
+  return { used: Number(row?.used || 0), limit };
+}
+
+async function accountPayload(env, user) {
+  const meta = await ensureUserMeta(env, user);
+  const workspace = await ensureDefaultWorkspace(env, user);
+  const usage = await usageSnapshot(env, user, meta);
+  const storage = await storageSnapshot(env, user, meta);
+  const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM workspaces WHERE user_id = ?1').bind(user.id).first();
+  return {
+    user: { id: user.id, email: user.email, name: user.name, avatarUrl: meta.avatar_key ? '/api/account/avatar' : null },
+    role: meta.role,
+    plan: effectivePlan(meta),
+    planExpiresAt: meta.plan_expires_at || null,
+    coins: Number(meta.coins || 0),
+    warnings: Number(meta.warnings || 0),
+    bannedUntil: meta.banned_until || null,
+    usage,
+    storage,
+    workspaceCount: Number(count?.total || 1),
+    defaultWorkspaceId: workspace.id
+  };
+}
+
+async function handleAccountGet(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  return json(request, 200, await accountPayload(env, auth.user));
+}
+
+async function handleAccountUpdate(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const body = await readJsonBody(request);
+  const name = String(body.name || '').trim().slice(0, 80);
+  if (!name) return json(request, 400, { error: 'Add a display name.' });
+  await env.DB.prepare('UPDATE users SET display_name = ?2 WHERE id = ?1').bind(auth.user.id, name).run();
+  return json(request, 200, { ok: true, name });
+}
+
+async function handleAvatarUpload(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  if (!env.FILES) return json(request, 503, { error: 'Profile photo storage is unavailable.' });
+  const form = await request.formData();
+  const workspace = await resolveWorkspace(env, auth.user, String(form.get('workspaceId') || ''));
+  const meta = await ensureUserMeta(env, auth.user);
+  const file = form.get('file');
+  if (!(file instanceof File) || !String(file.type || '').startsWith('image/')) return json(request, 400, { error: 'Choose an image.' });
+  if (file.size > 1024 * 1024) return json(request, 413, { error: 'Profile pictures are limited to 1 MB.' });
+  const key = `avatar:${auth.user.id}`;
+  await env.FILES.put(key, await file.arrayBuffer(), { metadata: { type: file.type || 'image/jpeg' } });
+  await ensureUserMeta(env, auth.user);
+  await env.DB.prepare('UPDATE user_meta SET avatar_key = ?2, updated_at = ?3 WHERE user_id = ?1').bind(auth.user.id, key, Date.now()).run();
+  return json(request, 200, { ok: true, avatarUrl: '/api/account/avatar' });
+}
+
+async function handleAvatarGet(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const meta = await ensureUserMeta(env, auth.user);
+  if (!meta?.avatar_key || !env.FILES) return json(request, 404, { error: 'No profile picture.' });
+  const object = await env.FILES.get(meta.avatar_key, { type: 'arrayBuffer' });
+  if (!object) return json(request, 404, { error: 'No profile picture.' });
+  const metadata = await env.FILES.getWithMetadata(meta.avatar_key, { type: 'arrayBuffer' });
+  const headers = new Headers(corsHeaders(request));
+  headers.set('Content-Type', metadata?.metadata?.type || 'image/jpeg');
+  headers.set('Cache-Control', 'private, max-age=300');
+  return new Response(object, { status: 200, headers });
+}
+
+async function handleDailyClaim(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const meta = await ensureUserMeta(env, auth.user);
+  const now = Date.now();
+  const today = new Date(now); today.setUTCHours(0,0,0,0);
+  if (meta.daily_claim_at && Number(meta.daily_claim_at) >= today.getTime()) {
+    return json(request, 409, { error: 'Daily coins already claimed.', nextClaimAt: today.getTime() + 86400000 });
+  }
+  await env.DB.batch([
+    env.DB.prepare('UPDATE user_meta SET coins = coins + ?2, daily_claim_at = ?3, updated_at = ?3 WHERE user_id = ?1').bind(auth.user.id, DAILY_COIN_REWARD, now),
+    env.DB.prepare('INSERT INTO coin_events (id, user_id, amount, reason, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
+      .bind(crypto.randomUUID(), auth.user.id, DAILY_COIN_REWARD, 'daily', now)
+  ]);
+  const fresh = await env.DB.prepare('SELECT coins FROM user_meta WHERE user_id = ?1').bind(auth.user.id).first();
+  return json(request, 200, { ok: true, reward: DAILY_COIN_REWARD, coins: Number(fresh?.coins || 0), nextClaimAt: today.getTime() + 86400000 });
+}
+
+async function handlePlusUpgrade(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const meta = await ensureUserMeta(env, auth.user);
+  if (Number(meta.coins || 0) < PLUS_COIN_COST) return json(request, 409, { error: `You need ${PLUS_COIN_COST} Ripo Coins for Plus.` });
+  const now = Date.now();
+  const base = meta.plan === 'plus' && Number(meta.plan_expires_at || 0) > now ? Number(meta.plan_expires_at) : now;
+  const expiresAt = base + PLUS_DAYS * 86400000;
+  await env.DB.batch([
+    env.DB.prepare("UPDATE user_meta SET coins = coins - ?2, plan = 'plus', plan_expires_at = ?3, updated_at = ?4 WHERE user_id = ?1")
+      .bind(auth.user.id, PLUS_COIN_COST, expiresAt, now),
+    env.DB.prepare('INSERT INTO coin_events (id, user_id, amount, reason, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
+      .bind(crypto.randomUUID(), auth.user.id, -PLUS_COIN_COST, 'plus_upgrade', now)
+  ]);
+  return json(request, 200, { ok: true, plan: 'plus', expiresAt });
+}
+
+async function handleWorkspacesList(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const meta = await ensureUserMeta(env, auth.user);
+  await ensureDefaultWorkspace(env, auth.user);
+  const rows = await env.DB.prepare('SELECT * FROM workspaces WHERE user_id = ?1 ORDER BY created_at ASC').bind(auth.user.id).all();
+  const workspaces = [];
+  for (const workspace of (rows.results || [])) {
+    const stateRow = await env.DB.prepare('SELECT state_json FROM workspace_v4_state WHERE workspace_id = ?1 AND user_id = ?2').bind(workspace.id, auth.user.id).first();
+    let botCount = 0;
+    try { botCount = JSON.parse(stateRow?.state_json || '{}')?.agents?.length || 0; } catch {}
+    const storage = await storageSnapshot(env, auth.user, meta, workspace.id);
+    workspaces.push({ id: workspace.id, name: workspace.name, createdAt: workspace.created_at, updatedAt: workspace.updated_at, botCount, storage });
+  }
+  return json(request, 200, { workspaces, limit: PLAN_LIMITS[effectivePlan(meta)].workspaceLimit });
+}
+
+async function handleWorkspaceCreate(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const meta = await ensureUserMeta(env, auth.user);
+  const plan = effectivePlan(meta);
+  const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM workspaces WHERE user_id = ?1').bind(auth.user.id).first();
+  if (Number(count?.total || 0) >= PLAN_LIMITS[plan].workspaceLimit) return json(request, 403, { error: plan === 'free' ? 'Plus is required for another workspace.' : 'Workspace limit reached.' });
+  const body = await readJsonBody(request);
+  const name = String(body.name || 'New Workspace').trim().slice(0, 80) || 'New Workspace';
+  const id = crypto.randomUUID(), now = Date.now();
+  await env.DB.prepare('INSERT INTO workspaces (id, user_id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)')
+    .bind(id, auth.user.id, name, now).run();
+  return json(request, 201, { workspace: { id, name, createdAt: now } });
+}
+
+async function handleWorkspaceRename(request, env, workspaceId) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const body = await readJsonBody(request);
+  const name = String(body.name || '').trim().slice(0, 80);
+  if (!name) return json(request, 400, { error: 'Add a workspace name.' });
+  const result = await env.DB.prepare('UPDATE workspaces SET name = ?3, updated_at = ?4 WHERE id = ?1 AND user_id = ?2')
+    .bind(workspaceId, auth.user.id, name, Date.now()).run();
+  if (!result.meta?.changes) return json(request, 404, { error: 'Workspace not found.' });
+  return json(request, 200, { ok: true, name });
+}
+
+async function handleFileDelete(request, env, fileId) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const row = await env.DB.prepare('SELECT object_key FROM files WHERE id = ?1 AND user_id = ?2').bind(fileId, auth.user.id).first();
+  if (!row) return json(request, 404, { error: 'File not found.' });
+  if (env.FILES) await env.FILES.delete(row.object_key).catch(() => {});
+  await env.DB.prepare('DELETE FROM files WHERE id = ?1 AND user_id = ?2').bind(fileId, auth.user.id).run();
+  return json(request, 200, { ok: true });
+}
+
+async function requireAdmin(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth;
+  const meta = await ensureUserMeta(env, auth.user);
+  if (meta.role !== 'admin' && String(auth.user.email || '').toLowerCase() !== ADMIN_EMAIL) return { error: json(request, 403, { error: 'Admin access required.' }) };
+  return { user: auth.user, meta };
+}
+
+async function handleAdminUsers(request, env) {
+  const auth = await requireAdmin(request, env); if (auth.error) return auth.error;
+  const rows = await env.DB.prepare(`SELECT users.id, users.email, users.display_name AS name, users.created_at AS createdAt,
+    COALESCE(user_meta.role,'user') AS role, COALESCE(user_meta.plan,'free') AS plan,
+    COALESCE(user_meta.coins,0) AS coins, COALESCE(user_meta.warnings,0) AS warnings,
+    user_meta.banned_until AS bannedUntil, COALESCE(user_meta.storage_bonus_bytes,0) AS storageBonusBytes
+    FROM users LEFT JOIN user_meta ON user_meta.user_id = users.id ORDER BY users.created_at DESC LIMIT 250`).all();
+  return json(request, 200, { users: rows.results || [] });
+}
+
+async function handleAdminAction(request, env, userId) {
+  const auth = await requireAdmin(request, env); if (auth.error) return auth.error;
+  const body = await readJsonBody(request);
+  const action = String(body.action || '');
+  await env.DB.prepare(`INSERT INTO user_meta (user_id, role, plan, coins, warnings, storage_bonus_bytes, created_at, updated_at)
+    VALUES (?1,'user','free',100,0,0,?2,?2) ON CONFLICT(user_id) DO NOTHING`).bind(userId, Date.now()).run();
+  const now = Date.now();
+  if (action === 'addCoins') await env.DB.prepare('UPDATE user_meta SET coins = MAX(0, coins + ?2), updated_at = ?3 WHERE user_id = ?1').bind(userId, Number(body.amount || 0), now).run();
+  else if (action === 'setCoins') await env.DB.prepare('UPDATE user_meta SET coins = MAX(0, ?2), updated_at = ?3 WHERE user_id = ?1').bind(userId, Number(body.amount || 0), now).run();
+  else if (action === 'setPlan') {
+    const plan = body.plan === 'plus' ? 'plus' : 'free';
+    const expires = plan === 'plus' ? now + Math.max(1, Number(body.days || 30)) * 86400000 : null;
+    await env.DB.prepare('UPDATE user_meta SET plan = ?2, plan_expires_at = ?3, updated_at = ?4 WHERE user_id = ?1').bind(userId, plan, expires, now).run();
+  } else if (action === 'setStorageBonus') await env.DB.prepare('UPDATE user_meta SET storage_bonus_bytes = MAX(0, ?2), updated_at = ?3 WHERE user_id = ?1').bind(userId, Number(body.bytes || 0), now).run();
+  else if (action === 'warn') await env.DB.prepare('UPDATE user_meta SET warnings = warnings + 1, updated_at = ?2 WHERE user_id = ?1').bind(userId, now).run();
+  else if (action === 'ban') await env.DB.prepare('UPDATE user_meta SET banned_until = ?2, updated_at = ?3 WHERE user_id = ?1').bind(userId, now + Math.max(1, Number(body.hours || 24)) * 3600000, now).run();
+  else if (action === 'unban') await env.DB.prepare('UPDATE user_meta SET banned_until = NULL, updated_at = ?2 WHERE user_id = ?1').bind(userId, now).run();
+  else if (action === 'setAdmin') {
+    const target = await env.DB.prepare('SELECT email FROM users WHERE id = ?1').bind(userId).first();
+    if (String(target?.email || '').toLowerCase() === ADMIN_EMAIL && body.enabled === false) return json(request, 400, { error: 'The owner admin cannot be demoted.' });
+    await env.DB.prepare("UPDATE user_meta SET role = ?2, updated_at = ?3 WHERE user_id = ?1").bind(userId, body.enabled ? 'admin' : 'user', now).run();
+  } else return json(request, 400, { error: 'Unknown admin action.' });
+  return json(request, 200, { ok: true });
+}
+
 async function handleStateGet(request, env) {
   const auth = await requireUser(request, env); if (auth.error) return auth.error;
-  const row = await env.DB.prepare('SELECT state_json FROM workspace_state WHERE user_id = ?1').bind(auth.user.id).first();
-  if (!row) return json(request, 200, {});
-  try { return json(request, 200, JSON.parse(row.state_json)); }
-  catch { return json(request, 200, {}); }
+  const url = new URL(request.url);
+  const workspace = await resolveWorkspace(env, auth.user, url.searchParams.get('workspaceId'));
+  const row = await env.DB.prepare('SELECT state_json FROM workspace_v4_state WHERE workspace_id = ?1 AND user_id = ?2').bind(workspace.id, auth.user.id).first();
+  if (!row) return json(request, 200, { workspaceId: workspace.id, workspaceName: workspace.name });
+  try { return json(request, 200, { ...JSON.parse(row.state_json), workspaceId: workspace.id, workspaceName: workspace.name }); }
+  catch { return json(request, 200, { workspaceId: workspace.id, workspaceName: workspace.name }); }
 }
 
 async function handleStatePut(request, env) {
   const auth = await requireUser(request, env); if (auth.error) return auth.error;
   const body = await readJsonBody(request);
+  const workspace = await resolveWorkspace(env, auth.user, body.workspaceId);
   const state = {
-    agents: Array.isArray(body.agents) ? body.agents.slice(0, 40) : [],
+    agents: Array.isArray(body.agents) ? body.agents.slice(0, 60) : [],
     conversations: body.conversations && typeof body.conversations === 'object' ? body.conversations : {},
-    teams: Array.isArray(body.teams) ? body.teams.slice(0, 30) : [],
+    teams: Array.isArray(body.teams) ? body.teams.slice(0, 40) : [],
+    archivedChats: Array.isArray(body.archivedChats) ? body.archivedChats.slice(0, 200) : [],
     onboarded: Boolean(body.onboarded)
   };
   const encoded = JSON.stringify(state);
-  if (encoded.length > 2_000_000) return json(request, 413, { error: 'Workspace state is too large.' });
-  await env.DB.prepare(`INSERT INTO workspace_state (user_id, state_json, updated_at) VALUES (?1, ?2, ?3)
-    ON CONFLICT(user_id) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at`)
-    .bind(auth.user.id, encoded, Date.now()).run();
-  return json(request, 200, { ok: true, updatedAt: Date.now() });
+  if (encoded.length > 3_000_000) return json(request, 413, { error: 'Workspace state is too large.' });
+  await env.DB.prepare(`INSERT INTO workspace_v4_state (workspace_id, user_id, state_json, updated_at) VALUES (?1, ?2, ?3, ?4)
+    ON CONFLICT(workspace_id) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at`)
+    .bind(workspace.id, auth.user.id, encoded, Date.now()).run();
+  await env.DB.prepare('UPDATE workspaces SET updated_at = ?2 WHERE id = ?1').bind(workspace.id, Date.now()).run();
+  return json(request, 200, { ok: true, workspaceId: workspace.id, updatedAt: Date.now() });
 }
 
 async function handleFilesList(request, env) {
   const auth = await requireUser(request, env); if (auth.error) return auth.error;
-  const rows = await env.DB.prepare('SELECT id, name, mime_type AS type, size, created_at AS createdAt FROM files WHERE user_id = ?1 ORDER BY created_at DESC LIMIT 200')
-    .bind(auth.user.id).all();
-  const files = (rows.results || []).map((file) => ({ ...file, source: 'cloud', url: `${new URL(request.url).origin}/api/files/${encodeURIComponent(file.id)}` }));
-  return json(request, 200, { files });
+  const url = new URL(request.url);
+  const workspace = await resolveWorkspace(env, auth.user, url.searchParams.get('workspaceId'));
+  const rows = await env.DB.prepare(`SELECT files.id, files.name, files.mime_type AS type, files.size, files.created_at AS createdAt
+    FROM files LEFT JOIN file_workspaces fw ON fw.file_id = files.id
+    WHERE files.user_id = ?1 AND (fw.workspace_id = ?2 OR fw.workspace_id IS NULL)
+    ORDER BY files.created_at DESC LIMIT 400`).bind(auth.user.id, workspace.id).all();
+  const files = (rows.results || []).map((file) => ({ ...file, source: 'cloud', workspaceId: workspace.id, url: `${new URL(request.url).origin}/api/files/${encodeURIComponent(file.id)}` }));
+  return json(request, 200, { files, workspaceId: workspace.id });
 }
 
 async function handleFileUpload(request, env) {
@@ -276,8 +652,9 @@ async function handleFileUpload(request, env) {
   if (file.size > 20 * 1024 * 1024) return json(request, 413, { error: 'Files are limited to 20 MB on the free storage plan.' });
   const totals = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM files').first();
   const userTotals = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM files WHERE user_id = ?1').bind(auth.user.id).first();
-  if (Number(totals?.total || 0) + file.size > 900 * 1024 * 1024) return json(request, 507, { error: 'Free cloud storage is nearly full. Delete old files before uploading more.' });
-  if (Number(userTotals?.total || 0) + file.size > 250 * 1024 * 1024) return json(request, 507, { error: 'This account has reached its 250 MB free upload allowance.' });
+  const storageLimit = PLAN_LIMITS[effectivePlan(meta)].storageBytes + Number(meta.storage_bonus_bytes || 0);
+  if (Number(totals?.total || 0) + file.size > 900 * 1024 * 1024) return json(request, 507, { error: 'The zero-cost KV storage pool is nearly full. Delete old files before uploading more.' });
+  if (Number(userTotals?.total || 0) + file.size > storageLimit) return json(request, 507, { error: 'This account has reached its workspace cloud-storage allowance.' });
   const safeName = String(file.name || 'file').replace(/[^a-zA-Z0-9._ -]/g, '_').slice(0, 140);
   const id = crypto.randomUUID();
   const key = `file:${auth.user.id}:${id}`;
@@ -285,9 +662,13 @@ async function handleFileUpload(request, env) {
   const bytes = await file.arrayBuffer();
   await env.FILES.put(key, bytes, { metadata: { type, name: safeName, userId: auth.user.id } });
   const createdAt = Date.now();
-  await env.DB.prepare('INSERT INTO files (id, user_id, object_key, name, mime_type, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)')
-    .bind(id, auth.user.id, key, safeName, type, file.size, createdAt).run();
-  return json(request, 201, { file: { id, name: safeName, type, size: file.size, source: 'cloud', createdAt, url: `${new URL(request.url).origin}/api/files/${id}` } });
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO files (id, user_id, object_key, name, mime_type, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)')
+      .bind(id, auth.user.id, key, safeName, type, file.size, createdAt),
+    env.DB.prepare('INSERT OR REPLACE INTO file_workspaces (file_id, workspace_id, user_id) VALUES (?1, ?2, ?3)')
+      .bind(id, workspace.id, auth.user.id)
+  ]);
+  return json(request, 201, { file: { id, name: safeName, type, size: file.size, source: 'cloud', workspaceId: workspace.id, createdAt, url: `${new URL(request.url).origin}/api/files/${id}` } });
 }
 
 async function handleFileGet(request, env, fileId) {
