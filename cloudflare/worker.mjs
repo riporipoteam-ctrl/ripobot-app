@@ -1564,15 +1564,6 @@ async function runDelegations(
       'Any bot may coordinate with another existing bot when another specialty is genuinely useful. To send another bot a task, emit <ripo_action>{"type":"message_agent","targetName":"Bot name","message":"specific task"}</ripo_action>. To explicitly delegate work, emit <ripo_action>{"type":"delegate_agent","targetName":"Bot name","task":"specific task"}</ripo_action>. Do not message yourself. Do not create loops. Prefer completing the task yourself unless another bot adds real value.'
     ].filter(Boolean).join('\n\n');
 
-    const requestMessages = [{ role: 'system', content: system }, { role: 'user', content: task }];
-    let result = null;
-    try { result = await callHuggingFace(requestMessages, env); } catch {}
-    if (!result) { try { result = await callWorkersAI(requestMessages, env); } catch {} }
-    if (!result) { try { result = await callBackup(requestMessages); } catch {} }
-    if (!result?.reply) continue;
-
-    const parsedTarget = extractActions(result.reply);
-    const cleanReply = parsedTarget.reply || result.reply;
     const createdAt = Date.now();
     const exchange = {
       id: crypto.randomUUID(),
@@ -1581,10 +1572,29 @@ async function runDelegations(
       targetAgentId: target.id,
       targetAgentName: target.name,
       task,
-      reply: cleanReply,
-      status: 'completed',
+      reply: '',
+      status: 'working',
       createdAt
     };
+    await persistAgentExchange(env, user.id, workspace.id, exchange);
+
+    const requestMessages = [{ role: 'system', content: system }, { role: 'user', content: task }];
+    let result = null;
+    try { result = await callHuggingFace(requestMessages, env); } catch {}
+    if (!result) { try { result = await callWorkersAI(requestMessages, env); } catch {} }
+    if (!result) { try { result = await callBackup(requestMessages); } catch {} }
+    if (!result?.reply) {
+      exchange.status = 'error';
+      await persistAgentExchange(env, user.id, workspace.id, exchange);
+      exchanges.push(exchange);
+      budget.count += 1;
+      continue;
+    }
+
+    const parsedTarget = extractActions(result.reply);
+    const cleanReply = parsedTarget.reply || result.reply;
+    exchange.reply = cleanReply;
+    exchange.status = 'completed';
     await persistAgentExchange(env, user.id, workspace.id, exchange);
     exchanges.push(exchange);
     replies.push({
@@ -1752,6 +1762,7 @@ async function handleChat(request, env) {
   let updatedFiles = [];
   let delegatedReplies = [];
   let interAgentMessages = [];
+  let pluginActivity = [];
 
   if (delegateActions.length) {
     const coordination = await runDelegations(
@@ -1772,6 +1783,9 @@ async function handleChat(request, env) {
     const toolRun = await runToolActions(request, env, auth.user, toolActions, workspace.id, pluginContext.ids);
     generatedFiles = toolRun.generatedFiles;
     updatedFiles = toolRun.updatedFiles;
+    pluginActivity = toolRun.toolResults
+      .filter((item) => item.type === 'plugin_call')
+      .map((item) => ({ pluginId: item.pluginId, action: item.action, ok: !item.error, error: item.error || null }));
     const toolMessage = `Tool results:\n${JSON.stringify(toolRun.toolResults).slice(0, 30000)}\n\nNow answer the user's request. Do not emit more tool actions. Mention created or edited files naturally when relevant.`;
     const followupMessages = [...requestMessages, { role: 'assistant', content: parsed.reply || 'I am using tools now.' }, { role: 'user', content: toolMessage }];
     let followup = null;
@@ -1809,6 +1823,7 @@ async function handleChat(request, env) {
     updatedFiles,
     delegatedReplies,
     interAgentMessages,
+    pluginActivity,
     attachmentFiles: attachmentContext.files,
     usage,
     coins: Number(freshMeta.coins || 0)
