@@ -808,6 +808,128 @@ function SettingsView({
   );
 }
 
+function BotDetails({ agent, files, onClose, onEdit, onOpenComputer }) {
+  const [tab, setTab] = useState('computer');
+  const media = files.filter((file) => /^image\//.test(file.type || '') || /^video\//.test(file.type || ''));
+  const busy = ['thinking','searching','working'].includes(agent?.state);
+  return (
+    <div className="bot-details-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="bot-details-sheet">
+        <header className="bot-details-head"><button className="icon-button" onClick={onClose}><X size={18}/></button><span>Bot details</span><button className="icon-button" onClick={onEdit}><Pencil size={17}/></button></header>
+        <div className="bot-details-profile">
+          <Avatar agent={agent} size="xl" />
+          <h2>{agent?.name}</h2><p>{agent?.role}</p>
+          <StateLabel state={agent?.state || 'ready'} />
+        </div>
+        <div className="bot-details-tabs">
+          <button className={cls(tab === 'computer' && 'active')} onClick={() => setTab('computer')}>Computer</button>
+          <button className={cls(tab === 'media' && 'active')} onClick={() => setTab('media')}>Media</button>
+          <button className={cls(tab === 'routines' && 'active')} onClick={() => setTab('routines')}>Routines</button>
+        </div>
+        <div className="bot-details-body">
+          {tab === 'computer' && <div className="bot-computer-panel">
+            <div className={cls('bot-screen-preview', busy && 'in-use')}>
+              <div className="bot-screen-top"><span /><span /><span /><strong>Ripo Computer</strong></div>
+              <div className="bot-screen-canvas">
+                {busy ? <><div className="working-browser"><i/><i/><i/><div className="working-card-row"><span/><span/><span/></div></div><span className="animated-cursor">↖</span></> : <div className="computer-idle"><Computer size={34}/><strong>Not in use by {agent?.name}</strong><span>The shared computer wakes automatically when this bot needs browser or terminal work.</span></div>}
+              </div>
+            </div>
+            <button className="secondary-button full-button" onClick={onOpenComputer}><Computer size={16}/>Open Ripo Computer</button>
+          </div>}
+          {tab === 'media' && (media.length ? <div className="bot-media-grid">{media.slice(0,24).map((file) => <SecureMedia key={file.id} file={file}/>)}</div> : <div className="settings-empty"><Images size={28}/><strong>No media yet</strong><span>Images and videos from this workspace will appear here.</span></div>)}
+          {tab === 'routines' && <div className="routine-detail-list"><div className="routine-detail"><span>↻</span><div><strong>Morning briefing</strong><small>Paused until you ask {agent?.name} to schedule it.</small></div></div><div className="settings-empty compact"><RefreshCw size={24}/><strong>Teach a routine in chat</strong><span>Ask the bot to remember a repeatable workflow. Scheduled execution can be added once a durable scheduler is connected.</span></div></div>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function VoiceCall({ agents, initialAgent, onClose, onTurn }) {
+  const [participantIds, setParticipantIds] = useState([initialAgent?.id].filter(Boolean));
+  const [listening, setListening] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [callLog, setCallLog] = useState([]);
+  const [voices, setVoices] = useState([]);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    const load = () => setVoices(window.speechSynthesis?.getVoices?.() || []);
+    load();
+    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = load;
+    return () => { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null; recognitionRef.current?.abort?.(); window.speechSynthesis?.cancel?.(); };
+  }, []);
+
+  function speak(text, agent) {
+    if (!window.speechSynthesis || !text) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    const english = voices.filter((voice) => /^en/i.test(voice.lang || ''));
+    const pool = english.length ? english : voices;
+    if (pool.length) utterance.voice = pool[avatarSeed(agent, { id: agent?.id }) % pool.length];
+    utterance.rate = .98; utterance.pitch = .94 + (avatarSeed(agent, { id: agent?.id }) % 12) / 100;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  async function runTurn(text) {
+    const clean = String(text || '').trim();
+    if (!clean || busy) return;
+    setBusy(true); setCallLog((current) => [...current, { role:'user', text:clean }]); setTranscript('');
+    try {
+      const replies = await onTurn(clean, participantIds);
+      for (const reply of replies || []) {
+        setCallLog((current) => [...current, { role:'bot', text:reply.content, agent:reply.agent }]);
+        speak(reply.content, reply.agent);
+      }
+    } catch (error) {
+      setCallLog((current) => [...current, { role:'system', text:error.message || 'Voice turn failed.' }]);
+    } finally { setBusy(false); }
+  }
+
+  function startListening() {
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) { alert('Live speech recognition is not available in this browser. You can still type during the call.'); return; }
+    recognitionRef.current?.abort?.();
+    const recognition = new Recognition();
+    recognition.lang = navigator.language || 'en-US';
+    recognition.interimResults = true; recognition.continuous = false;
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+    recognition.onresult = (event) => {
+      let all = '', final = '';
+      for (let i=event.resultIndex;i<event.results.length;i+=1) {
+        const chunk = event.results[i][0]?.transcript || '';
+        all += chunk;
+        if (event.results[i].isFinal) final += chunk;
+      }
+      setTranscript(all);
+      if (final.trim()) runTurn(final);
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
+  }
+
+  function toggleParticipant(id) {
+    setParticipantIds((current) => current.includes(id) ? (current.length > 1 ? current.filter((item) => item !== id) : current) : [...current, id]);
+  }
+
+  return (
+    <div className="voice-call-screen">
+      <header className="voice-call-head"><button className="call-end" onClick={onClose}><PhoneOff size={18}/></button><div><strong>Ripo Bot Call</strong><span>{participantIds.length} bot{participantIds.length===1?'':'s'} in meeting</span></div><span /></header>
+      <div className="call-stage">
+        <div className="call-participants">{participantIds.map((id) => { const agent=agents.find((item)=>item.id===id); return agent ? <div className="call-person" key={id}><Avatar agent={{...agent,state:busy?'thinking':agent.state}} size="xl"/><strong>{agent.name}</strong><span>{busy?'Listening / working':agent.role}</span></div> : null; })}</div>
+        <div className="call-transcript">{callLog.slice(-6).map((item,index)=><div key={index} className={cls('call-line',item.role)}>{item.agent && <Avatar agent={item.agent} size="xs"/>}<span>{item.text}</span></div>)}</div>
+      </div>
+      <div className="call-invite-strip"><span>Invite bots</span><div>{agents.map((agent)=><button key={agent.id} className={cls(participantIds.includes(agent.id)&&'active')} onClick={()=>toggleParticipant(agent.id)}><Avatar agent={agent} size="xs"/><span>{agent.name}</span></button>)}</div></div>
+      <div className="call-controls">
+        <button className={cls('mic-orb',listening&&'listening')} onClick={startListening} disabled={busy}>{busy?<LoaderCircle className="spin" size={23}/>:<Mic size={23}/>}</button>
+        <div className="call-type"><input value={transcript} onChange={(event)=>setTranscript(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')runTurn(transcript);}} placeholder={listening?'Listening…':'Speak or type to the meeting'}/><button onClick={()=>runTurn(transcript)} disabled={!transcript.trim()||busy}><ArrowUp size={17}/></button></div>
+      </div>
+      <p className="call-note"><Volume2 size={13}/>Uses your browser/device speech recognition and installed system voices, so voice quality and availability vary by device.</p>
+    </div>
+  );
+}
+
 function ChatView({
   agent,
   team,
@@ -817,136 +939,72 @@ function ChatView({
   onSend,
   onRename,
   onEdit,
+  onOpenDetails,
+  onStartCall,
   files,
   onNavigateFiles
 }) {
   const [draft, setDraft] = useState('');
-  const [searchEnabled, setSearchEnabled] = useState(true);
-  const [computerEnabled, setComputerEnabled] = useState(false);
   const [attached, setAttached] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(agent?.name || team?.name || '');
   const bottomRef = useRef(null);
-
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, sending]);
   useEffect(() => { setRenameValue(agent?.name || team?.name || ''); setRenaming(false); }, [agent?.id, team?.id]);
-
   const participants = team ? team.members.map((id) => agents.find((item) => item.id === id)).filter(Boolean) : [agent].filter(Boolean);
 
   function submit() {
     const value = draft.trim();
     if (!value || sending) return;
-    onSend(value, { search: searchEnabled, computer: computerEnabled, attachments: attached });
-    setDraft('');
-    setAttached([]);
+    onSend(value, { attachments: attached });
+    setDraft(''); setAttached([]);
   }
-
-  function saveRename() {
-    if (!agent || !renameValue.trim()) return;
-    onRename(renameValue.trim());
-    setRenaming(false);
-  }
+  function saveRename() { if (!agent || !renameValue.trim()) return; onRename(renameValue.trim()); setRenaming(false); }
 
   return (
-    <section className="chat-pane">
-      <div className="chat-main-column">
-      <header className="chat-header">
-        <div className="chat-identity">
-          <div className="stacked-avatars">{participants.slice(0, 3).map((item, index) => <span key={item.id} style={{ zIndex: participants.length - index }}><Avatar agent={item} size="sm" active={index === 0} /></span>)}</div>
-          <div>
-            <div className="chat-title-row">
-              {renaming && agent ? <div className="inline-rename"><input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveRename(); if (event.key === 'Escape') setRenaming(false); }} autoFocus /><button onClick={saveRename}><Check size={14} /></button></div> : <h2>{team?.name || agent?.name || 'Ripo Bot'}</h2>}
-              {agent?.isPrimary ? <span className="main-agent-chip">Main</span> : null}
-            </div>
-            <div className="chat-subtitle">{team ? `${participants.length} agents coordinating` : agent?.role}</div>
-          </div>
-        </div>
-        <div className="chat-header-actions">
-          <StateLabel state={sending ? (searchEnabled ? 'searching' : 'thinking') : (agent?.state || 'ready')} />
-          {agent && <div className="relative"><button className="icon-button" onClick={() => setMenuOpen(!menuOpen)}><MoreHorizontal size={18} /></button>{menuOpen && <div className="popover-menu"><button onClick={() => { setRenaming(true); setMenuOpen(false); }}><Pencil size={15} /> Rename</button><button onClick={() => { onEdit(); setMenuOpen(false); }}><Settings size={15} /> Edit agent</button></div>}</div>}
-        </div>
+    <section className="chat-v4">
+      <header className="chat-sticky-head">
+        <div className="chat-head-spacer" />
+        <button className="sticky-bot-identity" onClick={onOpenDetails}>
+          <div className="sticky-avatar-stack">{participants.slice(0,3).map((item,index)=><span key={item.id} style={{zIndex:participants.length-index}}><Avatar agent={item} size={index===0?'md':'xs'} active={index===0}/></span>)}</div>
+          <div className="sticky-bot-name">{renaming&&agent?<div className="inline-rename"><input value={renameValue} onChange={(event)=>setRenameValue(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')saveRename();}} autoFocus/><button onClick={(event)=>{event.stopPropagation();saveRename();}}><Check size={13}/></button></div>:<strong>{team?.name||agent?.name||'Ripo Bot'}</strong>}<span>{sending?'Working…':team?`${participants.length} bots`:agent?.role}</span></div>
+        </button>
+        <div className="chat-head-actions"><button className="round-action" onClick={onStartCall}><Phone size={17}/></button>{agent&&<div className="relative"><button className="round-action" onClick={()=>setMenuOpen(menuOpen==='more'?false:'more')}><MoreHorizontal size={18}/></button>{menuOpen==='more'&&<div className="popover-menu head-menu"><button onClick={()=>{setRenaming(true);setMenuOpen(false);}}><Pencil size={15}/>Rename</button><button onClick={()=>{onEdit();setMenuOpen(false);}}><Settings size={15}/>Edit bot</button><button onClick={()=>{onOpenDetails();setMenuOpen(false);}}><Computer size={15}/>Bot details</button></div>}</div>}</div>
       </header>
 
-      <div className="chat-scroll">
-        {messages.length <= 1 && !team && (
-          <div className="chat-empty-intro">
-            <Avatar agent={agent} size="xl" />
-            <span className="eyebrow">{agent?.isPrimary ? 'Main agent' : agent?.role}</span>
-            <h1>{agent?.name}</h1>
-            <p>{agent?.description}</p>
-            <div className="quick-start-grid">
-              {QUICK_STARTS.map((item) => <button key={item.title} onClick={() => setDraft(item.prompt)}><strong>{item.title}</strong><span>{item.prompt}</span></button>)}
+      <div className="chat-scroll-v4">
+        {messages.length <= 1 && !team && <div className="chat-welcome-v4"><Avatar agent={agent} size="xl"/><h1>{agent?.name}</h1><p>{agent?.description}</p><div className="starter-pills">{QUICK_STARTS.slice(0,4).map((item)=><button key={item.title} onClick={()=>setDraft(item.prompt)}>{item.title}</button>)}</div></div>}
+        {team && messages.length===0 && <div className="chat-welcome-v4"><div className="team-orbit">{participants.map((member)=><Avatar key={member.id} agent={member} size="lg"/>)}</div><h1>{team.name}</h1><p>Message the group once. Bots can pass context and handoffs between each other in this thread.</p></div>}
+        <div className="message-list-v4">{messages.map((message)=>{
+          const author=message.agentId?agents.find((item)=>item.id===message.agentId):null;
+          const user=message.role==='user';
+          return <article className={cls('bubble-row-v4',user&&'user')} key={message.id}>
+            {!user && author && <Avatar agent={author} size="xs"/>}
+            <div className={cls('bubble-v4',user&&'user-bubble')}>
+              {!user&&author&&<div className="bubble-author">{author.name}</div>}
+              <div className="bubble-text">{message.content}</div>
+              {message.sources?.length?<button className="bubble-tool-note"><Globe2 size={13}/>{message.sources.length} sources</button>:null}
+              {message.attachments?.length?<div className="bubble-files">{message.attachments.map((file)=><span key={file.id}><FileText size={13}/>{file.name}</span>)}</div>:null}
+              {message.generatedFiles?.length?<div className="generated-media">{message.generatedFiles.map((file)=><SecureMedia key={file.id} file={file}/>)}</div>:null}
             </div>
-          </div>
-        )}
-        {team && messages.length === 0 && <div className="team-empty"><div className="team-orbit">{participants.map((member) => <Avatar key={member.id} agent={member} size="lg" />)}</div><span className="eyebrow">Agent team</span><h1>{team.name}</h1><p>Send one goal. Ripo Bot will pass context through the selected agents and collect their contributions in this room.</p></div>}
-        <div className="message-list">
-          {messages.map((message) => {
-            const author = message.agentId ? agents.find((item) => item.id === message.agentId) : null;
-            const isUser = message.role === 'user';
-            return <article className={cls('message-row', isUser && 'message-user-row')} key={message.id}>
-              {!isUser && <Avatar agent={author || agent || STARTER_AGENTS[0]} size="sm" />}
-              <div className={cls('message-bubble', isUser && 'message-user')}>
-                {!isUser && <div className="message-meta"><strong>{author?.name || agent?.name || 'Ripo Bot'}</strong><span>{formatTime(message.createdAt)}</span></div>}
-                <div className="message-body">{message.content}</div>
-                {message.sources?.length ? <div className="source-strip"><Globe2 size={14} /><span>{message.sources.length} web sources used</span></div> : null}
-                {message.attachments?.length ? <div className="message-attachments">{message.attachments.map((file) => <span key={file.id}><File size={13} />{file.name}</span>)}</div> : null}
-                {isUser ? <span className="message-user-time">{formatTime(message.createdAt)}</span> : null}
-              </div>
-            </article>;
-          })}
-          {sending && <article className="message-row"><Avatar agent={agent || participants[0] || STARTER_AGENTS[0]} size="sm" /><div className="message-bubble typing-bubble"><span /><span /><span /></div></article>}
-          <div ref={bottomRef} />
+          </article>;
+        })}
+        {sending&&<article className="bubble-row-v4"><Avatar agent={agent||participants[0]} size="xs"/><div className="bubble-v4 typing-bubble"><span/><span/><span/></div></article>}
+        <div ref={bottomRef}/>
         </div>
       </div>
 
-      <div className="composer-wrap">
-        {attached.length > 0 && <div className="composer-files">{attached.map((file) => <span key={file.id}><File size={13} />{file.name}<button onClick={() => setAttached(attached.filter((item) => item.id !== file.id))}><X size={12} /></button></span>)}</div>}
-        <div className="composer">
-          <textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); } }} rows={1} placeholder={team ? `Message ${team.name}` : `Message ${agent?.name || 'Ripo Bot'}`} />
-          <div className="composer-toolbar">
-            <div className="composer-tools">
-              <div className="relative">
-                <button className="tool-button" onClick={() => setMenuOpen(menuOpen === 'files' ? false : 'files')}><Paperclip size={16} /><span>Attach</span></button>
-                {menuOpen === 'files' && <div className="attachment-menu">
-                  <div className="attachment-menu-head"><strong>Workspace files</strong><button onClick={onNavigateFiles}>Manage files</button></div>
-                  {files.length ? files.slice(0, 6).map((file) => <button key={file.id} onClick={() => { if (!attached.some((item) => item.id === file.id)) setAttached([...attached, file]); setMenuOpen(false); }}><FileText size={15} /><span>{file.name}</span></button>) : <div className="attachment-empty">Upload a file first.</div>}
-                </div>}
-              </div>
-              <button className={cls('tool-button', searchEnabled && 'active')} onClick={() => setSearchEnabled(!searchEnabled)}><Globe2 size={16} /><span>Search</span></button>
-              <button className={cls('tool-button', computerEnabled && 'active')} onClick={() => setComputerEnabled(!computerEnabled)}><Computer size={16} /><span>Computer</span></button>
-            </div>
-            <button className={cls('send-button', draft.trim() && 'ready')} disabled={!draft.trim() || sending} onClick={submit}>{sending ? <Square size={15} fill="currentColor" /> : <ArrowUp size={17} />}</button>
-          </div>
+      <div className="composer-v4-wrap">
+        {attached.length>0&&<div className="composer-files">{attached.map((file)=><span key={file.id}><File size={13}/>{file.name}<button onClick={()=>setAttached(attached.filter((item)=>item.id!==file.id))}><X size={12}/></button></span>)}</div>}
+        <div className="composer-v4">
+          <div className="relative"><button className="composer-plus" onClick={()=>setMenuOpen(menuOpen==='files'?false:'files')}><Plus size={20}/></button>{menuOpen==='files'&&<div className="attachment-menu v4-attachments"><div className="attachment-menu-head"><strong>Workspace files</strong><button onClick={onNavigateFiles}>Manage</button></div>{files.length?files.slice(0,8).map((file)=><button key={file.id} onClick={()=>{if(!attached.some((item)=>item.id===file.id))setAttached([...attached,file]);setMenuOpen(false);}}><FileText size={15}/><span>{file.name}</span></button>):<div className="attachment-empty">Upload a file first.</div>}</div>}</div>
+          <textarea value={draft} onChange={(event)=>setDraft(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submit();}}} rows={1} placeholder={team?`Message ${team.name}`:`Ask ${agent?.name||'Ripo Bot'}`}/>
+          <button className="composer-call" onClick={onStartCall}><Mic size={18}/></button>
+          <button className={cls('composer-send',draft.trim()&&'ready')} onClick={submit} disabled={!draft.trim()||sending}>{sending?<Square size={14} fill="currentColor"/>:<ArrowUp size={17}/>}</button>
         </div>
-        <div className="composer-footnote">Ripo Bot can make mistakes. Review important work and computer actions.</div>
+        <small className="auto-tools-note">Search, browser, computer, and image tools run automatically when the bot needs them.</small>
       </div>
-      </div>
-      <aside className="chat-inspector" aria-label="Bot activity">
-        <div className="inspector-card screen-card">
-          <div className="inspector-title-row"><span>Computer</span><StateLabel state={sending ? 'working' : 'ready'} /></div>
-          <div className="mini-browser">
-            <div className="mini-browser-top"><i /><i /><i /><span>Ripo Computer</span></div>
-            <div className="mini-browser-body">
-              <div className="mini-browser-sidebar" />
-              <div className="mini-browser-page">
-                <span className="mini-page-line wide" />
-                <span className="mini-page-line" />
-                <div className="mini-page-cards"><i /><i /><i /></div>
-                <span className="mini-page-line short" />
-              </div>
-            </div>
-          </div>
-          <p>{team?.name || agent?.name || 'Ripo Bot'}'s screen</p>
-        </div>
-        <div className="inspector-card routines-card">
-          <div className="inspector-title-row"><span>Routines</span><button className="tiny-plus" aria-label="Add routine"><Plus size={14} /></button></div>
-          <div className="routine-row"><span className="routine-dot">↻</span><div><strong>Morning briefing</strong><small>Every day at 8:00 AM</small></div></div>
-          <div className="routine-row"><span className="routine-dot">↻</span><div><strong>Inbox cleanup</strong><small>Weekdays at 6:00 PM</small></div></div>
-          <div className="routine-row muted-routine"><span className="routine-dot">Ⅱ</span><div><strong>Weekly team update</strong><small>Paused</small></div></div>
-        </div>
-      </aside>
     </section>
   );
 }
