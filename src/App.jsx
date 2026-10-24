@@ -1386,6 +1386,7 @@ function ChatView({
                 <div className={cls('bubble-v5',user&&'user-bubble-v5',message.botMessage&&'bot-mail-bubble-v8')}>
                 <div className="bubble-text">{message.content}</div>
                 {message.sources?.length?<button className="bubble-tool-note"><Globe2 size={13}/>{message.sources.length} sources</button>:null}
+                {message.pluginActivity?.length?<div className="plugin-activity-badges-v8">{message.pluginActivity.map((item,index)=><span key={`${item.pluginId}-${index}`} className={cls(!item.ok&&'error')}><Plug size={11}/>{item.pluginId}<small>{item.action}</small></span>)}</div>:null}
                 {message.attachments?.length?<div className="bubble-files-v5">{message.attachments.map((file)=><span key={file.id}><FileText size={14}/><span>{file.name}</span></span>)}</div>:null}
                 {message.generatedFiles?.length?<div className="generated-media-v5">{message.generatedFiles.map((file)=><SecureMedia key={file.id} file={file}/>)}</div>:null}
               </div>
@@ -1467,7 +1468,7 @@ function AgentActivityView({ exchanges = [], agents = [], compact = false, onOpe
           <p>{exchange.task}</p>
           {exchange.reply?<small>{exchange.reply}</small>:<small>Working…</small>}
         </div>
-        <span className={cls('activity-status-v8',exchange.status==='completed'&&'done')}>{exchange.status==='completed'?'Done':'Working'}</span>
+        <span className={cls('activity-status-v8',exchange.status==='completed'&&'done',exchange.status==='error'&&'error')}>{exchange.status==='completed'?'Done':exchange.status==='error'?'Error':'Working'}</span>
       </article>;
     })}
   </section>;
@@ -1683,7 +1684,7 @@ export default function App() {
       }
     };
     pullMailbox();
-    const timer = setInterval(pullMailbox, 12000);
+    const timer = setInterval(pullMailbox, 5000);
     return () => { alive = false; clearInterval(timer); };
   }, [cloudMode, auth, activeWorkspaceId]);
   useEffect(() => {
@@ -1936,7 +1937,8 @@ export default function App() {
       id: uid('assistant'), role: 'assistant', content: result.reply,
       createdAt: new Date().toISOString(), agentId: agent.id,
       sources: result.sources || [],
-      generatedFiles: result.generatedFiles || []
+      generatedFiles: result.generatedFiles || [],
+      pluginActivity: result.pluginActivity || []
     };
     if (Array.isArray(result.generatedFiles) && result.generatedFiles.length) {
       setFiles((current) => [...result.generatedFiles, ...current.filter((file) => !result.generatedFiles.some((generated) => generated.id === file.id))]);
