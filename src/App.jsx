@@ -814,66 +814,170 @@ function BotDetails({ agent, files, onClose, onEdit, onOpenComputer }) {
 function VoiceCall({ agents, initialAgent, onClose, onTurn }) {
   const [participantIds, setParticipantIds] = useState([initialAgent?.id].filter(Boolean));
   const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [callLog, setCallLog] = useState([]);
-  const [voices, setVoices] = useState([]);
-  const recognitionRef = useRef(null);
+  const recorderRef = useRef(null);
+  const streamRef = useRef(null);
+  const chunksRef = useRef([]);
+  const controllerRef = useRef(null);
+  const audioRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  function releaseVoiceHardware() {
+    stopVoiceSession({
+      recorder: recorderRef.current,
+      stream: streamRef.current,
+      controller: controllerRef.current,
+      audio: audioRef.current
+    });
+    recorderRef.current = null;
+    streamRef.current = null;
+    controllerRef.current = null;
+    audioRef.current = null;
+    chunksRef.current = [];
+    if (mountedRef.current) setListening(false);
+  }
 
   useEffect(() => {
-    const load = () => setVoices(window.speechSynthesis?.getVoices?.() || []);
-    load();
-    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = load;
-    return () => { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null; recognitionRef.current?.abort?.(); window.speechSynthesis?.cancel?.(); };
+    mountedRef.current = true;
+    const stopForPageExit = () => releaseVoiceHardware();
+    const stopWhenHidden = () => { if (document.visibilityState === 'hidden') releaseVoiceHardware(); };
+    window.addEventListener('pagehide', stopForPageExit);
+    document.addEventListener('visibilitychange', stopWhenHidden);
+    return () => {
+      mountedRef.current = false;
+      window.removeEventListener('pagehide', stopForPageExit);
+      document.removeEventListener('visibilitychange', stopWhenHidden);
+      releaseVoiceHardware();
+    };
   }, []);
 
-  function speak(text, agent) {
-    if (!window.speechSynthesis || !text) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    const english = voices.filter((voice) => /^en/i.test(voice.lang || ''));
-    const pool = english.length ? english : voices;
-    if (pool.length) utterance.voice = pool[avatarSeed(agent, { id: agent?.id }) % pool.length];
-    utterance.rate = .98; utterance.pitch = .94 + (avatarSeed(agent, { id: agent?.id }) % 12) / 100;
-    window.speechSynthesis.speak(utterance);
+  async function speak(text, agent) {
+    const clean = String(text || '').trim();
+    if (!clean) return;
+    controllerRef.current?.abort?.();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    try {
+      const token = storedToken();
+      const response = await fetch(`${API_BASE}/api/voice/speak`, {
+        method: 'POST',
+        credentials: 'include',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ text: clean, lang: (navigator.language || 'en').split('-')[0] || 'en' })
+      });
+      if (!response.ok) {
+        const problem = await response.json().catch(() => ({}));
+        throw new Error(problem.error || 'Voice audio failed.');
+      }
+      const blob = await response.blob();
+      if (!blob.size || controller.signal.aborted) return;
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.playbackRate = voiceRateForAgent(agent);
+      try { audio.preservesPitch = false; } catch {}
+      await new Promise((resolve, reject) => {
+        audio.onended = resolve;
+        audio.onerror = reject;
+        audio.play().catch(reject);
+      }).catch(() => {});
+      URL.revokeObjectURL(url);
+      if (audioRef.current === audio) audioRef.current = null;
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        setCallLog((current) => [...current, { role: 'system', text: 'Neural voice is temporarily unavailable. The text reply is still shown.' }]);
+      }
+    }
   }
 
   async function runTurn(text) {
     const clean = String(text || '').trim();
     if (!clean || busy) return;
-    setBusy(true); setCallLog((current) => [...current, { role:'user', text:clean }]); setTranscript('');
+    setBusy(true);
+    setCallLog((current) => [...current, { role: 'user', text: clean }]);
+    setTranscript('');
     try {
       const replies = await onTurn(clean, participantIds);
       for (const reply of replies || []) {
-        setCallLog((current) => [...current, { role:'bot', text:reply.content, agent:reply.agent }]);
-        speak(reply.content, reply.agent);
+        setCallLog((current) => [...current, { role: 'bot', text: reply.content, agent: reply.agent }]);
+        await speak(reply.content, reply.agent);
       }
     } catch (error) {
-      setCallLog((current) => [...current, { role:'system', text:error.message || 'Voice turn failed.' }]);
-    } finally { setBusy(false); }
+      setCallLog((current) => [...current, { role: 'system', text: error.message || 'Voice turn failed.' }]);
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
   }
 
-  function startListening() {
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) { alert('Live speech recognition is not available in this browser. You can still type during the call.'); return; }
-    recognitionRef.current?.abort?.();
-    const recognition = new Recognition();
-    recognition.lang = navigator.language || 'en-US';
-    recognition.interimResults = true; recognition.continuous = false;
-    recognition.onstart = () => setListening(true);
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
-    recognition.onresult = (event) => {
-      let all = '', final = '';
-      for (let i=event.resultIndex;i<event.results.length;i+=1) {
-        const chunk = event.results[i][0]?.transcript || '';
-        all += chunk;
-        if (event.results[i].isFinal) final += chunk;
+  async function transcribeRecording(blob) {
+    if (!blob?.size) return;
+    setTranscribing(true);
+    try {
+      const form = new FormData();
+      const extension = blob.type.includes('mp4') ? 'm4a' : 'webm';
+      form.append('audio', new File([blob], `ripo-call.${extension}`, { type: blob.type || 'audio/webm' }));
+      const result = await api('/api/voice/transcribe', { method: 'POST', body: form });
+      if (result?.text) {
+        setTranscript(result.text);
+        await runTurn(result.text);
       }
-      setTranscript(all);
-      if (final.trim()) runTurn(final);
-    };
-    recognitionRef.current = recognition;
-    recognition.start();
+    } catch (error) {
+      setCallLog((current) => [...current, { role: 'system', text: error.message || 'I could not transcribe that recording.' }]);
+    } finally {
+      if (mountedRef.current) setTranscribing(false);
+    }
+  }
+
+  async function startListening() {
+    if (busy || transcribing) return;
+    if (listening) {
+      try { recorderRef.current?.stop?.(); } catch {}
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      alert('Microphone recording is not available in this browser. You can still type during the call.');
+      return;
+    }
+    releaseVoiceHardware();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      const mimeType = preferredRecorderMime(window.MediaRecorder);
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => { if (event.data?.size) chunksRef.current.push(event.data); };
+      recorder.onerror = () => releaseVoiceHardware();
+      recorder.onstop = async () => {
+        const chunks = chunksRef.current;
+        const type = recorder.mimeType || chunks[0]?.type || 'audio/webm';
+        stream.getTracks().forEach((track) => { track.enabled = false; track.stop(); });
+        if (streamRef.current === stream) streamRef.current = null;
+        if (recorderRef.current === recorder) recorderRef.current = null;
+        if (mountedRef.current) setListening(false);
+        chunksRef.current = [];
+        if (chunks.length) await transcribeRecording(new Blob(chunks, { type }));
+      };
+      recorder.start();
+      setListening(true);
+    } catch (error) {
+      releaseVoiceHardware();
+      setCallLog((current) => [...current, { role: 'system', text: error?.name === 'NotAllowedError' ? 'Microphone permission was not granted.' : 'The microphone could not start.' }]);
+    }
+  }
+
+  function endCall() {
+    releaseVoiceHardware();
+    onClose();
   }
 
   function toggleParticipant(id) {
@@ -882,17 +986,22 @@ function VoiceCall({ agents, initialAgent, onClose, onTurn }) {
 
   return (
     <div className="voice-call-screen">
-      <header className="voice-call-head"><button className="call-end" onClick={onClose}><PhoneOff size={18}/></button><div><strong>Ripo Bot Call</strong><span>{participantIds.length} bot{participantIds.length===1?'':'s'} in meeting</span></div><span /></header>
+      <header className="voice-call-head">
+        <button className="call-end" onClick={endCall}><PhoneOff size={18}/></button>
+        <div><strong>Ripo Bot Call</strong><span>{participantIds.length} bot{participantIds.length===1?'':'s'} in meeting</span></div><span />
+      </header>
       <div className="call-stage">
-        <div className="call-participants">{participantIds.map((id) => { const agent=agents.find((item)=>item.id===id); return agent ? <div className="call-person" key={id}><Avatar agent={{...agent,state:busy?'thinking':agent.state}} size="xl"/><strong>{agent.name}</strong><span>{busy?'Listening / working':agent.role}</span></div> : null; })}</div>
+        <div className="call-participants">{participantIds.map((id) => { const agent=agents.find((item)=>item.id===id); return agent ? <div className="call-person" key={id}><Avatar agent={{...agent,state:busy?'thinking':agent.state}} size="xl"/><strong>{agent.name}</strong><span>{listening?'Listening…':transcribing?'Understanding…':busy?'Working…':agent.role}</span></div> : null; })}</div>
         <div className="call-transcript">{callLog.slice(-6).map((item,index)=><div key={index} className={cls('call-line',item.role)}>{item.agent && <Avatar agent={item.agent} size="xs"/>}<span>{item.text}</span></div>)}</div>
       </div>
       <div className="call-invite-strip"><span>Invite bots</span><div>{agents.map((agent)=><button key={agent.id} className={cls(participantIds.includes(agent.id)&&'active')} onClick={()=>toggleParticipant(agent.id)}><Avatar agent={agent} size="xs"/><span>{agent.name}</span></button>)}</div></div>
       <div className="call-controls">
-        <button className={cls('mic-orb',listening&&'listening')} onClick={startListening} disabled={busy}>{busy?<LoaderCircle className="spin" size={23}/>:<Mic size={23}/>}</button>
-        <div className="call-type"><input value={transcript} onChange={(event)=>setTranscript(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')runTurn(transcript);}} placeholder={listening?'Listening…':'Speak or type to the meeting'}/><button onClick={()=>runTurn(transcript)} disabled={!transcript.trim()||busy}><ArrowUp size={17}/></button></div>
+        <button className={cls('mic-orb',listening&&'listening')} onClick={startListening} disabled={busy||transcribing}>
+          {transcribing||busy?<LoaderCircle className="spin" size={23}/>:listening?<Square size={18} fill="currentColor"/>:<Mic size={23}/>}
+        </button>
+        <div className="call-type"><input value={transcript} onChange={(event)=>setTranscript(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')runTurn(transcript);}} placeholder={listening?'Tap the stop button when you are done':transcribing?'Transcribing…':'Speak or type to the meeting'}/><button onClick={()=>runTurn(transcript)} disabled={!transcript.trim()||busy||transcribing}><ArrowUp size={17}/></button></div>
       </div>
-      <p className="call-note"><Volume2 size={13}/>Uses your browser/device speech recognition and installed system voices, so voice quality and availability vary by device.</p>
+      <p className="call-note"><Volume2 size={13}/>Whisper transcribes your recording and MeloTTS generates the bot voice. Leaving the call explicitly stops every microphone track.</p>
     </div>
   );
 }
