@@ -935,6 +935,34 @@ function ChatView({
         </div>
         <small className="auto-tools-note">Search, browser, computer, and image tools run automatically when the bot needs them.</small>
       </div>
+
+      <aside className="desktop-bot-rail">
+        <section className="rail-profile" onClick={onOpenDetails}>
+          <Avatar agent={agent || participants[0]} size="lg" />
+          <div><strong>{team?.name || agent?.name || 'Ripo Bot'}</strong><span>{team ? `${participants.length} bots coordinating` : agent?.role}</span></div>
+          <ChevronRight size={17} />
+        </section>
+        <section className="rail-block">
+          <div className="rail-block-head"><span>Computer</span><StateLabel state={sending ? 'working' : (agent?.state || 'ready')} /></div>
+          <div className={cls('rail-screen', sending && 'working')}>
+            <div className="rail-screen-bar"><i/><i/><i/><span>Ripo Computer</span></div>
+            <div className="rail-screen-body">
+              {sending ? <><div className="rail-browser-lines"><b/><b/><b/><div><em/><em/><em/></div></div><span className="rail-cursor">↖</span></> : <div className="rail-idle"><Computer size={27}/><strong>Not in use</strong><span>{agent?.name || 'This bot'} will open it automatically when needed.</span></div>}
+            </div>
+          </div>
+          <button className="rail-link" onClick={onOpenDetails}>View computer <ChevronRight size={14}/></button>
+        </section>
+        <section className="rail-block">
+          <div className="rail-block-head"><span>Routines</span><Plus size={14}/></div>
+          <div className="rail-routine"><span>↻</span><div><strong>Morning briefing</strong><small>Ready to configure in chat</small></div></div>
+          <div className="rail-routine"><span>↻</span><div><strong>Weekly review</strong><small>Not scheduled</small></div></div>
+        </section>
+        <section className="rail-block">
+          <div className="rail-block-head"><span>Workspace</span><span>{files.length} files</span></div>
+          <div className="rail-mini-media">{files.filter((file)=>/^image\//.test(file.type||'')).slice(0,4).map((file)=><SecureMedia key={file.id} file={file}/>)}</div>
+          {!files.some((file)=>/^image\//.test(file.type||'')) && <p className="rail-empty-copy">Images generated or uploaded here will appear in this panel.</p>}
+        </section>
+      </aside>
     </section>
   );
 }
@@ -1088,7 +1116,14 @@ export default function App() {
 
   function finishOnboarding(data) {
     const selectedIds = new Set(['ripo', ...(data.starter || [])]);
-    setAgents(STARTER_AGENTS.filter((agent) => selectedIds.has(agent.id)));
+    const starterAgents = STARTER_AGENTS.filter((agent) => selectedIds.has(agent.id)).map((agent) => agent.id === 'ripo' ? {
+      ...agent,
+      role: data.mainRole || agent.role,
+      description: data.mainRole ? `Your main ${data.mainRole}. Plans work, delegates, searches, uses tools, and keeps the team moving.` : agent.description,
+      ...(data.mainAvatar || {}),
+      avatarSeed: data.mainAvatar?.avatarSeed || agent.avatarSeed || uid('avatar')
+    } : { ...agent, avatarSeed: agent.avatarSeed || uid('avatar') });
+    setAgents(starterAgents);
     const nextProfile = { ...(profile || {}), name: data.displayName, goal: data.goal };
     setProfile(nextProfile); writeLocal(LOCAL_KEYS.profile, nextProfile);
     setOnboarded(true);
