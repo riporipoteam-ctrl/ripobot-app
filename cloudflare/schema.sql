@@ -44,3 +44,76 @@ CREATE TABLE IF NOT EXISTS computer_state (
   updated_at INTEGER NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS user_meta (
+  user_id TEXT PRIMARY KEY,
+  role TEXT NOT NULL DEFAULT 'user',
+  plan TEXT NOT NULL DEFAULT 'free',
+  plan_expires_at INTEGER,
+  coins INTEGER NOT NULL DEFAULT 100,
+  warnings INTEGER NOT NULL DEFAULT 0,
+  banned_until INTEGER,
+  storage_bonus_bytes INTEGER NOT NULL DEFAULT 0,
+  daily_claim_at INTEGER,
+  avatar_key TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS usage_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  tokens INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_usage_user_created ON usage_events(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS coin_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_coin_user_created ON coin_events(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS workspaces (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS workspace_v4_state (
+  workspace_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  state_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS file_workspaces (
+  file_id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS workspace_usage_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  tokens INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_workspace_usage ON workspace_usage_events(user_id, workspace_id, created_at);
+
