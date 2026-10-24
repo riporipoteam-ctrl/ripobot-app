@@ -12,6 +12,82 @@ const PLAN_LIMITS = {
   free: { threeHourTokens: 45_000, weeklyTokens: 300_000, storageBytes: 250 * 1024 * 1024, workspaceLimit: 1 },
   plus: { threeHourTokens: null, weeklyTokens: 1_500_000, storageBytes: 750 * 1024 * 1024, workspaceLimit: 2 }
 };
+const ZERO_KEY_PLUGIN_CATALOG = [
+  {
+    id: 'open-meteo',
+    name: 'Open-Meteo',
+    provider: 'open-meteo.com',
+    category: 'Weather',
+    description: 'Current weather and forecasts worldwide with no account or API key.',
+    homepage: 'https://open-meteo.com/',
+    logo: 'https://open-meteo.com/favicon.ico',
+    accent: '#2f86ff',
+    zeroKey: true,
+    actions: [
+      { id: 'weather', label: 'Weather', description: 'Get current weather and a short forecast for a place.', args: { location: 'City or place name' } }
+    ]
+  },
+  {
+    id: 'wikipedia',
+    name: 'Wikipedia',
+    provider: 'wikipedia.org',
+    category: 'Knowledge',
+    description: 'Search and read public Wikipedia summaries and articles.',
+    homepage: 'https://www.wikipedia.org/',
+    logo: 'https://upload.wikimedia.org/wikipedia/commons/8/80/Wikipedia-logo-v2.svg',
+    accent: '#111111',
+    zeroKey: true,
+    actions: [
+      { id: 'search', label: 'Search', description: 'Search Wikipedia and return concise article extracts.', args: { query: 'Topic to search' } }
+    ]
+  },
+  {
+    id: 'hacker-news',
+    name: 'Hacker News',
+    provider: 'news.ycombinator.com',
+    category: 'News',
+    description: 'Read top technology stories from the public Hacker News API.',
+    homepage: 'https://news.ycombinator.com/',
+    logo: 'https://news.ycombinator.com/y18.svg',
+    accent: '#ff6600',
+    zeroKey: true,
+    actions: [
+      { id: 'top', label: 'Top stories', description: 'Get current top Hacker News stories.', args: { limit: '1-10 results' } },
+      { id: 'item', label: 'Story', description: 'Fetch a Hacker News story or comment by numeric ID.', args: { id: 'Numeric item ID' } }
+    ]
+  },
+  {
+    id: 'npm-registry',
+    name: 'npm Registry',
+    provider: 'npmjs.com',
+    category: 'Developer',
+    description: 'Search public npm packages and inspect package metadata without signing in.',
+    homepage: 'https://www.npmjs.com/',
+    logo: 'https://static.npmjs.com/images/avatars/Car.png',
+    accent: '#cb3837',
+    zeroKey: true,
+    actions: [
+      { id: 'search', label: 'Search packages', description: 'Search public npm packages.', args: { query: 'Package or keyword' } },
+      { id: 'package', label: 'Package info', description: 'Read public metadata for an exact npm package.', args: { name: 'Exact package name' } }
+    ]
+  },
+  {
+    id: 'github-public',
+    name: 'GitHub Public',
+    provider: 'github.com',
+    category: 'Developer',
+    description: 'Search public GitHub repositories using GitHub’s unauthenticated public API allowance.',
+    homepage: 'https://github.com/',
+    logo: 'https://github.githubassets.com/favicons/favicon.svg',
+    accent: '#111111',
+    zeroKey: true,
+    actions: [
+      { id: 'search_repos', label: 'Search repositories', description: 'Search public GitHub repositories.', args: { query: 'Repository search query' } },
+      { id: 'repo', label: 'Repository info', description: 'Read public repository metadata.', args: { repo: 'owner/name' } }
+    ]
+  }
+];
+
 const rateWindows = new Map();
 
 const allowedOrigins = new Set([
@@ -227,7 +303,16 @@ async function ensureSchema(env) {
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     )`),
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_agent_mailbox_workspace_created ON agent_mailbox(user_id, workspace_id, created_at)`),
-    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_agent_mailbox_target_created ON agent_mailbox(user_id, target_agent_id, created_at)`)
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_agent_mailbox_target_created ON agent_mailbox(user_id, target_agent_id, created_at)`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS workspace_plugins (
+      workspace_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      plugin_id TEXT NOT NULL,
+      installed_at INTEGER NOT NULL,
+      PRIMARY KEY(workspace_id, plugin_id),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_workspace_plugins_user ON workspace_plugins(user_id, workspace_id, installed_at)`)
   ]);
   return true;
 }
@@ -705,6 +790,198 @@ async function handleAgentMailbox(request, env) {
   });
 }
 
+
+function pluginById(pluginId) {
+  return ZERO_KEY_PLUGIN_CATALOG.find((plugin) => plugin.id === String(pluginId || '').trim()) || null;
+}
+
+async function installedPluginsForWorkspace(env, user, workspace) {
+  if (!env.DB) return [];
+  const rows = await env.DB.prepare('SELECT plugin_id, installed_at FROM workspace_plugins WHERE user_id = ?1 AND workspace_id = ?2 ORDER BY installed_at ASC')
+    .bind(user.id, workspace.id).all();
+  const installedAt = new Map((rows.results || []).map((row) => [row.plugin_id, Number(row.installed_at || 0)]));
+  return ZERO_KEY_PLUGIN_CATALOG
+    .filter((plugin) => installedAt.has(plugin.id))
+    .map((plugin) => ({ ...plugin, installed: true, installedAt: installedAt.get(plugin.id) }));
+}
+
+async function installedPluginContext(env, user, workspace) {
+  const installed = await installedPluginsForWorkspace(env, user, workspace);
+  const ids = new Set(installed.map((plugin) => plugin.id));
+  if (!installed.length) return { installed, ids, prompt: '' };
+  const lines = installed.map((plugin) => {
+    const actions = plugin.actions.map((action) => `${action.id}: ${action.description}`).join('; ');
+    return `- ${plugin.name} [${plugin.id}] — ${actions}`;
+  });
+  return {
+    installed,
+    ids,
+    prompt: [
+      'Installed zero-key plugins in this workspace:',
+      ...lines,
+      'Use an installed plugin automatically when it is the best source. Emit <ripo_action>{"type":"plugin_call","pluginId":"plugin-id","action":"action-id","args":{"key":"value"}}</ripo_action>. Never claim a plugin was used unless a plugin result is returned.'
+    ].join('\n')
+  };
+}
+
+async function handlePluginsList(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const url = new URL(request.url);
+  const workspace = await resolveWorkspace(env, auth.user, url.searchParams.get('workspaceId'));
+  const installed = await installedPluginsForWorkspace(env, auth.user, workspace);
+  const installedIds = new Set(installed.map((plugin) => plugin.id));
+  return json(request, 200, {
+    workspaceId: workspace.id,
+    plugins: ZERO_KEY_PLUGIN_CATALOG.map((plugin) => ({
+      ...plugin,
+      installed: installedIds.has(plugin.id),
+      installedAt: installed.find((item) => item.id === plugin.id)?.installedAt || null
+    }))
+  });
+}
+
+async function handlePluginInstall(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const body = await readJsonBody(request);
+  const plugin = pluginById(body.pluginId);
+  if (!plugin) return json(request, 404, { error: 'Plugin not found.' });
+  const workspace = await resolveWorkspace(env, auth.user, body.workspaceId);
+  const installedAt = Date.now();
+  await env.DB.prepare('INSERT OR REPLACE INTO workspace_plugins (workspace_id, user_id, plugin_id, installed_at) VALUES (?1, ?2, ?3, ?4)')
+    .bind(workspace.id, auth.user.id, plugin.id, installedAt).run();
+  return json(request, 200, { ok: true, workspaceId: workspace.id, plugin: { ...plugin, installed: true, installedAt } });
+}
+
+async function handlePluginUninstall(request, env) {
+  const auth = await requireUser(request, env); if (auth.error) return auth.error;
+  const body = await readJsonBody(request);
+  const plugin = pluginById(body.pluginId);
+  if (!plugin) return json(request, 404, { error: 'Plugin not found.' });
+  const workspace = await resolveWorkspace(env, auth.user, body.workspaceId);
+  await env.DB.prepare('DELETE FROM workspace_plugins WHERE user_id = ?1 AND workspace_id = ?2 AND plugin_id = ?3')
+    .bind(auth.user.id, workspace.id, plugin.id).run();
+  return json(request, 200, { ok: true, workspaceId: workspace.id, pluginId: plugin.id, installed: false });
+}
+
+async function fetchPluginJson(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Accept': 'application/json',
+      'User-Agent': 'RipoBot/1.0 (+https://ripobot.sitey.my)',
+      ...(options.headers || {})
+    }
+  });
+  if (!response.ok) throw new Error(`Plugin provider returned HTTP ${response.status}.`);
+  return response.json();
+}
+
+function compactPluginText(value, max = 9000) {
+  if (typeof value === 'string') return value.slice(0, max);
+  return JSON.stringify(value, null, 2).slice(0, max);
+}
+
+async function runInstalledPlugin(pluginId, action, args = {}) {
+  const id = String(pluginId || '').trim();
+  const actionId = String(action || '').trim();
+
+  if (id === 'open-meteo') {
+    if (actionId !== 'weather') throw new Error('Unsupported Open-Meteo action.');
+    const location = String(args.location || '').trim().slice(0, 120);
+    if (!location) throw new Error('Open-Meteo needs a location.');
+    const geo = await fetchPluginJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+    const place = geo?.results?.[0];
+    if (!place) throw new Error(`No location found for "${location}".`);
+    const forecast = await fetchPluginJson(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=5&timezone=auto`);
+    return {
+      provider: 'Open-Meteo',
+      location: [place.name, place.admin1, place.country].filter(Boolean).join(', '),
+      coordinates: { latitude: place.latitude, longitude: place.longitude },
+      timezone: forecast.timezone,
+      current: forecast.current,
+      currentUnits: forecast.current_units,
+      daily: forecast.daily,
+      dailyUnits: forecast.daily_units
+    };
+  }
+
+  if (id === 'wikipedia') {
+    if (actionId !== 'search') throw new Error('Unsupported Wikipedia action.');
+    const query = String(args.query || '').trim().slice(0, 180);
+    if (!query) throw new Error('Wikipedia needs a search query.');
+    const url = new URL('https://en.wikipedia.org/w/api.php');
+    url.searchParams.set('action', 'query');
+    url.searchParams.set('generator', 'search');
+    url.searchParams.set('gsrsearch', query);
+    url.searchParams.set('gsrlimit', '5');
+    url.searchParams.set('prop', 'extracts|info');
+    url.searchParams.set('exintro', '1');
+    url.searchParams.set('explaintext', '1');
+    url.searchParams.set('exchars', '900');
+    url.searchParams.set('inprop', 'url');
+    url.searchParams.set('format', 'json');
+    const data = await fetchPluginJson(url.toString());
+    const pages = Object.values(data?.query?.pages || {}).sort((a, b) => (a.index || 999) - (b.index || 999));
+    return {
+      provider: 'Wikipedia',
+      query,
+      results: pages.slice(0, 5).map((page) => ({ title: page.title, extract: page.extract || '', url: page.fullurl || `https://en.wikipedia.org/wiki/${encodeURIComponent(String(page.title || '').replace(/ /g, '_'))}` }))
+    };
+  }
+
+  if (id === 'hacker-news') {
+    if (actionId === 'item') {
+      const itemId = Math.max(1, Number(args.id || 0));
+      if (!Number.isFinite(itemId)) throw new Error('Hacker News needs a numeric item ID.');
+      const item = await fetchPluginJson(`https://hacker-news.firebaseio.com/v0/item/${Math.trunc(itemId)}.json`);
+      return { provider: 'Hacker News', item };
+    }
+    if (actionId !== 'top') throw new Error('Unsupported Hacker News action.');
+    const limit = Math.min(10, Math.max(1, Number(args.limit || 8)));
+    const ids = await fetchPluginJson('https://hacker-news.firebaseio.com/v0/topstories.json');
+    const stories = [];
+    for (const storyId of (Array.isArray(ids) ? ids.slice(0, limit) : [])) {
+      try {
+        const item = await fetchPluginJson(`https://hacker-news.firebaseio.com/v0/item/${storyId}.json`);
+        if (item) stories.push({ id: item.id, title: item.title, url: item.url || `https://news.ycombinator.com/item?id=${item.id}`, score: item.score, by: item.by, time: item.time, descendants: item.descendants });
+      } catch {}
+    }
+    return { provider: 'Hacker News', stories };
+  }
+
+  if (id === 'npm-registry') {
+    if (actionId === 'package') {
+      const name = String(args.name || '').trim().slice(0, 214);
+      if (!name) throw new Error('npm Registry needs a package name.');
+      const data = await fetchPluginJson(`https://registry.npmjs.org/${encodeURIComponent(name)}`);
+      const latest = data?.['dist-tags']?.latest;
+      const meta = latest ? data?.versions?.[latest] : null;
+      return { provider: 'npm Registry', name: data?.name || name, description: data?.description, latest, homepage: data?.homepage || meta?.homepage, repository: data?.repository || meta?.repository, license: meta?.license || data?.license, keywords: data?.keywords || meta?.keywords || [] };
+    }
+    if (actionId !== 'search') throw new Error('Unsupported npm Registry action.');
+    const query = String(args.query || '').trim().slice(0, 180);
+    if (!query) throw new Error('npm Registry needs a search query.');
+    const data = await fetchPluginJson(`https://registry.npmjs.org/-/v1/search?text=${encodeURIComponent(query)}&size=6`);
+    return { provider: 'npm Registry', query, results: (data?.objects || []).map((entry) => ({ name: entry?.package?.name, version: entry?.package?.version, description: entry?.package?.description, links: entry?.package?.links, score: entry?.score?.final })) };
+  }
+
+  if (id === 'github-public') {
+    if (actionId === 'repo') {
+      const repo = String(args.repo || '').trim().slice(0, 200);
+      if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) throw new Error('GitHub Public expects owner/name.');
+      const data = await fetchPluginJson(`https://api.github.com/repos/${repo}`, { headers: { 'X-GitHub-Api-Version': '2022-11-28' } });
+      return { provider: 'GitHub Public', repo: data.full_name, description: data.description, url: data.html_url, stars: data.stargazers_count, forks: data.forks_count, language: data.language, topics: data.topics, defaultBranch: data.default_branch, updatedAt: data.updated_at };
+    }
+    if (actionId !== 'search_repos') throw new Error('Unsupported GitHub Public action.');
+    const query = String(args.query || '').trim().slice(0, 180);
+    if (!query) throw new Error('GitHub Public needs a repository search query.');
+    const data = await fetchPluginJson(`https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&per_page=6`, { headers: { 'X-GitHub-Api-Version': '2022-11-28' } });
+    return { provider: 'GitHub Public', query, results: (data?.items || []).map((repo) => ({ fullName: repo.full_name, description: repo.description, url: repo.html_url, stars: repo.stargazers_count, language: repo.language, updatedAt: repo.updated_at })) };
+  }
+
+  throw new Error('Plugin is not supported.');
+}
+
 async function handleFilesList(request, env) {
   const auth = await requireUser(request, env); if (auth.error) return auth.error;
   const url = new URL(request.url);
@@ -1027,7 +1304,7 @@ function extractActions(text) {
   clean = clean.replace(regex, (_, raw) => {
     try {
       const parsed = JSON.parse(raw.trim());
-      if (parsed && ['create_agent', 'create_team', 'rename_agent', 'web_search', 'browser_open', 'browser_click', 'browser_type', 'browser_scroll', 'browser_key', 'computer_exec', 'generate_image', 'edit_image', 'rewrite_file', 'message_agent', 'delegate_agent'].includes(parsed.type)) actions.push(parsed);
+      if (parsed && ['create_agent', 'create_team', 'rename_agent', 'web_search', 'browser_open', 'browser_click', 'browser_type', 'browser_scroll', 'browser_key', 'computer_exec', 'generate_image', 'edit_image', 'rewrite_file', 'message_agent', 'delegate_agent', 'plugin_call'].includes(parsed.type)) actions.push(parsed);
     } catch {}
     return '';
   });
@@ -1099,7 +1376,7 @@ function shouldAutoSearch(text) {
   return /\b(latest|current|today|tonight|this week|news|search|look up|find online|web|price|release date|schedule|weather|score|who is|what happened|update on)\b/i.test(String(text || ''));
 }
 
-async function runToolActions(request, env, user, actions, workspaceId) {
+async function runToolActions(request, env, user, actions, workspaceId, installedPluginIds = new Set()) {
   const toolResults = [];
   const generatedFiles = [];
   const updatedFiles = [];
@@ -1211,6 +1488,19 @@ async function runToolActions(request, env, user, actions, workspaceId) {
           } catch (fallbackError) {
             toolResults.push({ type: 'edit_image', prompt, sourceFileId: fileId, error: fallbackError?.message || referenceError?.message || 'Image edit failed.' });
           }
+        }
+      }
+    } else if (action.type === 'plugin_call') {
+      const pluginId = String(action.pluginId || '').trim();
+      const pluginAction = String(action.action || '').trim();
+      if (!installedPluginIds.has(pluginId)) {
+        toolResults.push({ type: 'plugin_call', pluginId, action: pluginAction, error: 'That plugin is not installed in this workspace.' });
+      } else {
+        try {
+          const result = await runInstalledPlugin(pluginId, pluginAction, action.args || {});
+          toolResults.push({ type: 'plugin_call', pluginId, action: pluginAction, result: JSON.parse(compactPluginText(result, 16000)) });
+        } catch (error) {
+          toolResults.push({ type: 'plugin_call', pluginId, action: pluginAction, error: error?.message || 'Plugin call failed.' });
         }
       }
     } else if (action.type === 'rewrite_file') {
@@ -1370,6 +1660,7 @@ async function handleChat(request, env) {
     isCurrent: true
   };
   const attachmentContext = await buildAttachmentContext(env, auth.user, body.attachments, lastUser);
+  const pluginContext = await installedPluginContext(env, auth.user, workspace);
   let sources = [];
   if (shouldAutoSearch(lastUser)) sources = await searchWeb(lastUser, env);
 
@@ -1382,6 +1673,7 @@ async function handleChat(request, env) {
     'To create a new image, emit <ripo_action>{"type":"generate_image","prompt":"detailed image prompt"}</ripo_action>.',
     'To edit an attached image, emit <ripo_action>{"type":"edit_image","fileId":"attached-file-id","prompt":"describe the exact edit"}</ripo_action>.',
     'To overwrite an attached text/code file, emit <ripo_action>{"type":"rewrite_file","fileId":"attached-file-id","content":"complete replacement file contents"}</ripo_action>.',
+    pluginContext.prompt,
     'Use tools only when they are needed. Tool actions are hidden and their results are returned before your final answer.'
   ];
   if (roster.length > 1) {
@@ -1407,7 +1699,8 @@ async function handleChat(request, env) {
     agentInstructions ? `Bot-specific instructions: ${agentInstructions}` : '',
     rosterText,
     attachmentContext.text,
-    capabilities.join(' '),
+    pluginContext.prompt,
+    capabilities.filter(Boolean).join(' '),
     sources.length ? `${searchContext(sources)}\nUse these results when answering and distinguish uncertainty.` : ''
   ].filter(Boolean).join('\n\n');
 
@@ -1420,7 +1713,7 @@ async function handleChat(request, env) {
 
   let parsed = extractActions(result.reply);
   const immediateActions = parsed.actions.filter((action) => ['create_agent','create_team','rename_agent'].includes(action.type));
-  const toolActions = parsed.actions.filter((action) => ['web_search','browser_open','browser_click','browser_type','browser_scroll','browser_key','computer_exec','generate_image','edit_image','rewrite_file'].includes(action.type));
+  const toolActions = parsed.actions.filter((action) => ['web_search','browser_open','browser_click','browser_type','browser_scroll','browser_key','computer_exec','generate_image','edit_image','rewrite_file','plugin_call'].includes(action.type));
   const delegateActions = parsed.actions.filter((action) => action.type === 'message_agent' || action.type === 'delegate_agent');
 
   if (!delegateActions.length && roster.length > 1) {
@@ -1476,7 +1769,7 @@ async function handleChat(request, env) {
   }
 
   if (toolActions.length) {
-    const toolRun = await runToolActions(request, env, auth.user, toolActions, workspace.id);
+    const toolRun = await runToolActions(request, env, auth.user, toolActions, workspace.id, pluginContext.ids);
     generatedFiles = toolRun.generatedFiles;
     updatedFiles = toolRun.updatedFiles;
     const toolMessage = `Tool results:\n${JSON.stringify(toolRun.toolResults).slice(0, 30000)}\n\nNow answer the user's request. Do not emit more tool actions. Mention created or edited files naturally when relevant.`;
@@ -2032,6 +2325,9 @@ export default {
       if (url.pathname === '/api/search' && request.method === 'POST') return handleSearch(request, env);
       if (url.pathname === '/api/chat' && request.method === 'POST') return handleChat(request, env);
       if (url.pathname === '/api/agent-mailbox' && request.method === 'GET') return handleAgentMailbox(request, env);
+      if (url.pathname === '/api/plugins' && request.method === 'GET') return handlePluginsList(request, env);
+      if (url.pathname === '/api/plugins/install' && request.method === 'POST') return handlePluginInstall(request, env);
+      if (url.pathname === '/api/plugins/uninstall' && request.method === 'POST') return handlePluginUninstall(request, env);
       if (url.pathname === '/api/computer/status' && request.method === 'GET') return json(request, 200, { configured: Boolean(env.DB), provider: 'Ripo Computer', linux: true, browser: Boolean(env.BROWSER), liveViewReady: Boolean(env.BROWSER), browserProvider: env.BROWSER ? 'Cloudflare Browser Run Live View' : 'Unavailable', persistent: Boolean(env.DB), note: 'Persistent terminal plus a real Cloudflare Browser Run session with Live View.' });
       if (url.pathname === '/api/computer/live/start' && request.method === 'POST') return handleComputerLiveStart(request, env);
       if (url.pathname === '/api/computer/live/status' && request.method === 'GET') return handleComputerLiveStatus(request, env);
