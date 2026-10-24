@@ -807,7 +807,27 @@ async function buildAttachmentContext(env, user, attachments, userQuestion) {
       sections.push(`FILE ATTACHMENT: ${stored.name} (${stored.type})\nContents:\n${decoded || '[File is empty or not valid UTF-8 text.]'}`);
       continue;
     }
-    sections.push(`FILE ATTACHMENT: ${stored.name} (${stored.type}, ${stored.size} bytes). The binary file is attached, but this runtime does not yet have a safe parser for this format.`);
+    if (env.AI && stored.bytes.byteLength <= 10 * 1024 * 1024) {
+      try {
+        const converted = await env.AI.toMarkdown({
+          name: stored.name,
+          blob: new Blob([stored.bytes], { type: stored.type || 'application/octet-stream' })
+        });
+        const result = Array.isArray(converted) ? converted[0] : converted;
+        if (result?.format !== 'error' && typeof result?.data === 'string' && result.data.trim()) {
+          sections.push(`DOCUMENT ATTACHMENT: ${stored.name} (${result.mimetype || stored.type})\nConverted content:\n${result.data.slice(0, 24000)}`);
+          continue;
+        }
+        if (result?.error) {
+          sections.push(`DOCUMENT ATTACHMENT: ${stored.name} could not be converted: ${String(result.error).slice(0, 500)}`);
+          continue;
+        }
+      } catch (error) {
+        sections.push(`DOCUMENT ATTACHMENT: ${stored.name} could not be converted: ${String(error?.message || 'conversion unavailable').slice(0, 500)}`);
+        continue;
+      }
+    }
+    sections.push(`FILE ATTACHMENT: ${stored.name} (${stored.type}, ${stored.size} bytes). The file is attached, but it exceeds the document-conversion size used for chat context.`);
   }
   return {
     text: sections.length ? `Attached user files are available below. Use them directly when answering.\n\n${sections.join('\n\n---\n\n')}` : '',
@@ -1100,9 +1120,42 @@ async function runToolActions(request, env, user, actions, workspaceId) {
         try {
           const file = await generateImageForUser(env, user, prompt, workspaceId, [fileId]);
           generatedFiles.push(file);
-          toolResults.push({ type: 'edit_image', prompt, sourceFileId: fileId, file: { id: file.id, name: file.name } });
-        } catch (error) {
-          toolResults.push({ type: 'edit_image', prompt, sourceFileId: fileId, error: error.message });
+          toolResults.push({ type: 'edit_image', prompt, sourceFileId: fileId, file: { id: file.id, name: file.name }, mode: 'reference-edit' });
+        } catch (referenceError) {
+          try {
+            const stored = await ownedFile(env, user.id, fileId);
+            if (!stored || !stored.type.startsWith('image/')) throw referenceError;
+            let description = await describeImageAttachment(env, stored, prompt);
+            if ((!description || description.startsWith('[Image is attached but too large')) && env.AI) {
+              try {
+                const converted = await env.AI.toMarkdown({
+                  name: stored.name,
+                  blob: new Blob([stored.bytes], { type: stored.type || 'image/jpeg' })
+                });
+                const convertedResult = Array.isArray(converted) ? converted[0] : converted;
+                if (typeof convertedResult?.data === 'string' && convertedResult.data.trim()) description = convertedResult.data.slice(0, 7000);
+              } catch {}
+            }
+            if (!description) throw referenceError;
+            const reconstructionPrompt = [
+              'Create a new edited version of the source image described below.',
+              'Preserve the source composition, subjects, important text, layout, and visual identity as closely as possible unless the requested edit changes them.',
+              `Requested edit: ${prompt}`,
+              `Source image description: ${description}`
+            ].join('\n');
+            const file = await generateImageForUser(env, user, reconstructionPrompt, workspaceId);
+            generatedFiles.push(file);
+            toolResults.push({
+              type: 'edit_image',
+              prompt,
+              sourceFileId: fileId,
+              file: { id: file.id, name: file.name },
+              mode: 'vision-reconstruction',
+              note: 'The original reference exceeded or failed the image model reference constraints, so Ripo Bot reconstructed the source from vision context and applied the requested edit.'
+            });
+          } catch (fallbackError) {
+            toolResults.push({ type: 'edit_image', prompt, sourceFileId: fileId, error: fallbackError?.message || referenceError?.message || 'Image edit failed.' });
+          }
         }
       }
     } else if (action.type === 'rewrite_file') {
