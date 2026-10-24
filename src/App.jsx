@@ -242,6 +242,30 @@ function AvatarShapeSvg({ visual }) {
         return <path d="M50 6L88 20V48C88 69 74 84 50 94C26 84 12 69 12 48V20L50 6Z" />;
       case 'triangle':
         return <path d="M49 8C53 8 57 11 60 17L91 73C96 82 90 91 79 91H21C10 91 4 82 9 73L40 17C43 11 46 8 49 8Z" />;
+      case 'squircle':
+        return <path d="M50 7C77 7 93 19 93 50S77 93 50 93S7 81 7 50S23 7 50 7Z" />;
+      case 'octagon':
+        return <path d="M32 7H68L93 32V68L68 93H32L7 68V32L32 7Z" />;
+      case 'starburst':
+        return <path d="M50 6L61 21L80 14L82 34L96 44L84 58L89 78L69 80L56 95L42 82L22 89L19 69L5 57L18 42L12 22L32 20L50 6Z" />;
+      case 'bean':
+        return <path d="M19 18C39 5 69 11 82 30C98 53 87 82 63 91C40 100 15 89 9 65C5 47 7 28 19 18Z" />;
+      case 'arch':
+        return <path d="M14 91V49C14 25 29 9 50 9C72 9 87 25 87 49V91H64V54C64 45 59 39 50 39C42 39 36 45 36 54V91H14Z" />;
+      case 'kite':
+        return <path d="M50 5L91 43L62 93L15 61L50 5Z" />;
+      case 'clover':
+        return <path d="M50 44C40 23 19 19 10 32C1 46 13 62 31 61C17 77 26 94 42 94C55 94 61 82 58 68C72 83 91 74 91 58C91 44 77 38 64 44C74 27 64 10 49 10C34 10 27 27 36 43C40 50 45 50 50 44Z" />;
+      case 'ticket':
+        return <path d="M12 15H88V34C77 35 77 51 88 52V85H12V66C23 65 23 49 12 48V15Z" />;
+      case 'gem':
+        return <path d="M25 10H75L94 35L50 92L6 35L25 10Z" />;
+      case 'moon':
+        return <path d="M70 10C43 14 26 35 28 58C30 79 49 93 72 88C55 80 47 64 50 49C53 33 61 20 70 10Z" />;
+      case 'puff':
+        return <path d="M20 68C7 60 10 42 24 37C19 23 35 12 47 21C56 7 77 15 77 31C94 30 99 50 87 60C91 77 72 88 59 80C47 95 25 87 20 68Z" />;
+      case 'wave':
+        return <path d="M9 39C24 20 40 19 52 32C64 46 78 46 91 29V72C76 88 60 87 49 74C37 60 22 60 9 75V39Z" />;
       default:
         return <path d="M17 30C27 13 49 9 65 16C82 12 94 27 91 45C97 61 86 79 70 82C58 95 35 93 26 80C9 76 3 57 12 43C9 38 11 34 17 30Z" />;
     }
