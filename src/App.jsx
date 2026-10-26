@@ -296,7 +296,7 @@ function Avatar({ agent, size = 'md', active = false, interactive = false, onCli
       type={interactive ? 'button' : undefined}
       onClick={interactive ? onClick : undefined}
       className={cls('agent-avatar', `avatar-${size}`, `avatar-geometry-${visual.shape}`, `motion-${visual.motion}`, `state-${state}`, active && 'is-active', interactive && 'is-clickable')}
-      style={{ '--avatar-color': visual.color, '--avatar-delay': `${visual.delay.toFixed(2)}s`, '--avatar-speed': `${visual.speed.toFixed(1)}s` }}
+      style={{ '--avatar-color': visual.color, '--avatar-delay': `${visual.delay.toFixed(2)}s`, '--avatar-speed': `${visual.speed.toFixed(1)}s`, '--avatar-blink-speed': `${(9 + (visual.seed % 89) / 10).toFixed(1)}s` }}
       aria-label={interactive ? `Open ${agent?.name || 'bot'} details` : undefined}
       aria-hidden={interactive ? undefined : 'true'}
     >
@@ -698,7 +698,7 @@ function ComputerView() {
         <div>
           <div className="computer-brand-line"><span className="computer-live-dot"/><span>Ripo Computer</span></div>
           <h1>See the bot work.</h1>
-          <p>This is the actual Cloudflare Browser Run session. When a bot navigates, clicks, types, or scrolls, this Live View updates in real time.</p>
+          <p>Follow along when your bots browse, or open a page yourself.</p>
         </div>
         <StateLabel state={live?.active ? 'working' : status.configured ? 'ready' : 'waiting'} />
       </header>
@@ -730,8 +730,8 @@ function ComputerView() {
             ) : (
               <div className="computer-live-empty-v6">
                 <Avatar agent={{id:'computer-brand',avatarSeed:'computer-v6',avatarShape:3,avatarColor:'#111111',avatarMotion:3}} size="lg"/>
-                <h2>Real browser, not a mockup.</h2>
-                <p>Start the computer or ask a bot to open a website. The same Browser Run session the bot controls will appear here.</p>
+                <h2>Your computer is idle.</h2>
+                <p>Open a page or ask a bot to browse. Its activity will appear here.</p>
                 <button onClick={startOrNavigate} disabled={liveBusy}><Globe2 size={17}/>Start live browser</button>
               </div>
             )}
@@ -1305,10 +1305,17 @@ function ChatView({
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(agent?.name || team?.name || '');
   const bottomRef = useRef(null);
+  const shouldFollowRef = useRef(true);
   const photoInputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, sending]);
+  useEffect(() => {
+    if (shouldFollowRef.current) bottomRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+  }, [messages, sending]);
+  useEffect(() => {
+    shouldFollowRef.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+  }, [agent?.id, team?.id]);
   useEffect(() => { setRenameValue(agent?.name || team?.name || ''); setRenaming(false); }, [agent?.id, team?.id]);
 
   const participants = team ? team.members.map((id) => agents.find((item) => item.id === id)).filter(Boolean) : [agent].filter(Boolean);
@@ -1319,6 +1326,7 @@ function ChatView({
   function submit() {
     const value = draft.trim();
     if (!value || sending) return;
+    shouldFollowRef.current = true;
     onSend(value, { attachments: attached });
     setDraft('');
     setAttached([]);
@@ -1369,7 +1377,10 @@ function ChatView({
         </div>
       </header>
 
-      <div className="chat-scroll-v5">
+      <div className="chat-scroll-v5" onScroll={(event) => {
+        const el = event.currentTarget;
+        shouldFollowRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+      }}>
         {firstDatedMessage && <div className="chat-date-v5">{new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(firstDatedMessage.createdAt))}</div>}
         {messages.length <= 1 && !team && <div className="chat-empty-v5"><Avatar agent={agent} size="xl"/><h1>{agent?.name}</h1><p>{agent?.description}</p></div>}
         {team && messages.length===0 && <div className="chat-empty-v5"><div className="team-orbit">{participants.map((member)=><Avatar key={member.id} agent={member} size="lg"/>)}</div><h1>{team.name}</h1><p>Message the team once and the bots coordinate inside this thread.</p></div>}
@@ -1548,13 +1559,13 @@ function PluginStoreView({ activeWorkspaceId, onToast }) {
       loadError ? <div className="plugin-empty-v9" role="alert">{loadError} <button onClick={load}>Try again</button></div> : filtered.length === 0 ? <div className="plugin-empty-v9">No plugins match your search. Try another name or category.</div> : <div className="plugin-grid-v8">{filtered.map((plugin)=><article className={cls('plugin-card-v8',plugin.installed&&'installed')} key={plugin.id}>
         <div className="plugin-card-top-v8">
           <span className="plugin-logo-v8 large" style={{'--plugin-accent':plugin.accent}}><img src={plugin.logo} alt="" onError={(e)=>{e.currentTarget.style.display='none';}}/><b>{plugin.name.slice(0,1)}</b></span>
-          <span className="zero-key-badge-v8"><Zap size={11}/>Zero-key</span>
+          <span className="zero-key-badge-v8">{plugin.installed ? <><Check size={11}/>Installed</> : <><Zap size={11}/>Zero-key</>}</span>
         </div>
         <div className="plugin-card-copy-v8"><span>{plugin.category}</span><h3>{plugin.name}</h3><p>{plugin.description}</p><small>{plugin.provider}</small></div>
         <div className="plugin-action-list-v8">{(plugin.actions||[]).slice(0,3).map((action)=><span key={action.id}>{action.label}</span>)}</div>
         <div className="plugin-card-actions-v8">
           <a href={plugin.homepage} target="_blank" rel="noreferrer"><ExternalLink size={14}/>Website</a>
-          <button className={cls(plugin.installed&&'installed')} onClick={()=>toggle(plugin)} disabled={Boolean(busy)}>{busy===plugin.id?<LoaderCircle className="spin" size={15}/>:plugin.installed?<><Check size={15}/>Installed</>:<><Plus size={15}/>Install</>}</button>
+          <button className={cls(plugin.installed&&'installed')} onClick={()=>toggle(plugin)} disabled={Boolean(busy)}>{busy===plugin.id?<LoaderCircle className="spin" size={15}/>:plugin.installed?<><Check size={15}/>Uninstall</>:<><Plus size={15}/>Install</>}</button>
         </div>
       </article>)}</div>}
     </section>
