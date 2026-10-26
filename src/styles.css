@@ -2265,3 +2265,14 @@ html[data-resolved-theme="dark"] .plugin-activity-badges-v8>span.error,html[data
   .agent-activity-v8.compact .activity-status-v8,.agent-activity-v8.compact .activity-copy-v8 small{display:none}
 }
 @media(prefers-reduced-motion:reduce){.content-page,.chat-v5,.mobile-bot-home{animation:none!important}}
+.avatar-face-svg rect{animation-duration:var(--avatar-blink-speed,12s)}
+.agent-editor-preview-v5{background:var(--v4-soft,#f4f4f4)}
+.agent-name-v5>span,.agent-shape-section-v5>span,.agent-color-section-v5>span{font-size:12px;font-weight:600;color:var(--v4-text,#333)}
+.agent-shape-grid-v5{grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.agent-shape-grid-v5 button{aspect-ratio:auto;min-height:56px;border-radius:12px}
+.agent-color-grid-v5{grid-template-columns:repeat(12,minmax(0,1fr));gap:6px}
+.agent-editor-preview-v5>button{font-size:12px}
+@media(max-width:760px){
+  .agent-color-grid-v5{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+  .agent-shape-grid-v5 button{min-height:48px}
+}
