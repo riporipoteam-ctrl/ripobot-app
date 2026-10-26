@@ -2241,3 +2241,27 @@ html[data-resolved-theme="dark"] .activity-status-v8.done{background:#153426;col
 .activity-status-v8.error{background:#fff0f0;color:#b54848}
 html[data-resolved-theme="dark"] .plugin-activity-badges-v8>span{background:#1a2c38;color:#8dccf7}
 html[data-resolved-theme="dark"] .plugin-activity-badges-v8>span.error,html[data-resolved-theme="dark"] .activity-status-v8.error{background:#3a1f1f;color:#f09898}
+
+/* More legible, quieter product surfaces */
+.chat-identity-v9,.chat-name-v9{border:0;padding:0;background:transparent;color:inherit;display:flex;align-items:center;cursor:pointer}
+.chat-name-v9{min-width:0;font-size:15px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-bot-pill-v5{min-width:0}
+.plugin-market-v8,.mobile-bot-home{background:var(--v4-bg,#fff)!important}
+.plugin-feature-strip-v8{border:0;background:transparent;border-radius:0;border-bottom:1px solid var(--v4-line,#eee)}
+.plugin-feature-strip-v8>div{border:0;padding-left:0}
+.plugin-feature-strip-v8 strong{font-size:12px}.plugin-feature-strip-v8 small{font-size:11px}
+.plugin-card-copy-v8 p{font-size:13px;min-height:0}.plugin-card-copy-v8 small,.plugin-card-copy-v8>span,.plugin-action-list-v8 span{font-size:11px}
+.plugin-card-actions-v8 a,.plugin-card-actions-v8 button,.plugin-section-title-v8 p,.plugin-section-title-v8>span{font-size:12px}
+.plugin-empty-v9{padding:28px 0;color:var(--v4-muted,#777);font-size:14px}
+.plugin-empty-v9 button{border:0;background:transparent;color:var(--v4-text,#111);font:inherit;text-decoration:underline;cursor:pointer}
+.activity-copy-v8 strong{font-size:13px}.activity-copy-v8 p{font-size:13px}.activity-copy-v8 small,.activity-copy-v8 time,.activity-status-v8{font-size:11px}
+@media(max-width:760px){
+  .plugin-feature-strip-v8{display:flex;flex-wrap:wrap;gap:8px 18px;padding-bottom:14px}
+  .plugin-feature-strip-v8>div{padding:0;border:0}.plugin-feature-strip-v8 small{display:none}
+  .plugin-market-head-v8 p{font-size:13px}.plugin-card-v8{min-height:0}
+  .activity-row-v8:not(.compact .activity-row-v8){grid-template-columns:31px 20px 31px minmax(0,1fr);align-items:start}
+  .activity-row-v8 .activity-status-v8{display:block;grid-column:4;justify-self:start}
+  .activity-row-v8 .activity-copy-v8 small{display:block;white-space:normal;overflow-wrap:anywhere}
+  .agent-activity-v8.compact .activity-status-v8,.agent-activity-v8.compact .activity-copy-v8 small{display:none}
+}
+@media(prefers-reduced-motion:reduce){.content-page,.chat-v5,.mobile-bot-home{animation:none!important}}
