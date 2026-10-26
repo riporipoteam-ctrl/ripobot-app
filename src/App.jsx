@@ -434,8 +434,8 @@ function AgentEditor({ initialAgent, onSave, onClose }) {
     setForm((current) => ({
       ...current,
       avatarSeed: uid('avatar'),
-      avatarShape: Math.floor(Math.random() * AVATAR_SHAPES.length),
-      avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+      avatarShape: (Number(current.avatarShape) + 1 + Math.floor(Math.random() * (AVATAR_SHAPES.length - 1))) % AVATAR_SHAPES.length,
+      avatarColor: AVATAR_COLORS[(Math.max(0, AVATAR_COLORS.indexOf(current.avatarColor)) + 1 + Math.floor(Math.random() * (AVATAR_COLORS.length - 1))) % AVATAR_COLORS.length],
       avatarMotion: Math.floor(Math.random() * 12)
     }));
   }
@@ -1353,14 +1353,16 @@ function ChatView({
     <section className="chat-v5">
       <header className="chat-head-v5">
         <button className="chat-back-v5" onClick={onShowBots} aria-label="Back to bots"><ArrowLeft size={20}/></button>
-        <button className="chat-bot-pill-v5" onClick={onOpenDetails}>
+        <div className="chat-bot-pill-v5">
+        <button className="chat-identity-v9" onClick={onOpenDetails} aria-label={`Open ${title} details`}>
           <span className="chat-pill-avatars">
             {participants.slice(0,3).map((item,index)=><span key={item.id} style={{zIndex:participants.length-index}}><Avatar agent={item} size="xs"/></span>)}
           </span>
+        </button>
           {renaming&&agent
             ? <span className="inline-rename"><input value={renameValue} onChange={(event)=>setRenameValue(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')saveRename();}} autoFocus/><button onClick={(event)=>{event.stopPropagation();saveRename();}}><Check size={13}/></button></span>
-            : <strong>{title}</strong>}
-        </button>
+            : <button className="chat-name-v9" onClick={onOpenDetails}>{title}</button>}
+        </div>
         <div className="chat-head-tools-v5">
           <button className="chat-tool-v5" onClick={onOpenDetails} aria-label="Open bot computer"><Computer size={18}/></button>
           {agent&&<div className="relative chat-more-wrap"><button className="chat-more-v5" onClick={()=>setMenuOpen(menuOpen==='more'?false:'more')} aria-label="More"><MoreHorizontal size={18}/></button>{menuOpen==='more'&&<div className="popover-menu head-menu v5-head-menu"><button onClick={()=>{setRenaming(true);setMenuOpen(false);}}><Pencil size={15}/>Rename</button><button onClick={()=>{onEdit();setMenuOpen(false);}}><Settings size={15}/>Edit bot</button><button onClick={()=>{onStartCall();setMenuOpen(false);}}><Phone size={15}/>Start call</button></div>}</div>}
@@ -1466,7 +1468,7 @@ function AgentActivityView({ exchanges = [], agents = [], compact = false, onOpe
         <div className="activity-copy-v8">
           <div><strong>{exchange.sourceAgentName}</strong><span>→</span><strong>{exchange.targetAgentName}</strong><time>{formatTime(exchange.createdAt)}</time></div>
           <p>{exchange.task}</p>
-          {exchange.reply?<small>{exchange.reply}</small>:<small>Working…</small>}
+          {exchange.reply?<small>{exchange.reply}</small>:<small>{exchange.status === 'error' ? 'The handoff failed.' : exchange.status === 'completed' ? 'Completed' : 'Working…'}</small>}
         </div>
         <span className={cls('activity-status-v8',exchange.status==='completed'&&'done',exchange.status==='error'&&'error')}>{exchange.status==='completed'?'Done':exchange.status==='error'?'Error':'Working'}</span>
       </article>;
@@ -1480,14 +1482,15 @@ function PluginStoreView({ activeWorkspaceId, onToast }) {
   const [category,setCategory]=useState('All');
   const [busy,setBusy]=useState('');
   const [loading,setLoading]=useState(true);
+  const [loadError,setLoadError]=useState('');
 
   const load=async()=>{
     if(!activeWorkspaceId)return;
-    setLoading(true);
+    setLoading(true); setLoadError('');
     try{
       const data=await api(`/api/plugins?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
       setPlugins(data.plugins||[]);
-    }catch(error){onToast?.(error.message||'Could not load plugins.');}
+    }catch(error){setLoadError(error.message||'Could not load plugins.');}
     finally{setLoading(false);}
   };
 
@@ -1542,7 +1545,7 @@ function PluginStoreView({ activeWorkspaceId, onToast }) {
     <section className="plugin-catalog-v8">
       <div className="plugin-section-title-v8"><div><h2>Explore</h2><p>Third-party public services Ripo Bot can call without credentials.</p></div><span>{filtered.length} tools</span></div>
       {loading?<div className="plugin-loading-v8"><LoaderCircle className="spin" size={22}/>Loading plugin catalog…</div>:
-      <div className="plugin-grid-v8">{filtered.map((plugin)=><article className={cls('plugin-card-v8',plugin.installed&&'installed')} key={plugin.id}>
+      loadError ? <div className="plugin-empty-v9" role="alert">{loadError} <button onClick={load}>Try again</button></div> : filtered.length === 0 ? <div className="plugin-empty-v9">No plugins match your search. Try another name or category.</div> : <div className="plugin-grid-v8">{filtered.map((plugin)=><article className={cls('plugin-card-v8',plugin.installed&&'installed')} key={plugin.id}>
         <div className="plugin-card-top-v8">
           <span className="plugin-logo-v8 large" style={{'--plugin-accent':plugin.accent}}><img src={plugin.logo} alt="" onError={(e)=>{e.currentTarget.style.display='none';}}/><b>{plugin.name.slice(0,1)}</b></span>
           <span className="zero-key-badge-v8"><Zap size={11}/>Zero-key</span>
@@ -1551,7 +1554,7 @@ function PluginStoreView({ activeWorkspaceId, onToast }) {
         <div className="plugin-action-list-v8">{(plugin.actions||[]).slice(0,3).map((action)=><span key={action.id}>{action.label}</span>)}</div>
         <div className="plugin-card-actions-v8">
           <a href={plugin.homepage} target="_blank" rel="noreferrer"><ExternalLink size={14}/>Website</a>
-          <button className={cls(plugin.installed&&'installed')} onClick={()=>toggle(plugin)} disabled={busy===plugin.id}>{busy===plugin.id?<LoaderCircle className="spin" size={15}/>:plugin.installed?<><Check size={15}/>Installed</>:<><Plus size={15}/>Install</>}</button>
+          <button className={cls(plugin.installed&&'installed')} onClick={()=>toggle(plugin)} disabled={Boolean(busy)}>{busy===plugin.id?<LoaderCircle className="spin" size={15}/>:plugin.installed?<><Check size={15}/>Installed</>:<><Plus size={15}/>Install</>}</button>
         </div>
       </article>)}</div>}
     </section>
@@ -1596,6 +1599,9 @@ export default function App() {
   const [searchText, setSearchText] = useState('');
   const [toast, setToast] = useState('');
   const [syncState, setSyncState] = useState('saved');
+  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState(null);
+  const loadedWorkspaceRef = useRef(null);
+  const workspaceLoadRef = useRef(0);
 
   const activeAgent = agents.find((item) => item.id === activeAgentId) || agents[0];
   const activeTeam = teams.find((item) => item.id === activeTeamId) || null;
@@ -1629,22 +1635,31 @@ export default function App() {
 
   async function loadWorkspace(workspaceId) {
     if (!workspaceId || !storedToken()) return;
+    const loadId = ++workspaceLoadRef.current;
+    loadedWorkspaceRef.current = null;
+    setLoadedWorkspaceId(null);
     try {
       const state = await api(`/api/state?workspaceId=${encodeURIComponent(workspaceId)}`);
       const nextAgents = diversifyLegacyAgents(state?.agents?.length ? state.agents : [STARTER_AGENTS[0]]);
-      setAgents(nextAgents);
       const baseConversations = state?.conversations && Object.keys(state.conversations).length ? state.conversations : { ripo: DEFAULT_CONVERSATIONS.ripo };
       const mailbox = await api(`/api/agent-mailbox?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ messages: [] }));
+      if (loadId !== workspaceLoadRef.current) return;
+      const dataFiles = await api(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ files: [] }));
+      if (loadId !== workspaceLoadRef.current) return;
+      setAgents(nextAgents);
       setMailboxMessages(mailbox?.messages || []);
       setConversations(mergeAgentMailboxIntoConversations(baseConversations, mailbox?.messages || []));
       setTeams(Array.isArray(state?.teams) ? state.teams : []);
       setArchivedChats(Array.isArray(state?.archivedChats) ? state.archivedChats : []);
       if (typeof state?.onboarded === 'boolean') setOnboarded(state.onboarded);
-      const dataFiles = await api(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ files: [] }));
       setFiles(Array.isArray(dataFiles?.files) ? dataFiles.files : []);
+      loadedWorkspaceRef.current = workspaceId;
+      setLoadedWorkspaceId(workspaceId);
       setActiveAgentId(nextAgents[0]?.id || 'ripo');
       setActiveTeamId(null);
-    } catch {}
+    } catch {
+      if (loadId === workspaceLoadRef.current) { setSyncState('local'); setToast('Could not load workspace. Your cloud data was not changed.'); }
+    }
   }
 
   useEffect(() => {
@@ -1695,27 +1710,29 @@ export default function App() {
     writeLocal(LOCAL_KEYS.theme, theme);
     const root = document.documentElement;
     root.dataset.theme = theme;
-    if (theme === 'system') {
-      const dark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-      root.dataset.resolvedTheme = dark ? 'dark' : 'light';
-      root.style.colorScheme = dark ? 'dark' : 'light';
-    } else {
-      root.dataset.resolvedTheme = theme;
-      root.style.colorScheme = theme;
-    }
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const applyTheme = () => {
+      const resolved = theme === 'system' ? (media?.matches ? 'dark' : 'light') : theme;
+      root.dataset.resolvedTheme = resolved;
+      root.style.colorScheme = resolved;
+    };
+    applyTheme();
+    if (theme === 'system') media?.addEventListener?.('change', applyTheme);
+    return () => media?.removeEventListener?.('change', applyTheme);
   }, [theme]);
 
   useEffect(() => {
-    if (!cloudMode || !auth || !onboarded) return undefined;
+    if (!cloudMode || !auth || !onboarded || !activeWorkspaceId || loadedWorkspaceId !== activeWorkspaceId) return undefined;
     setSyncState('saving');
     const timer = setTimeout(() => {
+      if (loadedWorkspaceRef.current !== activeWorkspaceId) return;
       api('/api/state', {
         method: 'PUT',
         body: JSON.stringify({ workspaceId: activeWorkspaceId, agents, conversations, teams, archivedChats, onboarded })
       }).then(() => setSyncState('saved')).catch(() => setSyncState('local'));
     }, 700);
     return () => clearTimeout(timer);
-  }, [agents, conversations, teams, archivedChats, onboarded, cloudMode, auth, activeWorkspaceId]);
+  }, [agents, conversations, teams, archivedChats, onboarded, cloudMode, auth, activeWorkspaceId, loadedWorkspaceId]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -1754,8 +1771,19 @@ export default function App() {
 
   async function selectWorkspace(workspaceId) {
     if (!workspaceId || workspaceId === activeWorkspaceId) { setView('chat'); return; }
-    if (cloudMode && activeWorkspaceId) {
-      await api('/api/state', { method: 'PUT', body: JSON.stringify({ workspaceId: activeWorkspaceId, agents, conversations, teams, archivedChats, onboarded }) }).catch(() => {});
+    const previousWorkspaceId = loadedWorkspaceRef.current;
+    loadedWorkspaceRef.current = null;
+    setLoadedWorkspaceId(null);
+    if (cloudMode && previousWorkspaceId === activeWorkspaceId) {
+      try {
+        await api('/api/state', { method: 'PUT', body: JSON.stringify({ workspaceId: activeWorkspaceId, agents, conversations, teams, archivedChats, onboarded }) });
+      } catch {
+        loadedWorkspaceRef.current = previousWorkspaceId;
+        setLoadedWorkspaceId(previousWorkspaceId);
+        setSyncState('local');
+        setToast('Could not save this workspace. Try again before switching.');
+        return;
+      }
     }
     setActiveWorkspaceId(workspaceId);
     writeLocal(LOCAL_KEYS.activeWorkspace, workspaceId);
@@ -2029,6 +2057,7 @@ export default function App() {
 
   async function logout() {
     if (cloudMode) api('/api/auth/logout', { method: 'POST', body: '{}' }).catch(() => {});
+    workspaceLoadRef.current += 1; loadedWorkspaceRef.current = null; setLoadedWorkspaceId(null);
     setAuth(null); setCloudMode(false); setProfile(null); setAccount(null); setOnboarded(false); setWorkspaces([]);
     const keepTheme = theme, keepAccent = accent;
     Object.values(LOCAL_KEYS).forEach((key) => { try { localStorage.removeItem(key); } catch {} });
@@ -2079,7 +2108,7 @@ export default function App() {
                 <time>{last?.createdAt ? formatTime(last.createdAt) : ''}</time>
               </button>;
             })}
-            {teams.map((team) => <button key={team.id} className="mobile-bot-row" onClick={() => openTeam(team.id)}>
+            {teams.filter((team) => team.name.toLowerCase().includes(searchText.trim().toLowerCase())).map((team) => <button key={team.id} className="mobile-bot-row" onClick={() => openTeam(team.id)}>
               <span className="mobile-team-orb"><Users size={18}/></span>
               <span className="mobile-bot-copy"><strong>{team.name}</strong><small>{team.members.length} bots working together</small></span>
               <time />
