@@ -434,7 +434,7 @@ function AgentEditor({ initialAgent, onSave, onClose }) {
     setForm((current) => ({
       ...current,
       avatarSeed: uid('avatar'),
-      avatarShape: (Number(current.avatarShape) + 1 + Math.floor(Math.random() * (AVATAR_SHAPES.length - 1))) % AVATAR_SHAPES.length,
+      avatarShape: ((Number(current.avatarShape) || 0) + 1 + Math.floor(Math.random() * (AVATAR_SHAPES.length - 1))) % AVATAR_SHAPES.length,
       avatarColor: AVATAR_COLORS[(Math.max(0, AVATAR_COLORS.indexOf(current.avatarColor)) + 1 + Math.floor(Math.random() * (AVATAR_COLORS.length - 1))) % AVATAR_COLORS.length],
       avatarMotion: Math.floor(Math.random() * 12)
     }));
@@ -1610,9 +1610,6 @@ export default function App() {
   const [searchText, setSearchText] = useState('');
   const [toast, setToast] = useState('');
   const [syncState, setSyncState] = useState('saved');
-  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState(null);
-  const loadedWorkspaceRef = useRef(null);
-  const workspaceLoadRef = useRef(0);
 
   const activeAgent = agents.find((item) => item.id === activeAgentId) || agents[0];
   const activeTeam = teams.find((item) => item.id === activeTeamId) || null;
@@ -1646,31 +1643,22 @@ export default function App() {
 
   async function loadWorkspace(workspaceId) {
     if (!workspaceId || !storedToken()) return;
-    const loadId = ++workspaceLoadRef.current;
-    loadedWorkspaceRef.current = null;
-    setLoadedWorkspaceId(null);
     try {
       const state = await api(`/api/state?workspaceId=${encodeURIComponent(workspaceId)}`);
       const nextAgents = diversifyLegacyAgents(state?.agents?.length ? state.agents : [STARTER_AGENTS[0]]);
+      setAgents(nextAgents);
       const baseConversations = state?.conversations && Object.keys(state.conversations).length ? state.conversations : { ripo: DEFAULT_CONVERSATIONS.ripo };
       const mailbox = await api(`/api/agent-mailbox?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ messages: [] }));
-      if (loadId !== workspaceLoadRef.current) return;
-      const dataFiles = await api(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ files: [] }));
-      if (loadId !== workspaceLoadRef.current) return;
-      setAgents(nextAgents);
       setMailboxMessages(mailbox?.messages || []);
       setConversations(mergeAgentMailboxIntoConversations(baseConversations, mailbox?.messages || []));
       setTeams(Array.isArray(state?.teams) ? state.teams : []);
       setArchivedChats(Array.isArray(state?.archivedChats) ? state.archivedChats : []);
       if (typeof state?.onboarded === 'boolean') setOnboarded(state.onboarded);
+      const dataFiles = await api(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ files: [] }));
       setFiles(Array.isArray(dataFiles?.files) ? dataFiles.files : []);
-      loadedWorkspaceRef.current = workspaceId;
-      setLoadedWorkspaceId(workspaceId);
       setActiveAgentId(nextAgents[0]?.id || 'ripo');
       setActiveTeamId(null);
-    } catch {
-      if (loadId === workspaceLoadRef.current) { setSyncState('local'); setToast('Could not load workspace. Your cloud data was not changed.'); }
-    }
+    } catch {}
   }
 
   useEffect(() => {
@@ -1733,17 +1721,16 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    if (!cloudMode || !auth || !onboarded || !activeWorkspaceId || loadedWorkspaceId !== activeWorkspaceId) return undefined;
+    if (!cloudMode || !auth || !onboarded) return undefined;
     setSyncState('saving');
     const timer = setTimeout(() => {
-      if (loadedWorkspaceRef.current !== activeWorkspaceId) return;
       api('/api/state', {
         method: 'PUT',
         body: JSON.stringify({ workspaceId: activeWorkspaceId, agents, conversations, teams, archivedChats, onboarded })
       }).then(() => setSyncState('saved')).catch(() => setSyncState('local'));
     }, 700);
     return () => clearTimeout(timer);
-  }, [agents, conversations, teams, archivedChats, onboarded, cloudMode, auth, activeWorkspaceId, loadedWorkspaceId]);
+  }, [agents, conversations, teams, archivedChats, onboarded, cloudMode, auth, activeWorkspaceId]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -1782,19 +1769,8 @@ export default function App() {
 
   async function selectWorkspace(workspaceId) {
     if (!workspaceId || workspaceId === activeWorkspaceId) { setView('chat'); return; }
-    const previousWorkspaceId = loadedWorkspaceRef.current;
-    loadedWorkspaceRef.current = null;
-    setLoadedWorkspaceId(null);
-    if (cloudMode && previousWorkspaceId === activeWorkspaceId) {
-      try {
-        await api('/api/state', { method: 'PUT', body: JSON.stringify({ workspaceId: activeWorkspaceId, agents, conversations, teams, archivedChats, onboarded }) });
-      } catch {
-        loadedWorkspaceRef.current = previousWorkspaceId;
-        setLoadedWorkspaceId(previousWorkspaceId);
-        setSyncState('local');
-        setToast('Could not save this workspace. Try again before switching.');
-        return;
-      }
+    if (cloudMode && activeWorkspaceId) {
+      await api('/api/state', { method: 'PUT', body: JSON.stringify({ workspaceId: activeWorkspaceId, agents, conversations, teams, archivedChats, onboarded }) }).catch(() => {});
     }
     setActiveWorkspaceId(workspaceId);
     writeLocal(LOCAL_KEYS.activeWorkspace, workspaceId);
@@ -2068,7 +2044,6 @@ export default function App() {
 
   async function logout() {
     if (cloudMode) api('/api/auth/logout', { method: 'POST', body: '{}' }).catch(() => {});
-    workspaceLoadRef.current += 1; loadedWorkspaceRef.current = null; setLoadedWorkspaceId(null);
     setAuth(null); setCloudMode(false); setProfile(null); setAccount(null); setOnboarded(false); setWorkspaces([]);
     const keepTheme = theme, keepAccent = accent;
     Object.values(LOCAL_KEYS).forEach((key) => { try { localStorage.removeItem(key); } catch {} });
